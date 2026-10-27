@@ -45,6 +45,16 @@ try {
   } else {
     console.log(`in ${guilds.length} server(s): ${guilds.map((guild) => guild.name).join(", ")}`);
   }
+
+  const commands = (await rest.get(`/applications/${config.clientId}/commands`)) as {
+    name: string;
+    description: string;
+  }[];
+  console.log(
+    commands.length === 0
+      ? "no slash commands registered yet: run yarn register"
+      : `commands: ${commands.map((command) => `/${command.name}`).join(", ")}`,
+  );
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`token rejected: ${message}`);
