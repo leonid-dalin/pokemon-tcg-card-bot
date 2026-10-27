@@ -70,6 +70,14 @@ describe("TcgdexClient", () => {
     await expect(client.getCard("nope-1")).rejects.toBeInstanceOf(TcgdexError);
   });
 
+  it("remembers a missing card so a repeat lookup stays off the network", async () => {
+    const { calls } = stubFetch({ "/cards/zz99-999": { status: 404, body: {} } });
+    const client = new TcgdexClient({ retries: 0 });
+    await expect(client.getCard("zz99-999")).rejects.toMatchObject({ status: 404 });
+    await expect(client.getCard("zz99-999")).rejects.toMatchObject({ status: 404 });
+    expect(calls).toHaveLength(1);
+  });
+
   it("caps how many search results come back", async () => {
     stubFetch({ "/cards?name=": { body: summaries } });
     const client = new TcgdexClient();
@@ -238,5 +246,19 @@ describe("lookupById", () => {
     expect(lookup?.alternates.length).toBeGreaterThan(0);
     expect(lookup?.alternates.every((entry) => /^(a|b|p)[a-z0-9]*-\d{3}$/.test(entry.id))).toBe(true);
     expect(lookup?.view.footer).toContain(POCKET_ATTRIBUTION);
+  });
+});
+
+describe("price fallback", () => {
+  it("never asks the ja catalogue for an English card id", async () => {
+    const priceless = { ...dragapult, variants_detailed: [] };
+    const { calls } = stubFetch({
+      "/cards?name=": { body: summaries },
+      "/cards/sv08.5-073": { body: priceless },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    await lookupCard(client, "Dragapult ex", "sv08.5");
+    expect(calls.some((url) => url.includes("/fr/cards/sv08.5-073"))).toBe(true);
+    expect(calls.some((url) => url.includes("/ja/"))).toBe(false);
   });
 });

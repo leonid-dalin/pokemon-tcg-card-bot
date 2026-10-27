@@ -12,7 +12,9 @@ export interface ClientOptions {
 
 interface CacheEntry {
   expires: number;
-  value: unknown;
+  /** Absent for a remembered 404. */
+  value?: unknown;
+  missing?: true;
 }
 
 export class TcgdexError extends Error {
@@ -49,7 +51,12 @@ export class TcgdexClient {
   private async getJson<T>(path: string, ttlMs: number): Promise<T> {
     // path already carries the language segment
     const cached = this.cache.get(path);
-    if (cached && cached.expires > Date.now()) return cached.value as T;
+    if (cached && cached.expires > Date.now()) {
+      // A 404 is remembered too, or every lookup of a card without prices asks
+      // again for the languages that do not carry it.
+      if (cached.missing) throw new TcgdexError(`not found: ${path}`, 404);
+      return cached.value as T;
+    }
 
     let lastError: unknown;
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
@@ -58,7 +65,10 @@ export class TcgdexClient {
           signal: AbortSignal.timeout(this.timeoutMs),
           headers: { accept: "application/json" },
         });
-        if (response.status === 404) throw new TcgdexError(`not found: ${path}`, 404);
+        if (response.status === 404) {
+          this.cache.set(path, { expires: Date.now() + ttlMs, missing: true });
+          throw new TcgdexError(`not found: ${path}`, 404);
+        }
         if (!response.ok) {
           if (response.status === 429 || response.status >= 500) {
             throw new TcgdexError(`upstream ${response.status}`, response.status);
@@ -106,7 +116,10 @@ export class TcgdexClient {
     return this.getJson<CardSummary[]>(`/${lang}/cards`, this.setTtlMs);
   }
 
-  /** TCGdex serves en, fr, de and others but not ja, so a ja request 404s. */
+  /**
+   * TCGdex has a ja catalogue, but its ids differ from the English ones, so an
+   * English id asked for under ja always 404s.
+   */
   async getCard(id: string, lang = "en"): Promise<Card> {
     return this.getJson<Card>(`/${lang}/cards/${encodeURIComponent(id)}`, this.cardTtlMs);
   }

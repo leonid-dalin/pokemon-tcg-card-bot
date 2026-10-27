@@ -35,10 +35,10 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
 }
 
 /**
- * English pricing first, then any locale that has pricing. TCGdex has no ja
- * route, so the chain skips straight from en to the rest.
+ * English pricing first, then any locale that has pricing. TCGdex's ja catalogue
+ * uses its own ids, so an English id is never found there and ja is left out.
  */
-const PRICE_LOCALES = ["en", "ja", "fr", "de", "es", "it", "pt"] as const;
+const PRICE_LOCALES = ["en", "fr", "de", "es", "it", "pt"] as const;
 
 async function withEnglishPricing(client: TcgdexClient, card: Card): Promise<Card> {
   if (priceField(card)) return card;
