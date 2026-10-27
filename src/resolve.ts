@@ -92,6 +92,7 @@ const SERIES_ORDER = [
   "sv",
   "me",
   "tcgp",
+  "30th",
 ] as const;
 
 export function seriesRank(cardId: string): number {

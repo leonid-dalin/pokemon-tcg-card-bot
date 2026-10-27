@@ -103,6 +103,11 @@ describe("seriesRank", () => {
     expect(seriesRank("mep-025")).toBe(seriesRank("me01-104"));
   });
 
+  it("ranks the 30th anniversary sets newest", () => {
+    expect(seriesRank("30th-017")).toBeGreaterThan(seriesRank("sv04.5-016"));
+    expect(seriesRank("30th-c-001")).toBe(seriesRank("30th-017"));
+  });
+
   it("returns -1 for an unknown set", () => {
     expect(seriesRank("2024sv-2")).toBe(-1);
   });
