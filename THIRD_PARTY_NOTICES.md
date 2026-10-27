@@ -6,10 +6,13 @@ This project's own code is licensed under the Apache License 2.0, see [LICENSE](
 
 discord.js is licensed under Apache-2.0 and is used for the gateway connection, slash commands and embeds
 
-pokemon-tcg-pocket-cards by PocketDecks is licensed under AGPL-3.0-or-later. It supplies every Pokémon TCG Pocket card. The bot reads its data files at runtime, so no card data is copied into this repository. Two consequences are worth knowing before you redistribute anything:
+pokemon-tcg-pocket-cards by PocketDecks is licensed under AGPL-3.0-or-later. It supplies every Pokémon TCG Pocket card. The bot reads its data files at runtime, so no card data is copied into this repository. Worth knowing before you redistribute anything:
 
-- The package stays a separate work with its own licence. This repository's Apache 2.0 grant does not extend to it, and cannot.
-- The AGPL asks anyone who offers the software over a network to offer the corresponding source. This repository is public, so running the bot as it stands satisfies that requirement in practice. If you need a distribution that carries no copyleft obligation at all, remove the dependency and the Pocket path in `src/api/pocket.ts`.
+- The package ships data, not code: 424 JSON files and type declarations, with no runtime JavaScript. This repository depends on it through `package.json` and `yarn.lock`, so anyone installing the project fetches it themselves and this repository distributes none of it.
+- The package stays a separate work with its own licence. This repository's Apache 2.0 grant does not extend to it, and cannot. Depend on it and your own code stays Apache 2.0.
+- Do not vendor the JSON into this repository. Copying the files in would make this repository a distributor of AGPL material, and that is the case where the copyleft obligations attach to the copy.
+- If you ship a container or an archive that includes `node_modules`, that artefact redistributes the package. Include its licence and a pointer to its source alongside your own.
+- If you need a distribution with no copyleft obligation at all, remove the dependency and the Pocket path in `src/api/pocket.ts`.
 
 Card data served by that package, including images, remains the property of its rights holders
 
