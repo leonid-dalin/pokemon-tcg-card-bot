@@ -1,6 +1,6 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
-import { renderCard, type EmbedView } from "./render.js";
+import { priceField, renderCard, type EmbedView } from "./render.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
@@ -33,6 +33,28 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
     return setRecency(b.id) - setRecency(a.id);
   });
 }
+
+/**
+ * English pricing first, then any locale that has pricing. TCGdex has no ja
+ * route, so the chain skips straight from en to the rest.
+ */
+const PRICE_LOCALES = ["en", "ja", "fr", "de", "es", "it", "pt"] as const;
+
+async function withEnglishPricing(client: TcgdexClient, card: Card): Promise<Card> {
+  if (priceField(card)) return card;
+  for (const lang of PRICE_LOCALES.slice(1)) {
+    try {
+      const alternate = await client.getCard(card.id, lang);
+      if (priceField(alternate)) return alternate;
+    } catch {
+      // no such printing in that language
+    }
+  }
+  return card;
+}
+
+/** A full card id, which pins one exact printing rather than a set. */
+export const CARD_ID = /^[a-z0-9.]{1,12}-\d{1,4}$/i;
 
 /** Attribution for Pocket cards, which never come from TCGdex. */
 export const POCKET_ATTRIBUTION = "Pocket card data from pokemon-tcg-pocket-cards";
@@ -73,6 +95,29 @@ function lookupPocket(query: string, setHint: string | undefined, options: Looku
 }
 
 /**
+ * Pin one printing by its card id, which is what the printing buttons send back.
+ */
+export async function lookupById(
+  client: TcgdexClient,
+  id: string,
+  options: LookupOptions = {},
+): Promise<CardLookup | undefined> {
+  const pinned = (await client.getCard(id).catch(() => undefined)) ?? getPocketCard(id);
+  if (!pinned) return undefined;
+  const sameName = (await client.searchByName(pinned.name).catch(() => []))
+    .filter((entry) => entry.id !== pinned.id && normaliseName(entry.name) === normaliseName(pinned.name))
+    .slice(0, options.alternateLimit ?? 10);
+  return {
+    card: pinned,
+    view: renderCard(pinned, {
+      ...(options.attribution ? { attribution: options.attribution } : {}),
+      ...(options.cardUrl ? { cardUrl: options.cardUrl } : {}),
+    }),
+    alternates: sameName,
+  };
+}
+
+/**
  * Resolve a name to a printing and render it. Returns undefined when nothing
  * matches, so callers can stay silent instead of posting an error for a typo.
  */
@@ -84,6 +129,13 @@ export async function lookupCard(
 ): Promise<CardLookup | undefined> {
   // A hint can be a set id (sv07), the printed code players use (SCR) or the set
   // name (Stellar Crown). All three resolve offline against the set index.
+  // The embed prints card ids in the Other printings field, so a hint that looks
+  // like one pins that exact printing. Without this the id falls through to set
+  // matching, matches nothing, and returns a different printing.
+  if (setHint && CARD_ID.test(setHint.trim())) {
+    return lookupById(client, setHint.trim(), options);
+  }
+
   // "pocket" is a group, not a set, so it filters rather than pins one id.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
   if (pocketOnly) return lookupPocket(query, setHint, options);
@@ -105,7 +157,7 @@ export async function lookupCard(
   const [primary] = ordered;
   if (!primary) return undefined;
 
-  const card = await client.getCard(primary.id);
+  const card = await withEnglishPricing(client, await client.getCard(primary.id));
   // "Printings of X" only makes sense for the same card name, so a query for
   // "Dragapult ex" never lists the plain Dragapult as another printing.
   const target = normaliseName(card.name);

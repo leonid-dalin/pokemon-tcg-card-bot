@@ -9,22 +9,22 @@ Read the [Code of Conduct](CODE_OF_CONDUCT.md), the [Security Policy](SECURITY.m
 Node 24 is what CI uses. The bot needs a Discord application to run, but the test suite does not, so you can work on most of the code without one
 
 ```bash
-yarn install
-yarn test        # offline, 73 tests
-yarn typecheck
+npm ci
+npm test        # offline, 73 tests
+npm run typecheck
 ```
 
 To run it against a real server, copy `.env.example` to `.env`, fill in the token and client id as described in the [README](README.md), then:
 
 ```bash
-yarn doctor      # validates the token before anything touches the gateway
-yarn register    # publishes /card and /set
-yarn dev         # needs a terminal, see the note below
+npm run doctor      # validates the token before anything touches the gateway
+npm run register    # publishes /card and /set
+npm run dev         # needs a terminal, see the note below
 ```
 
-`yarn dev` runs through `tsx`, which requires a real terminal. In a service manager or a container use `yarn build` then `yarn start`
+`npm run dev` runs through `tsx`, which requires a real terminal. In a service manager or a container use `npm run build` then `npm start`
 
-Two tools help when you change lookup behaviour. `yarn preview "Card name"` runs the real lookup and render path against the live APIs, prints the embed payload and writes a Discord-styled HTML page to `preview/`. `yarn index:sets` rebuilds `src/data/set-index.ts` from all 220 set endpoints, which is what you run after a new set releases
+Two tools help when you change lookup behaviour. `npm run preview "Card name"` runs the real lookup and render path against the live APIs, prints the embed payload and writes a Discord-styled HTML page to `preview/`. `npm run index:sets` rebuilds `src/data/set-index.ts` from all 220 set endpoints, which is what you run after a new set releases
 
 ## Changes
 

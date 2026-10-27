@@ -26,6 +26,8 @@ export interface Pricing {
   avg?: number | null;
   low?: number | null;
   trend?: number | null;
+  avg1?: number | null;
+  avg7?: number | null;
   avg30?: number | null;
   updated?: string;
   idProduct?: number | null;

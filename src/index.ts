@@ -5,11 +5,16 @@ import { loadDotEnv } from "./env.js";
 import {
   handleAutocomplete,
   handleCardCommand,
+  handleSearchCommand,
   handleSetCommand,
   type CommandContext,
 } from "./discord/commands.js";
+import { printingIdFrom, printingRows } from "./discord/printing-buttons.js";
+import { parseDecklist } from "./decklist.js";
+import { renderDecklist } from "./render.js";
 import { toEmbeds } from "./discord/embeds.js";
-import { lookupCard, lookupEmbeds, suggestNames } from "./lookup.js";
+import type { CardSummary } from "./api/types.js";
+import { lookupById, lookupCard, lookupEmbeds, suggestNames } from "./lookup.js";
 import { extractMentions } from "./mentions.js";
 import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
@@ -46,11 +51,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleAutocomplete(context, interaction);
       return;
     }
+    if (interaction.isButton()) {
+      const id = printingIdFrom(interaction.customId);
+      if (!id) return;
+      await interaction.deferUpdate();
+      const lookup = await lookupById(api, id, { attribution: config.attribution });
+      if (!lookup) {
+        await interaction.followUp({ content: `No card matched \`${id}\`.`, ephemeral: true });
+        return;
+      }
+      await interaction.editReply({
+        embeds: toEmbeds(lookupEmbeds(lookup)),
+        components: printingRows(lookup.alternates),
+      });
+      return;
+    }
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === "card") {
       await handleCardCommand(context, interaction);
     } else if (interaction.commandName === "set") {
       await handleSetCommand(context, interaction);
+    } else if (interaction.commandName === "search") {
+      await handleSearchCommand(context, interaction);
     }
   } catch (error) {
     console.error("interaction failed", error);
@@ -82,6 +104,14 @@ client.on(Events.MessageCreate, async (message) => {
     return;
   }
 
+  const deck = parseDecklist(message.content);
+  if (deck) {
+    await message
+      .reply({ embeds: toEmbeds([renderDecklist(deck)]), allowedMentions: { repliedUser: false } })
+      .catch(() => {});
+    return;
+  }
+
   const mentions = extractMentions(message.content);
   if (mentions.length === 0) return;
 
@@ -101,6 +131,7 @@ client.on(Events.MessageCreate, async (message) => {
     const embeds = [];
     const misses: string[] = [];
     const suggestions = new Map<string, string>();
+    const buttonCards: CardSummary[] = [];
     for (const mention of mentions) {
       const lookup = await lookupCard(api, mention.name, mention.setHint, {
         attribution: config.attribution,
@@ -108,6 +139,7 @@ client.on(Events.MessageCreate, async (message) => {
       console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
       if (lookup) {
         embeds.push(...toEmbeds(lookupEmbeds(lookup)));
+        buttonCards.push(...lookup.alternates);
       } else {
         misses.push(mention.raw);
         const closest = await suggestNames(api, mention.name);
@@ -125,6 +157,7 @@ client.on(Events.MessageCreate, async (message) => {
     // A mention is an explicit request, so a name that resolves to nothing gets
     // an answer. Silence here reads as a broken bot, not as a polite no-op.
     await message.reply({
+      ...(embeds.length > 0 ? { components: printingRows(buttonCards) } : {}),
       ...(misses.length > 0
         ? {
             content: misses
@@ -141,6 +174,10 @@ client.on(Events.MessageCreate, async (message) => {
     });
   } catch (error) {
     console.error("mention lookup failed", error);
+    // A dead API used to leave the channel with nothing at all.
+    await message
+      .reply({ content: "Card lookup failed, try again in a moment.", allowedMentions: { repliedUser: false } })
+      .catch(() => {});
   }
 });
 

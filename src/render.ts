@@ -1,4 +1,5 @@
 import type { Ability, Attack, Card, CardSetRef, Pricing, SetSummary } from "./api/types.js";
+import type { ParsedDeck } from "./decklist.js";
 
 export interface EmbedField {
   name: string;
@@ -98,9 +99,16 @@ export function priceField(card: Card): EmbedField | undefined {
   const lines: string[] = [];
 
   if (cardmarket) {
-    const avg = money(cardmarket.avg ?? cardmarket.trend, cardmarket.unit ?? "EUR");
-    const low = money(cardmarket.low, cardmarket.unit ?? "EUR");
+    const unit = cardmarket.unit ?? "EUR";
+    const avg = money(cardmarket.avg ?? cardmarket.trend, unit);
+    const low = money(cardmarket.low, unit);
     if (avg) lines.push(`Cardmarket ${avg}${low ? ` (low ${low})` : ""}`);
+    const trend = [
+      cardmarket.avg1 !== null && cardmarket.avg1 !== undefined ? `1d ${money(cardmarket.avg1, unit)}` : undefined,
+      cardmarket.avg7 !== null && cardmarket.avg7 !== undefined ? `7d ${money(cardmarket.avg7, unit)}` : undefined,
+      cardmarket.avg30 !== null && cardmarket.avg30 !== undefined ? `30d ${money(cardmarket.avg30, unit)}` : undefined,
+    ].filter((entry): entry is string => Boolean(entry));
+    if (trend.length > 0) lines.push(`Trend ${trend.join(" · ")}`);
   }
   if (tcgplayer) {
     const market = money(tcgplayer.avg ?? tcgplayer.trend, tcgplayer.unit ?? "USD");
@@ -208,6 +216,45 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
     ...(image ? { imageUrl: image } : { description: "No scan is available for this printing." }),
     ...(set?.symbol ? { thumbnailUrl: `${set.symbol}.webp` } : {}),
     footer,
+  };
+}
+
+/** List view for a text search, capped so the description stays inside limits. */
+export function renderSearchResults(query: string, cards: { id: string; name: string }[]): EmbedView {
+  const lines = cards
+    .slice(0, 15)
+    .map((card) => `\`${card.id}\` ${card.name}`)
+    .join("\n");
+  return {
+    title: `Cards mentioning "${truncate(query, 80)}"`,
+    color: DEFAULT_COLOUR,
+    description: truncate(`${lines}${cards.length > 15 ? `
+and ${cards.length - 15} more` : ""}`, 4000),
+    fields: [],
+    footer: "Card data from TCGdex",
+  };
+}
+
+/** A pasted decklist, formatted, with the count checked against 60. */
+export function renderDecklist(deck: ParsedDeck): EmbedView {
+  const body = deck.lines
+    .map((line) => {
+      const printing = line.setCode ? ` (${line.setCode}${line.number ? ` ${line.number}` : ""})` : "";
+      return `${line.count} ${line.name}${printing}`;
+    })
+    .join("\n");
+
+  const fields: EmbedField[] = [{ name: "Cards", value: String(deck.total), inline: true }];
+  if (deck.total !== 60) {
+    fields.push({ name: "Count", value: `Decklists are 60 cards, this one lists ${deck.total}`, inline: true });
+  }
+
+  return {
+    title: "Decklist",
+    color: DEFAULT_COLOUR,
+    description: truncate(body, 4000),
+    fields,
+    footer: "Parsed from the pasted list",
   };
 }
 

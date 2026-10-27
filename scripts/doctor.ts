@@ -5,7 +5,7 @@ import { loadDotEnv } from "../src/env.js";
 /**
  * Preflight check for the credentials in .env.
  *
- *   yarn doctor
+ *   npm run doctor
  *
  * It reads the token, calls GET /users/@me and prints which bot it belongs to,
  * then lists the servers the bot has been invited to. A wrong or expired token
@@ -58,7 +58,7 @@ try {
   }[];
   console.log(
     commands.length === 0
-      ? "no slash commands registered yet: run yarn register"
+      ? "no slash commands registered yet: run npm run register"
       : `commands: ${commands.map((command) => `/${command.name}`).join(", ")}`,
   );
 } catch (error) {

@@ -20,7 +20,7 @@ const recency = new Map(orderedByDate.map((entry, index) => [entry.id, index]));
 /**
  * How new a set is, from real release dates rather than a hand-written series
  * list. Falls back to the series table for a set the index does not know, which
- * is what a brand new set looks like before `yarn index:sets` is rerun.
+ * is what a brand new set looks like before `npm run index:sets` is rerun.
  */
 export function setRecency(cardId: string): number {
   const setId = normaliseName(setIdOf(cardId));

@@ -1,6 +1,6 @@
 import type { Card, CardSummary, CardSetRef, SetSummary } from "./types.js";
 
-const BASE = "https://api.tcgdex.net/v2/en";
+const BASE = "https://api.tcgdex.net/v2";
 
 export interface ClientOptions {
   baseUrl?: string;
@@ -47,6 +47,7 @@ export class TcgdexClient {
   }
 
   private async getJson<T>(path: string, ttlMs: number): Promise<T> {
+    // path already carries the language segment
     const cached = this.cache.get(path);
     if (cached && cached.expires > Date.now()) return cached.value as T;
 
@@ -84,22 +85,33 @@ export class TcgdexClient {
    * locally, and the upstream `set` parameter is ignored, so a low cap silently
    * drops the printing the caller asked for.
    */
-  async searchByName(name: string, limit = 500): Promise<CardSummary[]> {
+  async searchByName(name: string, limit = 500, lang = "en"): Promise<CardSummary[]> {
     const query = new URLSearchParams({ name });
-    const cards = await this.getJson<CardSummary[]>(`/cards?${query.toString()}`, this.cardTtlMs);
+    const cards = await this.getJson<CardSummary[]>(`/${lang}/cards?${query.toString()}`, this.cardTtlMs);
     return cards.slice(0, limit);
   }
 
-  async getCard(id: string): Promise<Card> {
-    return this.getJson<Card>(`/cards/${encodeURIComponent(id)}`, this.cardTtlMs);
+  /**
+   * Text search over ability and attack wording. TCGdex indexes it as `effect`,
+   * which is how "search your deck for a Supporter" becomes findable.
+   */
+  async searchByEffect(text: string, limit = 25, lang = "en"): Promise<CardSummary[]> {
+    const query = new URLSearchParams({ effect: text });
+    const cards = await this.getJson<CardSummary[]>(`/${lang}/cards?${query.toString()}`, this.cardTtlMs);
+    return cards.slice(0, limit);
   }
 
-  async getSet(id: string): Promise<CardSetRef> {
-    return this.getJson<CardSetRef>(`/sets/${encodeURIComponent(id)}`, this.setTtlMs);
+  /** TCGdex serves en, fr, de and others but not ja, so a ja request 404s. */
+  async getCard(id: string, lang = "en"): Promise<Card> {
+    return this.getJson<Card>(`/${lang}/cards/${encodeURIComponent(id)}`, this.cardTtlMs);
   }
 
-  async listSets(): Promise<SetSummary[]> {
-    return this.getJson<SetSummary[]>("/sets", this.setTtlMs);
+  async getSet(id: string, lang = "en"): Promise<CardSetRef> {
+    return this.getJson<CardSetRef>(`/${lang}/sets/${encodeURIComponent(id)}`, this.setTtlMs);
+  }
+
+  async listSets(lang = "en"): Promise<SetSummary[]> {
+    return this.getJson<SetSummary[]>(`/${lang}/sets`, this.setTtlMs);
   }
 
   clearCache(): void {

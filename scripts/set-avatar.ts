@@ -7,7 +7,7 @@ import { loadDotEnv } from "../src/env.js";
 /**
  * Set the bot's profile picture.
  *
- *   yarn avatar "assets/avatar.jpg"
+ *   npm run avatar "assets/avatar.jpg"
  *
  * Discord takes the image as a data URL on PATCH /users/@me, so the file is
  * inlined and base64 encoded here. It must be under 8 MB and one of png, jpg,

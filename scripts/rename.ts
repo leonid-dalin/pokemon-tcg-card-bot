@@ -5,7 +5,7 @@ import { loadDotEnv } from "../src/env.js";
 /**
  * Rename the bot user.
  *
- *   yarn rename Crustlebot
+ *   npm run rename Crustlebot
  *
  * PATCH /users/@me accepts a username for bot accounts only. Discord allows two
  * username changes per hour, so a rejected name costs one of them.
@@ -13,7 +13,7 @@ import { loadDotEnv } from "../src/env.js";
 const name = (process.argv[2] ?? "").trim();
 
 if (!name) {
-  console.error('usage: yarn rename "Crustlebot"');
+  console.error('usage: npm run rename "Crustlebot"');
   process.exit(1);
 }
 if (name.length < 2 || name.length > 32) {

@@ -29,4 +29,4 @@ The bot reads `DISCORD_TOKEN` from the environment or from `.env`, which is giti
 
 ## Dependencies
 
-`yarn audit` covers the tree. Dependabot alerts on the repository cover the same ground and are worth enabling alongside it
+`npm audit` covers the tree. Dependabot alerts on the repository cover the same ground and are worth enabling alongside it

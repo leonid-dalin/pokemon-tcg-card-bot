@@ -5,7 +5,8 @@ import {
 } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import { lookupCard, lookupEmbeds } from "../lookup.js";
-import { renderSet } from "../render.js";
+import { renderSearchResults, renderSet } from "../render.js";
+import { printingRows } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed, toEmbeds } from "./embeds.js";
 
@@ -42,7 +43,17 @@ export const setCommand = new SlashCommandBuilder()
       .setAutocomplete(true),
   );
 
-export const commandDefinitions = [cardCommand, setCommand];
+export const searchCommand = new SlashCommandBuilder()
+  .setName("search")
+  .setDescription("Find cards by what their abilities and attacks say")
+  .addStringOption((option) =>
+    option
+      .setName("text")
+      .setDescription('Wording to look for, for example "search your deck for a Supporter"')
+      .setRequired(true),
+  );
+
+export const commandDefinitions = [cardCommand, setCommand, searchCommand];
 
 export async function handleAutocomplete(
   context: CommandContext,
@@ -85,7 +96,25 @@ export async function handleCardCommand(
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;
   }
-  await interaction.editReply({ embeds: toEmbeds(lookupEmbeds(lookup)) });
+  await interaction.editReply({
+    embeds: toEmbeds(lookupEmbeds(lookup)),
+    components: printingRows(lookup.alternates),
+  });
+}
+
+export async function handleSearchCommand(
+  context: CommandContext,
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const text = interaction.options.getString("text", true).trim();
+
+  await interaction.deferReply();
+  const cards = await context.client.searchByEffect(text);
+  if (cards.length === 0) {
+    await interaction.editReply({ content: `No card wording mentions \`${text}\`.` });
+    return;
+  }
+  await interaction.editReply({ embeds: [toEmbed(renderSearchResults(text, cards))] });
 }
 
 export async function handleSetCommand(

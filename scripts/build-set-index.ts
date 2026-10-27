@@ -7,7 +7,7 @@ import { TcgdexClient } from "../src/api/tcgdex.js";
  * endpoint, so this is the one place that pays for 220 requests. Run it when a
  * new set releases.
  *
- *   yarn index:sets
+ *   npm run index:sets
  */
 const client = new TcgdexClient({ timeoutMs: 20_000, retries: 3 });
 const sets = await client.listSets();

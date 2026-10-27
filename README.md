@@ -13,9 +13,12 @@ The reply carries the card art, set and number, regulation mark, rarity, attacks
 | --- | --- |
 | `/card name:<text> [set:<hint>]` | Shows a card with autocomplete on the name and an optional set hint |
 | `/set id:<setId>` | Shows a set with its card count, series and release date |
+| `/search text:<wording>` | Finds cards whose abilities or attacks contain that wording |
 | `[[Card name]]` | Replies with the card from any message |
 | `[[Card name\|hint]]` | Same, with a set id, printed code or set name pinning one printing |
 | `[[Card name\|pocket]]` | Restricts the lookup to Pokémon TCG Pocket |
+| `[[Card name\|sv08.5-073]]` | Pins one exact printing by card id |
+| a pasted decklist | Replies with the list formatted and the count checked against 60 |
 
 ## Why this exists
 
@@ -27,7 +30,7 @@ The one thing added on top is the inline mention. Card Buddy needs a command, so
 
 Physical cards come from [TCGdex](https://tcgdex.dev), which needs no API key and has no quota to manage
 
-Pokémon TCG Pocket cards come from the PocketDecks [`pokemon-tcg-pocket-cards`](https://github.com/chase-mew/pokemon-tcg-pocket-cards) package: 4,317 cards across 23 expansions. It is a dependency, so the data arrives with `yarn install` and needs no network at runtime. TCGdex's Pocket catalogue stops before Deluxe Pack: Mega, which is why a card like Crustle ex is missing there entirely; the package has it, including its alternate printings. That package is AGPL-3.0, so read [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before you redistribute anything
+Pokémon TCG Pocket cards come from the PocketDecks [`pokemon-tcg-pocket-cards`](https://github.com/chase-mew/pokemon-tcg-pocket-cards) package: 4,317 cards across 23 expansions. It is a dependency, so the data arrives with `npm ci` and needs no network at runtime. TCGdex's Pocket catalogue stops before Deluxe Pack: Mega, which is why a card like Crustle ex is missing there entirely; the package has it, including its alternate printings. That package is AGPL-3.0, so read [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before you redistribute anything
 
 A lookup tries TCGdex first and falls back to Pocket data when nothing matches, so `[[Crustle ex]]` and `[[Crustle ex|ptcgp]]` both resolve to `b4b-133`. The bot reads:
 
@@ -47,8 +50,8 @@ Responses are cached in memory, ten minutes for cards and an hour for sets, so a
 6. Check the credentials before running anything:
 
 ```bash
-yarn install
-yarn doctor       # prints the bot name, or Discord's error if the token is wrong
+npm ci
+npm run doctor       # prints the bot name, or Discord's error if the token is wrong
 ```
 
 7. Invite the bot with the `bot` and `applications.commands` scopes and this permissions integer:
@@ -62,24 +65,24 @@ That is View Channels, Send Messages, Embed Links, Read Message History, Use App
 8. Register the commands and run:
 
 ```bash
-yarn register     # publish /card and /set
-yarn dev          # run from source
+npm run register     # publish /card and /set
+npm run dev          # run from source
 ```
 
 If your npm config blocks install scripts, `esbuild` arrives without its platform binary. Approve it once with `npm approve-scripts esbuild` and reinstall
 
 The bot refuses to start twice: it writes `.bot.pid` and exits if that pid is still alive. Two instances sharing one token both answer every mention, which looks like one bot replying twice and leaves no error in either log. A pid file left by a hard kill is ignored, because the process behind it is gone
 
-`yarn dev` runs through `tsx`, which needs a real terminal. In a service manager, container or anything without a tty it exits with `stdin is not a tty`, so use `yarn build` then `yarn start` there
+`npm run dev` runs through `tsx`, which needs a real terminal. In a service manager, container or anything without a tty it exits with `stdin is not a tty`, so use `npm run build` then `npm start` there
 
-For production, `yarn build` then `yarn start`
+For production, `npm run build` then `npm start`
 
 ## Profile picture
 
 `assets/avatar.jpg` is a 512 by 512 crop of the image this instance asked for. Set it with:
 
 ```bash
-yarn avatar assets/avatar.jpg
+npm run avatar assets/avatar.jpg
 ```
 
 The script validates the file type and the 8 MB ceiling before it calls `PATCH /users/@me`, so a bad path fails on your machine before any upload starts
@@ -87,7 +90,7 @@ The script validates the file type and the 8 MB ceiling before it calls `PATCH /
 ## Checking a card without Discord
 
 ```bash
-yarn preview "Dragapult ex" "Charizard|sv03.5" "Mega Kangaskhan ex"
+npm run preview "Dragapult ex" "Charizard|sv03.5" "Mega Kangaskhan ex"
 ```
 
 That runs the real lookup and render path against the live API, prints the embed payload as JSON and writes a Discord-styled HTML preview to `preview/`. It is the fastest way to confirm a card, a set hint or the mention format before deploying
@@ -95,17 +98,20 @@ That runs the real lookup and render path against the live API, prints the embed
 ## Tests
 
 ```bash
-yarn test        # 73 tests over mention parsing, name resolution, set indexing, rendering and both data sources
-yarn typecheck
+npm test        # 85 tests over mention and decklist parsing, name resolution, set indexing, buttons, rendering and both data sources
+npm run typecheck
 ```
 
-The suite runs offline. The API client tests stub `fetch`, and the render tests use two recorded cards in `tests/fixtures/`, so a TCGdex outage or a reprint does not break CI. Pocket lookups read the bundled package, so they need no network either
+CI runs the typecheck, the suite and a build on every push and pull request, on the Node version in `.nvmrc`. The suite runs offline. The API client tests stub `fetch`, and the render tests use two recorded cards in `tests/fixtures/`, so a TCGdex outage or a reprint does not break CI. Pocket lookups read the bundled package, so they need no network either
 
 ## Behaviour worth knowing
 
-- Name score decides the printing first, then artwork, then the newest set by real release date. A plain `[[Lapras]]` gives the newest Lapras, not whichever one the API lists first. Release dates and codes live in `src/data/set-index.ts`, built by `yarn index:sets`; rerun it when a set releases. A card with other printings carries an Other printings field listing them, with the `[[name|setId]]` syntax to reach an exact one. It stays one embed per mention, since two embeds read as two answers to one question.
+- Name score decides the printing first, then artwork, then the newest set by real release date. A plain `[[Lapras]]` gives the newest Lapras, not whichever one the API lists first. Release dates and codes live in `src/data/set-index.ts`, built by `npm run index:sets`; rerun it when a set releases. A card with other printings carries an Other printings field listing them, with the `[[name|setId]]` syntax to reach an exact one. It stays one embed per mention, since two embeds read as two answers to one question.
 - Case, accents, apostrophes and spacing are normalised, so `pokemon catcher`, `Pokémon Catcher` and `Boss's Orders` all resolve.
 - `[[...]]` inside backticks or a fenced block does not trigger a reply, so you can document the syntax in the same channel.
+- Card ids work as hints, so the ids shown in the Other printings field can be pasted straight back.
+- Printings appear as buttons under the card. Pressing one swaps the embed for that printing.
+- Prices come from English listings first. When the English record carries none, the bot tries the other languages TCGdex serves, in order, and uses the first with a figure. TCGdex has no Japanese route, so the chain skips from English to the rest. Cardmarket's one, seven and thirty day averages appear as a trend line when the source reports them.
 - One reply covers up to three mentions per message and five embeds, with the throttle off by default (`MENTION_COOLDOWN_SECONDS=0`). Set it to a number of seconds to turn on a per-member token bucket: a burst of three mentions, then one more per interval. It is keyed per member, so one person can never swallow another's mention, and a burst matters because testing several cards in a row is normal.
 - A few promos have no scan in the source, and the embed says so, so a card with no art never looks broken.
 

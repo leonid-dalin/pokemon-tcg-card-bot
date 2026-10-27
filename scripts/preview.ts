@@ -8,7 +8,7 @@ import type { EmbedView } from "../src/render.js";
  * Render real lookups without connecting to Discord. Use it to check a card, a
  * mention and the HTML preview before deploying.
  *
- *   yarn preview "Dragapult ex" "Charizard|sv03.5" "Mega Kangaskhan ex"
+ *   npm run preview "Dragapult ex" "Charizard|sv03.5" "Mega Kangaskhan ex"
  */
 function escapeHtml(value: string): string {
   return value
@@ -59,7 +59,7 @@ function toHtml(views: EmbedView[]): string {
 
 const queries = process.argv.slice(2);
 if (queries.length === 0) {
-  console.error('usage: yarn preview "Card name" "Card name|setId"');
+  console.error('usage: npm run preview "Card name" "Card name|setId"');
   process.exit(1);
 }
 

@@ -1,0 +1,32 @@
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import type { CardSummary } from "../api/types.js";
+
+export const PRINTING_PREFIX = "printing:";
+const MAX_BUTTONS = 5;
+
+/**
+ * One row of buttons for the other printings of a card. The custom id carries
+ * the card id, so the handler resolves it with the same lookup a hint uses and
+ * needs no state of its own.
+ */
+export function printingRows(alternates: CardSummary[]): ActionRowBuilder<ButtonBuilder>[] {
+  const shown = alternates.slice(0, MAX_BUTTONS);
+  if (shown.length === 0) return [];
+
+  const row = new ActionRowBuilder<ButtonBuilder>();
+  for (const card of shown) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${PRINTING_PREFIX}${card.id}`)
+        .setLabel(card.id)
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  return [row];
+}
+
+export function printingIdFrom(customId: string): string | undefined {
+  if (!customId.startsWith(PRINTING_PREFIX)) return undefined;
+  const id = customId.slice(PRINTING_PREFIX.length).trim();
+  return id.length > 0 ? id : undefined;
+}
