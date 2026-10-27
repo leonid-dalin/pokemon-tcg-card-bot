@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { TcgdexClient } from "../src/api/tcgdex.js";
+import { TcgdexClient, TcgdexError } from "../src/api/tcgdex.js";
 import type { Card } from "../src/api/types.js";
 
 /**
@@ -41,7 +41,7 @@ console.log(`cards to inspect: ${summaries.length}`);
 
 const entries: IndexedCard[] = [];
 let done = 0;
-let failed = 0;
+const failures: string[] = [];
 
 for (let start = 0; start < summaries.length; start += CONCURRENCY) {
   const batch = summaries.slice(start, start + CONCURRENCY);
@@ -51,8 +51,10 @@ for (let start = 0; start < summaries.length; start += CONCURRENCY) {
         const card = await client.getCard(summary.id);
         const text = textOf(card);
         return text.length > 0 ? { id: summary.id, name: summary.name, text } : undefined;
-      } catch {
-        failed += 1;
+      } catch (error) {
+        // A card the list names but the API does not serve has no text to index.
+        if (error instanceof TcgdexError && error.status === 404) return undefined;
+        failures.push(summary.id);
         return undefined;
       }
     }),
@@ -62,8 +64,15 @@ for (let start = 0; start < summaries.length; start += CONCURRENCY) {
   if (done % 1000 < CONCURRENCY) console.log(`inspected ${done}/${summaries.length}, kept ${entries.length}`);
 }
 
-entries.sort((a, b) => a.id.localeCompare(b.id));
-writeFileSync("src/data/text-index.json", `${JSON.stringify(entries)}\n`, "utf8");
-
-const bytes = Buffer.byteLength(JSON.stringify(entries));
-console.log(`wrote src/data/text-index.json: ${entries.length} cards with text, ${(bytes / 1024 / 1024).toFixed(1)} MB, ${failed} failed`);
+// A partial index would silently drop cards from search, so any failure keeps
+// the previous index. Set the exit code rather than calling process.exit, which
+// trips a libuv assertion while undici is still closing its sockets.
+if (failures.length > 0) {
+  console.error(`${failures.length} cards failed, index left unchanged: ${failures.slice(0, 20).join(", ")}`);
+  process.exitCode = 1;
+} else {
+  entries.sort((a, b) => a.id.localeCompare(b.id));
+  writeFileSync("src/data/text-index.json", `${JSON.stringify(entries)}\n`, "utf8");
+  const bytes = Buffer.byteLength(JSON.stringify(entries));
+  console.log(`wrote src/data/text-index.json: ${entries.length} cards with text, ${(bytes / 1024 / 1024).toFixed(1)} MB`);
+}
