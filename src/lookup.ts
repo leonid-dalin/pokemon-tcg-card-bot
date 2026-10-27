@@ -1,7 +1,7 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { renderCard, renderPrintingChoices, type EmbedView } from "./render.js";
-import { normaliseName, rankPrintings, setIdOf } from "./resolve.js";
+import { normaliseName, rankPrintings } from "./resolve.js";
 
 export interface CardLookup {
   card: Card;
@@ -14,39 +14,17 @@ export interface LookupOptions {
   cardUrl?: (card: Card) => string | undefined;
   /** How many other printings to list when a name matches several. */
   alternateLimit?: number;
-  /** How many candidates to date-check when choosing the newest printing. */
-  recencySample?: number;
 }
 
 /**
- * Order candidates newest set first. TCGdex set details carry releaseDate and
- * are small, so checking the top few candidates costs one cached request each
- * and stops a query for Pikachu landing on a 1999 promo.
+ * Prefer candidates that have artwork. TCGdex has no scan for a few promos and
+ * older printings, and a card embed without art is a poor answer, so an
+ * art-bearing printing is chosen even when the source lists another one first.
  */
-async function newestFirst(
-  client: TcgdexClient,
-  ranked: CardSummary[],
-  sample: number,
-): Promise<CardSummary[]> {
-  const head = ranked.slice(0, sample);
-  const tail = ranked.slice(sample);
-  const dated = await Promise.all(
-    head.map(async (card) => {
-      try {
-        const set = await client.getSet(setIdOf(card.id));
-        return { card, date: set.releaseDate ?? "" };
-      } catch {
-        return { card, date: "" };
-      }
-    }),
-  );
-  dated.sort((a, b) => {
-    const aArt = a.card.image ? 1 : 0;
-    const bArt = b.card.image ? 1 : 0;
-    if (aArt !== bArt) return bArt - aArt;
-    return a.date === b.date ? 0 : a.date < b.date ? 1 : -1;
-  });
-  return [...dated.map((entry) => entry.card), ...tail];
+function preferArtwork(ranked: CardSummary[]): CardSummary[] {
+  const withArt = ranked.filter((card) => Boolean(card.image));
+  const withoutArt = ranked.filter((card) => !card.image);
+  return [...withArt, ...withoutArt];
 }
 
 /**
@@ -63,7 +41,7 @@ export async function lookupCard(
   const ranked = rankPrintings(summaries, query, setHint);
   if (ranked.length === 0) return undefined;
 
-  const ordered = await newestFirst(client, ranked, options.recencySample ?? 5);
+  const ordered = preferArtwork(ranked);
   const [primary] = ordered;
   if (!primary) return undefined;
 

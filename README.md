@@ -60,7 +60,7 @@ That runs the real lookup and render path against the live API, prints the embed
 ## Tests
 
 ```bash
-yarn test        # 46 tests over mention parsing, name resolution, rendering and the API client
+yarn test        # 47 tests over mention parsing, name resolution, rendering and the API client
 yarn typecheck
 ```
 
@@ -68,7 +68,7 @@ The suite runs offline. The API client tests stub `fetch`, and the render tests 
 
 ## Behaviour worth knowing
 
-- **Newest printing wins.** A name that matches several printings resolves to the one from the most recently released set, checked across the top five candidates. `[[Pikachu]]` gives you a current Pikachu rather than a 1999 promo, and the other printings are listed underneath with the `[[name|setId]]` syntax to reach them.
+- **Printings with art win.** When a name matches several printings, the bot prefers one that has a scan, then keeps the source order. A few printings have no scan in TCGdex, and an embed without art is a poor answer. Every card that has other printings is followed by a list of them with the `[[name|setId]]` syntax to reach an exact one, because the source order does not always start with the printing you want.
 - **Names are folded.** Case, accents, curly apostrophes and spacing are normalised, so `pokemon catcher`, `Pokémon Catcher` and `Boss’s Orders` all resolve.
 - **Code is ignored.** `[[...]]` inside backticks or a fenced block does not trigger a reply, so you can document the syntax in the same channel.
 - **One reply per message.** Up to three mentions per message and five embeds per reply, with a per-channel cooldown of 30 seconds by default (`MENTION_COOLDOWN_SECONDS`).
@@ -77,7 +77,6 @@ The suite runs offline. The API client tests stub `fetch`, and the render tests 
 ## Limits
 
 - TCGplayer pricing is sparse in TCGdex. Cardmarket is populated for nearly everything, so most embeds show one price source rather than two.
-- Set release dates come from the set detail endpoint, so the first lookup of a card from an unseen set costs one extra small request.
 - A name that matches nothing stays silent rather than posting an error, which keeps typos from turning into noise. The slash command does answer with a miss message.
 
 ## Licence

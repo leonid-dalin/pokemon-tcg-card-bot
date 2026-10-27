@@ -119,24 +119,6 @@ describe("lookupCard", () => {
     expect(embeds[1]?.title).toBe("Printings of Dragapult ex");
   });
 
-  it("prefers the printing from the newest set", async () => {
-    stubFetch({
-      "/cards?name=": {
-        body: [
-          { id: "basep-1", name: "Pikachu", localId: "1" },
-          { id: "sv08-050", name: "Pikachu", localId: "050" },
-        ],
-      },
-      "/sets/basep": { body: { id: "basep", name: "Wizards Black Star Promos", releaseDate: "1999-07-01" } },
-      "/sets/sv08": { body: { id: "sv08", name: "Surging Sparks", releaseDate: "2024-11-08" } },
-      "/cards/sv08-050": { body: { ...dragapult, id: "sv08-050", name: "Pikachu", localId: "050" } },
-    });
-    const client = new TcgdexClient();
-    const lookup = await lookupCard(client, "Pikachu");
-    expect(lookup?.card.id).toBe("sv08-050");
-    expect(lookup?.alternates.map((card) => card.id)).toEqual(["basep-1"]);
-  });
-
   it("prefers a printing with art over a newer one without", async () => {
     stubFetch({
       "/cards?name=": {
