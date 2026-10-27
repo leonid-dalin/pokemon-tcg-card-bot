@@ -1,0 +1,46 @@
+# CodeRabbit configuration
+# Docs: https://docs.coderabbit.ai/getting-started/configure-coderabbit-overview
+language: "en-GB"
+early_access: false
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: false
+  poem: false
+  review_status: true
+  commit_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_instructions:
+    - path: "src/**"
+      instructions: |
+        A lookup tries TCGdex first and falls back to the bundled Pocket data. Physical cards and Pocket cards come from different sources with different id shapes, so a change that merges the two paths is a regression.
+
+        - Card rendering is a pure function returning a plain view model. Flag any Discord type leaking into render.ts, lookup.ts, resolve.ts or mentions.ts: those layers are tested without a gateway connection, and that only holds while they stay free of discord.js.
+        - A hint may be a set id, a printed set code or a set name, and it resolves offline against src/data/set-index.ts. Do not accept a hint implementation that calls the network per lookup.
+        - Pocket cards must credit pokemon-tcg-pocket-cards in the footer and must not claim TCGdex as the source.
+        - Name matching order is score, then artwork, then release date. A change that reorders those silently changes which printing a bare name resolves to, so it needs a test naming the card it protects.
+    - path: "tests/**"
+      instructions: |
+        The suite runs offline. The API client tests stub global fetch with an object carrying ok, status and json; an unmatched route returns 404 rather than throwing, because an unknown error is treated as retryable and every test then waits out the backoff.
+
+        - Assertions belong on rendered fields, not on a snapshot of a whole embed, so a copy tweak does not fail a dozen tests.
+        - Fixtures are recorded from real API responses. Flag a fixture that was hand-edited to make a test pass.
+    - path: "scripts/**"
+      instructions: |
+        These are operator tools, not part of the request path. index:sets rebuilds src/data/set-index.ts from all 220 set endpoints and is the only thing that should write that file; a hand-edited set index is a defect.
+
+        - A script that needs credentials reads them through loadDotEnv and loadConfig, never from a literal.
+        - Set process.exitCode rather than calling process.exit after a network call, or undici teardown trips a libuv assertion and the exit code becomes 127.
+    - path: "README.md"
+      instructions: |
+        The setup steps name a page, a field label and a button, because the Discord portal has two different pages and the bot token is shown once. Flag any step that says only "copy the token".
+
+        Numbers here must match the code: the test count, the permissions integer and the card totals. A stale count is a defect.
+
+        Spelling is en-GB.
+chat:
+  auto_reply: true

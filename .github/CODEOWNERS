@@ -1,0 +1,12 @@
+# Reviewers are requested automatically for pull requests that touch these paths.
+# Later rules win, so keep the specific paths below the catch-all.
+
+* @leonid-dalin
+
+/.github/ @leonid-dalin
+/.coderabbit.yaml @leonid-dalin
+/src/ @leonid-dalin
+/src/api/ @leonid-dalin
+/src/data/ @leonid-dalin
+/tests/ @leonid-dalin
+/scripts/ @leonid-dalin

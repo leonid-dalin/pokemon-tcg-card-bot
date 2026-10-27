@@ -27,3 +27,5 @@ project reproduces the same public information contract, meaning card art with s
 and number, rules text, legality and prices, derived from that bot's documented
 command behaviour. No source code, assets or data files from Card Buddy are
 included here, and this project is not a fork of it.
+
+Full dependency, data and image terms are in THIRD_PARTY_NOTICES.md.

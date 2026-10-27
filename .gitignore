@@ -1,6 +1,32 @@
+# dependencies
 node_modules/
+
+# build output
 dist/
+*.tsbuildinfo
+
+# test and coverage output
+coverage/
+.vitest/
+
+# local configuration and credentials
 .env
-preview/
-*.log
+.env.*
+!.env.example
+
+# editor and tooling leftovers
+*.before
+*.orig
+*.rej
+
+# runtime state
 .bot.pid
+*.log
+preview/
+
+# editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

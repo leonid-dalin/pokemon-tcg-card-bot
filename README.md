@@ -5,21 +5,29 @@ A Discord bot that shows a Pokémon TCG card. Two ways in:
 - `/card name:Dragapult ex` for a slash command with autocomplete.
 - `[[Dragapult ex]]` anywhere in a message, and the bot replies with the card. Pin a printing with `[[Dragapult ex|sv08.5]]`.
 
-The reply carries the card art, set and number, regulation mark, rarity, attacks and abilities, weakness and retreat, format legality, Cardmarket and TCGplayer prices where the source has them, and the illustrator.
+The reply carries the card art, set and number, regulation mark, rarity, attacks and abilities, weakness and retreat, format legality, Cardmarket and TCGplayer prices where the source has them, and the illustrator
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `/card name:<text> [set:<hint>]` | Shows a card with autocomplete on the name and an optional set hint |
+| `/set id:<setId>` | Shows a set with its card count, series and release date |
+| `[[Card name]]` | Replies with the card from any message |
+| `[[Card name\|hint]]` | Same, with a set id, printed code or set name pinning one printing |
+| `[[Card name\|pocket]]` | Restricts the lookup to Pokémon TCG Pocket |
 
 ## Why this exists
 
-Card Buddy is a well known Pokémon card bot, and its behaviour is the reference point: art first, then set and number, rules text, legality and both price sources, with a name that can be narrowed to one printing. This project rebuilds that information contract from its public command list and the open TCGdex API. No code, assets or data from Card Buddy are involved. See NOTICE.
+Card Buddy is a well known Pokémon card bot, and its behaviour is the reference point: art first, then set and number, rules text, legality and both price sources, with a name that can be narrowed to one printing. This project rebuilds that information contract from its public command list and open card data. No code, assets or data from Card Buddy are involved. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
-The one thing added on top is the inline mention. Card Buddy needs a command, so a card mentioned mid-sentence gets no reply. `[[...]]` fixes that, which is what the Hearthstone bot d0nkeybot does with `[[card mentions]]`.
+The one thing added on top is the inline mention. Card Buddy needs a command, so a card mentioned mid-sentence gets no reply. `[[...]]` fixes that, which is what the Hearthstone bot d0nkeybot does with `[[card mentions]]`
 
 ## Data sources
 
-Two, because one is not enough.
+Physical cards come from [TCGdex](https://tcgdex.dev), which needs no API key and has no quota to manage
 
-**Physical cards** come from [TCGdex](https://tcgdex.dev), no API key, no quota to manage.
-
-**Pokémon TCG Pocket** comes from the PocketDecks [`pokemon-tcg-pocket-cards`](https://github.com/chase-mew/pokemon-tcg-pocket-cards) package, 4,317 cards across 23 expansions. It is a dependency, so the data arrives with `yarn install` and needs no network at runtime. TCGdex's Pocket catalogue stops before Deluxe Pack: Mega, which is why a card like Crustle ex is missing there entirely; the package has it, including its alternate printings.
+Pokémon TCG Pocket cards come from the PocketDecks [`pokemon-tcg-pocket-cards`](https://github.com/chase-mew/pokemon-tcg-pocket-cards) package: 4,317 cards across 23 expansions. It is a dependency, so the data arrives with `yarn install` and needs no network at runtime. TCGdex's Pocket catalogue stops before Deluxe Pack: Mega, which is why a card like Crustle ex is missing there entirely; the package has it, including its alternate printings. That package is AGPL-3.0, so read [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before you redistribute anything
 
 A lookup tries TCGdex first and falls back to Pocket data when nothing matches, so `[[Crustle ex]]` and `[[Crustle ex|ptcgp]]` both resolve to `b4b-133`. The bot reads:
 
@@ -27,7 +35,7 @@ A lookup tries TCGdex first and falls back to Pocket data when nothing matches, 
 - `GET /v2/en/cards/{id}` for the card, its pricing and its legality.
 - `GET /v2/en/sets/{id}` for the set, including `releaseDate`, which is how the newest printing wins when a name matches several.
 
-Responses are cached in memory, ten minutes for cards and an hour for sets, so a busy channel does not hammer the API. Retries cover 429 and 5xx with exponential backoff, and every request carries a timeout.
+Responses are cached in memory, ten minutes for cards and an hour for sets, so a busy channel does not hammer the API. Retries cover 429 and 5xx with exponential backoff, and every request carries a timeout
 
 ## Setup
 
@@ -35,7 +43,7 @@ Responses are cached in memory, ten minutes for cards and an hour for sets, so a
 2. **Application ID:** on **General Information**, the first page after creating the app, copy the field labelled **Application ID**.
 3. **Bot token:** in the left sidebar open **Bot**, find the **Token** section and press **Reset Token**, then **Copy**. It is shown once; if you navigate away you have to reset it again.
 4. Under **Bot → Privileged Gateway Intents**, enable **Message Content**. Without it the bot sees slash commands but never the `[[...]]` mentions. Leave it off and set `MENTION_ENABLED=false` if you only want the slash command.
-5. Copy `.env.example` to `.env` and paste the two values into `DISCORD_TOKEN` and `DISCORD_CLIENT_ID`. Set `DISCORD_GUILD_ID` while developing so commands appear instantly instead of within the hour.
+5. Copy `.env.example` to `.env` and paste the two values into `DISCORD_TOKEN` and `DISCORD_CLIENT_ID`. Set `DISCORD_GUILD_ID` while developing; guild commands appear at once, global ones take up to an hour.
 6. Check the credentials before running anything:
 
 ```bash
@@ -49,7 +57,7 @@ yarn doctor       # prints the bot name, or Discord's error if the token is wron
 277025475584
 ```
 
-That is View Channels, Send Messages, Embed Links, Read Message History, Use Application Commands and Send Messages in Threads. The thread permission is easy to miss: without it a `[[card]]` mentioned inside a thread gets no reply, because the bot cannot post there.
+That is View Channels, Send Messages, Embed Links, Read Message History, Use Application Commands and Send Messages in Threads. The thread permission is easy to miss: without it a `[[card]]` mentioned inside a thread gets no reply, because the bot cannot post there
 
 8. Register the commands and run:
 
@@ -58,13 +66,13 @@ yarn register     # publish /card and /set
 yarn dev          # run from source
 ```
 
-If your npm config blocks install scripts, `esbuild` arrives without its platform binary. Approve it once with `npm approve-scripts esbuild` and reinstall.
+If your npm config blocks install scripts, `esbuild` arrives without its platform binary. Approve it once with `npm approve-scripts esbuild` and reinstall
 
-The bot refuses to start twice: it writes `.bot.pid` and exits if that pid is still alive. Two instances sharing one token both answer every mention, which looks like one bot replying twice and leaves no error in either log. A pid file left by a hard kill is ignored, because the process behind it is gone.
+The bot refuses to start twice: it writes `.bot.pid` and exits if that pid is still alive. Two instances sharing one token both answer every mention, which looks like one bot replying twice and leaves no error in either log. A pid file left by a hard kill is ignored, because the process behind it is gone
 
-`yarn dev` runs through `tsx`, which needs a real terminal. In a service manager, container or anything without a tty it exits with `stdin is not a tty`, so use `yarn build` then `yarn start` there.
+`yarn dev` runs through `tsx`, which needs a real terminal. In a service manager, container or anything without a tty it exits with `stdin is not a tty`, so use `yarn build` then `yarn start` there
 
-For production, `yarn build` then `yarn start`.
+For production, `yarn build` then `yarn start`
 
 ## Profile picture
 
@@ -74,7 +82,7 @@ For production, `yarn build` then `yarn start`.
 yarn avatar assets/avatar.jpg
 ```
 
-The script validates the file type and the 8 MB ceiling before it calls `PATCH /users/@me`, so a bad path fails locally instead of halfway through an upload.
+The script validates the file type and the 8 MB ceiling before it calls `PATCH /users/@me`, so a bad path fails on your machine before any upload starts
 
 ## Checking a card without Discord
 
@@ -82,32 +90,34 @@ The script validates the file type and the 8 MB ceiling before it calls `PATCH /
 yarn preview "Dragapult ex" "Charizard|sv03.5" "Mega Kangaskhan ex"
 ```
 
-That runs the real lookup and render path against the live API, prints the embed payload as JSON and writes a Discord-styled HTML preview to `preview/`. It is the fastest way to confirm a card, a set hint or the mention format before deploying.
+That runs the real lookup and render path against the live API, prints the embed payload as JSON and writes a Discord-styled HTML preview to `preview/`. It is the fastest way to confirm a card, a set hint or the mention format before deploying
 
 ## Tests
 
 ```bash
-yarn test        # 47 tests over mention parsing, name resolution, rendering and the API client
+yarn test        # 73 tests over mention parsing, name resolution, set indexing, rendering and both data sources
 yarn typecheck
 ```
 
-The suite runs offline. The API client tests stub `fetch`, and the render tests use two recorded cards in `tests/fixtures/`, so a TCGdex outage or a reprint does not break CI.
+The suite runs offline. The API client tests stub `fetch`, and the render tests use two recorded cards in `tests/fixtures/`, so a TCGdex outage or a reprint does not break CI. Pocket lookups read the bundled package, so they need no network either
 
 ## Behaviour worth knowing
 
-- **Printings with art win.** When a name matches several printings, the bot prefers one that has a scan, then keeps the source order. A few printings have no scan in TCGdex, and an embed without art is a poor answer. A card with other printings carries an **Other printings** field listing them, with the `[[name|setId]]` syntax to reach an exact one, because the source order does not always start with the printing you want. It stays one embed per mention, since two embeds read as two answers to one question.
-- **Set hints take a code, an id or a name.** `[[Lapras|SCR]]`, `[[Lapras|sv07]]` and `[[Lapras|Stellar Crown]]` all reach the same card. The printed code is what players actually use, so it is the one worth remembering. A partial set name works too. `[[Crustle|pocket]]` filters to Pokémon TCG Pocket sets only, which is useful because those ids (A1 through B2a) are not memorable and there is no single set called tcgp.
-- **Printing choice is data-driven.** Artwork first, then the newest set by real release date, so a plain `[[Lapras]]` gives the newest Lapras rather than whichever the API happens to list first. Release dates and codes live in `src/data/set-index.ts`, built by `yarn index:sets`; rerun it when a set releases.
-- **Names are folded.** Case, accents, curly apostrophes and spacing are normalised, so `pokemon catcher`, `Pokémon Catcher` and `Boss’s Orders` all resolve.
-- **Code is ignored.** `[[...]]` inside backticks or a fenced block does not trigger a reply, so you can document the syntax in the same channel.
-- **One reply per message.** Up to three mentions per message and five embeds per reply, with the throttle off by default (`MENTION_COOLDOWN_SECONDS=0`). Set it to a number of seconds to turn on a per-member token bucket: a burst of three mentions, then one more per interval. It is keyed per member, so one person can never swallow another's mention, and a burst matters because testing several cards in a row is normal.
-- **Missing scans are labelled.** A few promos have no scan in the source; the embed says so instead of posting a bare embed with no art.
+- Name score decides the printing first, then artwork, then the newest set by real release date. A plain `[[Lapras]]` gives the newest Lapras, not whichever one the API lists first. Release dates and codes live in `src/data/set-index.ts`, built by `yarn index:sets`; rerun it when a set releases. A card with other printings carries an Other printings field listing them, with the `[[name|setId]]` syntax to reach an exact one. It stays one embed per mention, since two embeds read as two answers to one question.
+- Case, accents, apostrophes and spacing are normalised, so `pokemon catcher`, `Pokémon Catcher` and `Boss's Orders` all resolve.
+- `[[...]]` inside backticks or a fenced block does not trigger a reply, so you can document the syntax in the same channel.
+- One reply covers up to three mentions per message and five embeds, with the throttle off by default (`MENTION_COOLDOWN_SECONDS=0`). Set it to a number of seconds to turn on a per-member token bucket: a burst of three mentions, then one more per interval. It is keyed per member, so one person can never swallow another's mention, and a burst matters because testing several cards in a row is normal.
+- A few promos have no scan in the source, and the embed says so, so a card with no art never looks broken.
 
 ## Limits
 
-- TCGplayer pricing is sparse in TCGdex. Cardmarket is populated for nearly everything, so most embeds show one price source rather than two.
-- A name that matches nothing gets a short `No card matched` reply, because a mention is an explicit request and silence reads as a broken bot. Plain text without brackets is still ignored, which keeps ordinary conversation quiet.
+- TCGplayer pricing is sparse in TCGdex. Cardmarket covers nearly everything, so most embeds carry one price source.
+- A name that matches nothing gets a short `No card matched` reply with the closest names, because a mention is an explicit request and silence reads as a broken bot. Plain text without brackets is still ignored, which keeps ordinary conversation quiet.
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report vulnerabilities by email as described in [SECURITY.md](SECURITY.md), never in a public issue. Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Licence
 
-Apache License 2.0, see LICENSE. The avatar images are excluded, see NOTICE.
+This project's own code is licensed under the Apache License 2.0, see [LICENSE](LICENSE). Card data, the Pocket package and the avatar image keep their own terms, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
