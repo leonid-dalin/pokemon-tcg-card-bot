@@ -137,6 +137,21 @@ describe("lookupCard", () => {
     expect(lookup?.card.id).toBe("swsh10.5-055");
   });
 
+  it("pins the set exactly so A1 does not match A1a", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "A1a-025", name: "Pikachu", localId: "025", image: "https://assets.tcgdex.net/en/tcgp/A1a/25" },
+          { id: "A1-025", name: "Pikachu", localId: "025", image: "https://assets.tcgdex.net/en/tcgp/A1/25" },
+        ],
+      },
+      "/cards/A1-025": { body: { ...dragapult, id: "A1-025", name: "Pikachu", localId: "025" } },
+    });
+    const client = new TcgdexClient();
+    const lookup = await lookupCard(client, "Pikachu", "A1");
+    expect(lookup?.card.id).toBe("A1-025");
+  });
+
   it("keeps an exact name ahead of a newer series that only contains it", async () => {
     stubFetch({
       "/cards?name=": {

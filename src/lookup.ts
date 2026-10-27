@@ -1,7 +1,7 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { renderCard, type EmbedView } from "./render.js";
-import { normaliseName, rankPrintings, scoreCandidate } from "./resolve.js";
+import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { isPocketCard, isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
 
 export interface CardLookup {
@@ -47,10 +47,16 @@ export async function lookupCard(
   // name (Stellar Crown). All three resolve offline against the set index.
   // "pocket" is a group, not a set, so it filters rather than pins one id.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
-  const hint = setHint && !pocketOnly ? (resolveSetHint(setHint) ?? setHint) : undefined;
+  const resolved = setHint && !pocketOnly ? resolveSetHint(setHint) : undefined;
   const summaries = await client.searchByName(query);
-  const matched = rankPrintings(summaries, query, hint);
-  const ranked = pocketOnly ? matched.filter((card) => isPocketCard(card.id)) : matched;
+  const matched = rankPrintings(summaries, query, resolved ?? (pocketOnly ? undefined : setHint));
+
+  // A hint that resolved to a real set pins that set exactly. Prefix matching
+  // would let "A1" also match "A1a", and the newer set then wins the ranking.
+  const pinned = resolved
+    ? matched.filter((card) => normaliseName(setIdOf(card.id)) === normaliseName(resolved))
+    : matched;
+  const ranked = pocketOnly ? pinned.filter((card) => isPocketCard(card.id)) : pinned;
   if (ranked.length === 0) return undefined;
 
   const ordered = orderForDisplay(ranked, query);

@@ -78,8 +78,13 @@ export class TcgdexClient {
     throw lastError instanceof Error ? lastError : new TcgdexError(String(lastError));
   }
 
-  /** Name search is a prefix match upstream, so short queries return many printings. */
-  async searchByName(name: string, limit = 100): Promise<CardSummary[]> {
+  /**
+   * Name search is a prefix match upstream, so a common name returns well over a
+   * hundred printings. The cap is deliberately high: filtering by set happens
+   * locally, and the upstream `set` parameter is ignored, so a low cap silently
+   * drops the printing the caller asked for.
+   */
+  async searchByName(name: string, limit = 500): Promise<CardSummary[]> {
     const query = new URLSearchParams({ name });
     const cards = await this.getJson<CardSummary[]>(`/cards?${query.toString()}`, this.cardTtlMs);
     return cards.slice(0, limit);
