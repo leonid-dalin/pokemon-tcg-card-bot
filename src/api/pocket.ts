@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import type { Card, CardSummary } from "./types.js";
 
 /**
@@ -10,9 +11,13 @@ import type { Card, CardSummary } from "./types.js";
  * the package's v5 data instead: a collection file per set with printing
  * metadata, and a gameplay file with the attacks.
  */
-// Resolved from the working directory, not from import.meta.url: the compiled
-// build sits two levels deeper, where a relative path would miss node_modules.
-const PACKAGE_ROOT = join(process.cwd(), "node_modules", "pokemon-tcg-pocket-cards", "data", "v5");
+// Node's own resolver finds the package from this module, so the bot starts
+// from any working directory, in a checkout or from dist.
+const PACKAGE_ROOT = join(
+  dirname(createRequire(import.meta.url).resolve("pokemon-tcg-pocket-cards/package.json")),
+  "data",
+  "v5",
+);
 
 interface AlternateVersion {
   set_code: string;
