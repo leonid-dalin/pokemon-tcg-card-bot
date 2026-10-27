@@ -11,10 +11,13 @@ import {
 import { toEmbeds } from "./discord/embeds.js";
 import { lookupCard, lookupEmbeds } from "./lookup.js";
 import { extractMentions } from "./mentions.js";
+import { acquireSingleInstanceLock } from "./single-instance.js";
 
 const MAX_EMBEDS_PER_MESSAGE = 5;
 
 loadDotEnv();
+
+if (!acquireSingleInstanceLock()) process.exit(1);
 
 const config = loadConfig(process.env);
 const api = new TcgdexClient();

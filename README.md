@@ -54,6 +54,8 @@ yarn dev          # run from source
 
 If your npm config blocks install scripts, `esbuild` arrives without its platform binary. Approve it once with `npm approve-scripts esbuild` and reinstall.
 
+The bot refuses to start twice: it writes `.bot.pid` and exits if that pid is still alive. Two instances sharing one token both answer every mention, which looks like one bot replying twice and leaves no error in either log. A pid file left by a hard kill is ignored, because the process behind it is gone.
+
 `yarn dev` runs through `tsx`, which needs a real terminal. In a service manager, container or anything without a tty it exits with `stdin is not a tty`, so use `yarn build` then `yarn start` there.
 
 For production, `yarn build` then `yarn start`.

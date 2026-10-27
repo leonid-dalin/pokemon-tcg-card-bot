@@ -3,3 +3,4 @@ dist/
 .env
 preview/
 *.log
+.bot.pid
