@@ -58,3 +58,16 @@ export function resolveSetHint(hint: string): string | undefined {
 export function setEntry(setId: string): SetIndexEntry | undefined {
   return byId.get(normaliseName(setId));
 }
+
+const POCKET_HINT = /^(ptcgp|tcgp|pocket|pocket tcg)$/i;
+const POCKET_SET = /^(?:[AB][0-9]|P-A)/i;
+
+/** True when the hint means "any Pocket set" rather than one set. */
+export function isPocketHint(hint: string): boolean {
+  return POCKET_HINT.test(hint.trim());
+}
+
+/** Pocket set ids are A1 through B2a, plus the P-A promo set. */
+export function isPocketCard(cardId: string): boolean {
+  return POCKET_SET.test(setIdOf(cardId));
+}

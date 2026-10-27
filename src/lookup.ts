@@ -2,7 +2,7 @@ import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { renderCard, type EmbedView } from "./render.js";
 import { normaliseName, rankPrintings, scoreCandidate } from "./resolve.js";
-import { resolveSetHint, setRecency } from "./set-index.js";
+import { isPocketCard, isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
 
 export interface CardLookup {
   card: Card;
@@ -45,9 +45,12 @@ export async function lookupCard(
 ): Promise<CardLookup | undefined> {
   // A hint can be a set id (sv07), the printed code players use (SCR) or the set
   // name (Stellar Crown). All three resolve offline against the set index.
-  const hint = setHint ? (resolveSetHint(setHint) ?? setHint) : undefined;
+  // "pocket" is a group, not a set, so it filters rather than pins one id.
+  const pocketOnly = setHint ? isPocketHint(setHint) : false;
+  const hint = setHint && !pocketOnly ? (resolveSetHint(setHint) ?? setHint) : undefined;
   const summaries = await client.searchByName(query);
-  const ranked = rankPrintings(summaries, query, hint);
+  const matched = rankPrintings(summaries, query, hint);
+  const ranked = pocketOnly ? matched.filter((card) => isPocketCard(card.id)) : matched;
   if (ranked.length === 0) return undefined;
 
   const ordered = orderForDisplay(ranked, query);

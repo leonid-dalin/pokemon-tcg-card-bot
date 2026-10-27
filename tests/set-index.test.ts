@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveSetHint, setRecency, setEntry } from "../src/set-index.js";
+import { isPocketCard, isPocketHint, resolveSetHint, setRecency, setEntry } from "../src/set-index.js";
 import { SET_INDEX } from "../src/data/set-index.js";
 
 describe("set index coverage", () => {
@@ -54,5 +54,23 @@ describe("setRecency", () => {
   it("looks up a set entry by id", () => {
     expect(setEntry("sv07")?.name).toBe("Stellar Crown");
     expect(setEntry("nope")).toBeUndefined();
+  });
+});
+
+describe("pocket group hint", () => {
+  it("recognises the names people use", () => {
+    expect(isPocketHint("pocket")).toBe(true);
+    expect(isPocketHint("PTCGP")).toBe(true);
+    expect(isPocketHint("tcgp")).toBe(true);
+    expect(isPocketHint("A4a")).toBe(false);
+    expect(isPocketHint("sv07")).toBe(false);
+  });
+
+  it("identifies pocket card ids", () => {
+    expect(isPocketCard("A4a-047")).toBe(true);
+    expect(isPocketCard("B2a-001")).toBe(true);
+    expect(isPocketCard("P-A-014")).toBe(true);
+    expect(isPocketCard("sv04-007")).toBe(false);
+    expect(isPocketCard("bw3-7")).toBe(false);
   });
 });
