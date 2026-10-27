@@ -54,6 +54,8 @@ yarn dev          # run from source
 
 If your npm config blocks install scripts, `esbuild` arrives without its platform binary. Approve it once with `npm approve-scripts esbuild` and reinstall.
 
+`yarn dev` runs through `tsx`, which needs a real terminal. In a service manager, container or anything without a tty it exits with `stdin is not a tty`, so use `yarn build` then `yarn start` there.
+
 For production, `yarn build` then `yarn start`.
 
 ## Profile picture
@@ -85,7 +87,7 @@ The suite runs offline. The API client tests stub `fetch`, and the render tests 
 
 ## Behaviour worth knowing
 
-- **Printings with art win.** When a name matches several printings, the bot prefers one that has a scan, then keeps the source order. A few printings have no scan in TCGdex, and an embed without art is a poor answer. Every card that has other printings is followed by a list of them with the `[[name|setId]]` syntax to reach an exact one, because the source order does not always start with the printing you want.
+- **Printings with art win.** When a name matches several printings, the bot prefers one that has a scan, then keeps the source order. A few printings have no scan in TCGdex, and an embed without art is a poor answer. A card with other printings carries an **Other printings** field listing them, with the `[[name|setId]]` syntax to reach an exact one, because the source order does not always start with the printing you want. It stays one embed per mention, since two embeds read as two answers to one question.
 - **Names are folded.** Case, accents, curly apostrophes and spacing are normalised, so `pokemon catcher`, `Pokémon Catcher` and `Boss’s Orders` all resolve.
 - **Code is ignored.** `[[...]]` inside backticks or a fenced block does not trigger a reply, so you can document the syntax in the same channel.
 - **One reply per message.** Up to three mentions per message and five embeds per reply, with a per-channel cooldown of 30 seconds by default (`MENTION_COOLDOWN_SECONDS`).

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Card } from "../src/api/types.js";
-import { cardColour, priceField, renderCard, renderPrintingChoices, renderSet } from "../src/render.js";
+import { cardColour, priceField, renderCard, renderSet } from "../src/render.js";
 
 const fixture = (name: string): Card =>
   JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8")) as Card;
@@ -104,18 +104,6 @@ describe("renderCard", () => {
     for (const field of renderCard(long).fields) {
       expect(field.value.length).toBeLessThanOrEqual(1024);
     }
-  });
-});
-
-describe("renderPrintingChoices", () => {
-  it("lists the printings and shows how to narrow them", () => {
-    const view = renderPrintingChoices("Dragapult ex", [
-      { id: "sv06-130", localId: "130" },
-      { id: "sv08.5-073", localId: "073" },
-    ]);
-    expect(view.description).toContain("sv06-130");
-    expect(view.description).toContain("[[Dragapult ex|setId]]");
-    expect(view.title).toBe("Printings of Dragapult ex");
   });
 });
 

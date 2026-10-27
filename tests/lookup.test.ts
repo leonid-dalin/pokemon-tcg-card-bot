@@ -107,7 +107,7 @@ describe("lookupCard", () => {
     expect(lookup?.card.id).toBe("sv06-130");
   });
 
-  it("emits a second embed listing the other printings", async () => {
+  it("keeps one embed and lists other printings as a field", async () => {
     stubFetch({
       "/cards?name=": { body: summaries },
       "/cards/sv08.5-073": { body: dragapult },
@@ -115,8 +115,10 @@ describe("lookupCard", () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Dragapult ex");
     const embeds = lookupEmbeds(lookup!);
-    expect(embeds).toHaveLength(2);
-    expect(embeds[1]?.title).toBe("Printings of Dragapult ex");
+    expect(embeds).toHaveLength(1);
+    const printings = embeds[0]?.fields.find((field) => field.name === "Other printings");
+    expect(printings?.value).toContain("sv06-130");
+    expect(printings?.value).toContain("[[Dragapult ex|setId]]");
   });
 
   it("prefers a printing with art over a newer one without", async () => {

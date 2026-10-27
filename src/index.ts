@@ -27,6 +27,7 @@ if (config.mentionEnabled) {
 
 const client = new Client({ intents });
 const mentionCooldowns = new Map<string, number>();
+let warnedAboutContent = false;
 
 client.once(Events.ClientReady, (ready) => {
   console.log(`logged in as ${ready.user.tag}; mention replies ${config.mentionEnabled ? "on" : "off"}`);
@@ -56,6 +57,16 @@ client.on(Events.MessageCreate, async (message) => {
   if (!config.mentionEnabled) return;
   if (message.author.bot || message.webhookId) return;
 
+  // With the Message Content intent switched off Discord still delivers the
+  // event but strips the text, which looks like the bot ignoring everyone.
+  if (!message.content && !warnedAboutContent) {
+    warnedAboutContent = true;
+    console.warn(
+      "received a message with no content: enable Message Content under Bot -> Privileged Gateway Intents, then restart",
+    );
+    return;
+  }
+
   const mentions = extractMentions(message.content);
   if (mentions.length === 0) return;
 
@@ -70,6 +81,7 @@ client.on(Events.MessageCreate, async (message) => {
       const lookup = await lookupCard(api, mention.name, mention.setHint, {
         attribution: config.attribution,
       });
+      console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
       if (lookup) embeds.push(...toEmbeds(lookupEmbeds(lookup)));
       if (embeds.length >= MAX_EMBEDS_PER_MESSAGE) break;
     }

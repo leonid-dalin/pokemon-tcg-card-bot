@@ -208,21 +208,6 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
   };
 }
 
-/** Compact list used when a name matches several printings. */
-export function renderPrintingChoices(name: string, cards: { id: string; localId?: string }[]): EmbedView {
-  const lines = cards
-    .slice(0, 15)
-    .map((card) => `\`${card.id}\`${card.localId ? ` · #${card.localId}` : ""}`)
-    .join("\n");
-  return {
-    title: `Printings of ${name}`,
-    color: DEFAULT_COLOUR,
-    description: truncate(`${lines}\n\nNarrow it with \`[[${name}|setId]]\`.`, 4000),
-    fields: [],
-    footer: "Card data from TCGdex",
-  };
-}
-
 export function renderSet(set: SetSummary | CardSetRef): EmbedView {
   const count = set.cardCount?.official ?? set.cardCount?.total;
   const fields: EmbedField[] = [];

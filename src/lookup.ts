@@ -1,6 +1,6 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
-import { renderCard, renderPrintingChoices, type EmbedView } from "./render.js";
+import { renderCard, type EmbedView } from "./render.js";
 import { normaliseName, rankPrintings } from "./resolve.js";
 
 export interface CardLookup {
@@ -62,13 +62,17 @@ export async function lookupCard(
   };
 }
 
-/** The embeds a single mention should produce: the card, then other printings if any. */
+/**
+ * One embed per mention. Other printings ride along as a field rather than a
+ * second embed, because two embeds read as two answers to one question.
+ */
 export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
-  const views: EmbedView[] = [lookup.view];
-  if (lookup.alternates.length > 0) {
-    views.push(renderPrintingChoices(lookup.card.name, lookup.alternates));
-  }
-  return views;
+  if (lookup.alternates.length === 0) return [lookup.view];
+
+  const ids = lookup.alternates.map((card) => `\`${card.id}\``).join(", ");
+  const value = `${ids}
+Narrow it with \`[[${lookup.card.name}|setId]]\`.`;
+  return [{ ...lookup.view, fields: [...lookup.view.fields, { name: "Other printings", value }] }];
 }
 
 export function isMissing(error: unknown): boolean {

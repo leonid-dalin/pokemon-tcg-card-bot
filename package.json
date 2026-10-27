@@ -10,14 +10,15 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "dev": "tsx src/index.ts",
     "preview": "tsx scripts/preview.ts",
     "avatar": "tsx scripts/set-avatar.ts",
     "register": "tsx src/discord/register.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "doctor": "tsx scripts/doctor.ts"
+    "doctor": "tsx scripts/doctor.ts",
+    "rename": "tsx scripts/rename.ts"
   },
   "dependencies": {
     "discord.js": "^14.16.3"

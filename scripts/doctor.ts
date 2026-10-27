@@ -39,11 +39,13 @@ try {
   }
   console.log(`token valid, authenticated as ${me.username} (${me.id})${me.bot ? "" : " [not a bot user]"}`);
 
-  const guilds = (await rest.get("/users/@me/guilds")) as { name: string }[];
+  const guilds = (await rest.get("/users/@me/guilds")) as { id: string; name: string }[];
   if (guilds.length === 0) {
     console.log("not in any server yet: invite it with the OAuth2 URL from the Developer Portal");
   } else {
-    console.log(`in ${guilds.length} server(s): ${guilds.map((guild) => guild.name).join(", ")}`);
+    console.log(
+      `in ${guilds.length} server(s): ${guilds.map((guild) => `${guild.name} (${guild.id})`).join(", ")}`,
+    );
   }
 
   const commands = (await rest.get(`/applications/${config.clientId}/commands`)) as {
