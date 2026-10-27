@@ -41,6 +41,16 @@ describe("extractMentions", () => {
     expect(extractMentions("[[   ]]")).toEqual([]);
   });
 
+  it("reads the hint through a doubled pipe", () => {
+    expect(extractMentions("[[crustle||ptcgp]]")).toEqual([
+      { raw: "crustle||ptcgp", name: "crustle", setHint: "ptcgp" },
+    ]);
+  });
+
+  it("treats a trailing pipe with no hint as no hint", () => {
+    expect(extractMentions("[[crustle|]]")).toEqual([{ raw: "crustle|", name: "crustle" }]);
+  });
+
   it("collapses internal whitespace", () => {
     expect(extractMentions("[[Mega    Kangaskhan   ex]]")[0]?.name).toBe("Mega Kangaskhan ex");
   });
