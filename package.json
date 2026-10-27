@@ -1,7 +1,7 @@
 {
   "name": "pokemon-card-bot",
   "version": "0.1.0",
-  "description": "Discord bot that shows Pok\u00e9mon TCG cards from a slash command or an inline [[card]] mention",
+  "description": "Discord bot that shows Pokémon TCG cards from a slash command or an inline [[card]] mention",
   "license": "Apache-2.0",
   "type": "module",
   "private": true,
@@ -23,13 +23,14 @@
     "index:text": "tsx scripts/build-text-index.ts"
   },
   "dependencies": {
-    "discord.js": "^14.16.3",
+    "discord.js": "^14.27.0",
     "pokemon-tcg-pocket-cards": "^5.4.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }
