@@ -96,3 +96,24 @@ Narrow it with \`[[${lookup.card.name}|setId]]\`.`;
 export function isMissing(error: unknown): boolean {
   return error instanceof TcgdexError && error.status === 404;
 }
+
+/**
+ * Closest names when a lookup misses. Dropping the last word is what turns
+ * "Crustle ex" into "Crustle", which is the common case: people add a suffix
+ * that no printing carries.
+ */
+export async function suggestNames(
+  client: TcgdexClient,
+  query: string,
+  limit = 3,
+): Promise<CardSummary[]> {
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return [];
+  const shortened = words.slice(0, -1).join(" ");
+  try {
+    const cards = await client.searchByName(shortened);
+    return orderForDisplay(rankPrintings(cards, shortened), shortened).slice(0, limit);
+  } catch {
+    return [];
+  }
+}

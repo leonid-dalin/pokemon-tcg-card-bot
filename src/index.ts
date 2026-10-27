@@ -9,7 +9,7 @@ import {
   type CommandContext,
 } from "./discord/commands.js";
 import { toEmbeds } from "./discord/embeds.js";
-import { lookupCard, lookupEmbeds } from "./lookup.js";
+import { lookupCard, lookupEmbeds, suggestNames } from "./lookup.js";
 import { extractMentions } from "./mentions.js";
 import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
@@ -100,13 +100,24 @@ client.on(Events.MessageCreate, async (message) => {
   try {
     const embeds = [];
     const misses: string[] = [];
+    const suggestions = new Map<string, string>();
     for (const mention of mentions) {
       const lookup = await lookupCard(api, mention.name, mention.setHint, {
         attribution: config.attribution,
       });
       console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
-      if (lookup) embeds.push(...toEmbeds(lookupEmbeds(lookup)));
-      else misses.push(mention.raw);
+      if (lookup) {
+        embeds.push(...toEmbeds(lookupEmbeds(lookup)));
+      } else {
+        misses.push(mention.raw);
+        const closest = await suggestNames(api, mention.name);
+        if (closest.length > 0) {
+          suggestions.set(
+            mention.raw,
+            closest.map((card) => `\`${card.name}\` (${card.id})`).join(", "),
+          );
+        }
+      }
       if (embeds.length >= MAX_EMBEDS_PER_MESSAGE) break;
     }
     if (embeds.length === 0 && misses.length === 0) return;
@@ -115,7 +126,15 @@ client.on(Events.MessageCreate, async (message) => {
     // an answer. Silence here reads as a broken bot, not as a polite no-op.
     await message.reply({
       ...(misses.length > 0
-        ? { content: `No card matched ${misses.map((name) => `\`${name}\``).join(", ")}.` }
+        ? {
+            content: misses
+              .map((raw) => {
+                const closest = suggestions.get(raw);
+                const base = `No card matched \`${raw}\`.`;
+                return closest ? `${base} Closest: ${closest}.` : base;
+              })
+              .join("\n"),
+          }
         : {}),
       ...(embeds.length > 0 ? { embeds: embeds.slice(0, MAX_EMBEDS_PER_MESSAGE) } : {}),
       allowedMentions: { repliedUser: false },
