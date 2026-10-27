@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normaliseName, rankPrintings, resolvePrinting, scoreCandidate, setIdMatches, setIdOf } from "../src/resolve.js";
+import { normaliseName, rankPrintings, resolvePrinting, scoreCandidate, seriesRank, setIdMatches, setIdOf } from "../src/resolve.js";
 
 const printing = (id: string, name: string) => ({ id, name });
 
@@ -88,5 +88,22 @@ describe("resolvePrinting", () => {
 
   it("returns undefined when nothing matches", () => {
     expect(resolvePrinting([printing("sv06-130", "Dragapult")], "Snorlax")).toBeUndefined();
+  });
+});
+
+describe("seriesRank", () => {
+  it("orders series oldest to newest", () => {
+    expect(seriesRank("base1-4")).toBeLessThan(seriesRank("swsh1-1"));
+    expect(seriesRank("swsh1-1")).toBeLessThan(seriesRank("sv08.5-073"));
+    expect(seriesRank("sv08.5-073")).toBeLessThan(seriesRank("me01-104"));
+  });
+
+  it("reads the longer series prefix", () => {
+    expect(seriesRank("swshp-1")).toBe(seriesRank("swsh1-1"));
+    expect(seriesRank("mep-025")).toBe(seriesRank("me01-104"));
+  });
+
+  it("returns -1 for an unknown set", () => {
+    expect(seriesRank("2024sv-2")).toBe(-1);
   });
 });

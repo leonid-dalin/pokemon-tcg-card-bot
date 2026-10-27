@@ -69,6 +69,40 @@ export function rankPrintings(
   return ranked.map((entry) => entry.card);
 }
 
+
+/**
+ * Set ids begin with their series, and the search API returns printings in no
+ * useful order, so a plain name like "charizard" otherwise resolves to a 2009
+ * card. This ranks series oldest to newest; the longest prefix wins so "swshp"
+ * is Sword and Shield rather than something else that starts with "s".
+ */
+const SERIES_ORDER = [
+  "base",
+  "gym",
+  "neo",
+  "lc",
+  "ex",
+  "dp",
+  "pl",
+  "hgss",
+  "bw",
+  "xy",
+  "sm",
+  "swsh",
+  "sv",
+  "me",
+  "tcgp",
+] as const;
+
+export function seriesRank(cardId: string): number {
+  const setId = normaliseName(setIdOf(cardId));
+  let rank = -1;
+  for (const [index, series] of SERIES_ORDER.entries()) {
+    if (setId.startsWith(series)) rank = Math.max(rank, index);
+  }
+  return rank;
+}
+
 export function resolvePrinting(
   summaries: CardSummary[],
   query: string,

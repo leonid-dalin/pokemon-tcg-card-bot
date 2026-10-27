@@ -121,6 +121,37 @@ describe("lookupCard", () => {
     expect(printings?.value).toContain("[[Dragapult ex|setId]]");
   });
 
+  it("accepts a set name as the hint", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "sv08-144", name: "Snorlax", localId: "144", image: "https://assets.tcgdex.net/en/sv/sv08/144" },
+          { id: "swsh10.5-055", name: "Snorlax", localId: "055", image: "https://assets.tcgdex.net/en/swsh/swsh10.5/55" },
+        ],
+      },
+      "/sets": { body: [{ id: "swsh10.5", name: "Pokémon GO" }, { id: "sv08", name: "Surging Sparks" }] },
+      "/cards/swsh10.5-055": { body: { ...dragapult, id: "swsh10.5-055", name: "Snorlax", localId: "055" } },
+    });
+    const client = new TcgdexClient();
+    const lookup = await lookupCard(client, "Snorlax", "Pokemon GO");
+    expect(lookup?.card.id).toBe("swsh10.5-055");
+  });
+
+  it("prefers the newest series among art-bearing printings", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "pl4-1", name: "Charizard", localId: "1", image: "https://assets.tcgdex.net/en/pl/pl4/1" },
+          { id: "sv03-125", name: "Charizard", localId: "125", image: "https://assets.tcgdex.net/en/sv/sv03/125" },
+        ],
+      },
+      "/cards/sv03-125": { body: { ...dragapult, id: "sv03-125", name: "Charizard", localId: "125" } },
+    });
+    const client = new TcgdexClient();
+    const lookup = await lookupCard(client, "Charizard");
+    expect(lookup?.card.id).toBe("sv03-125");
+  });
+
   it("prefers a printing with art over a newer one without", async () => {
     stubFetch({
       "/cards?name=": {

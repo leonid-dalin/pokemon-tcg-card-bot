@@ -1,7 +1,7 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { renderCard, type EmbedView } from "./render.js";
-import { normaliseName, rankPrintings } from "./resolve.js";
+import { normaliseName, rankPrintings, seriesRank } from "./resolve.js";
 
 export interface CardLookup {
   card: Card;
@@ -17,14 +17,16 @@ export interface LookupOptions {
 }
 
 /**
- * Prefer candidates that have artwork. TCGdex has no scan for a few promos and
- * older printings, and a card embed without art is a poor answer, so an
- * art-bearing printing is chosen even when the source lists another one first.
+ * Order candidates for display: artwork first, then the newest series, then the
+ * source order. TCGdex has no scan for a few promos, and a card embed without
+ * art is a poor answer, so art outranks recency.
  */
-function preferArtwork(ranked: CardSummary[]): CardSummary[] {
-  const withArt = ranked.filter((card) => Boolean(card.image));
-  const withoutArt = ranked.filter((card) => !card.image);
-  return [...withArt, ...withoutArt];
+function orderForDisplay(ranked: CardSummary[]): CardSummary[] {
+  return [...ranked].sort((a, b) => {
+    const art = (b.image ? 1 : 0) - (a.image ? 1 : 0);
+    if (art !== 0) return art;
+    return seriesRank(b.id) - seriesRank(a.id);
+  });
 }
 
 /**
@@ -38,10 +40,21 @@ export async function lookupCard(
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
   const summaries = await client.searchByName(query);
-  const ranked = rankPrintings(summaries, query, setHint);
+  let ranked = rankPrintings(summaries, query, setHint);
+
+  // A hint can be a set id (swsh10.5) or a set name (Pokemon GO). Names are not
+  // in the card id, so they need one lookup against the cached set list.
+  if (ranked.length === 0 && setHint) {
+    const sets = await client.listSets();
+    const wanted = normaliseName(setHint);
+    const match = sets.find((set) => normaliseName(set.name) === wanted) ??
+      sets.find((set) => normaliseName(set.name).includes(wanted));
+    if (match) ranked = rankPrintings(summaries, query, match.id);
+  }
+
   if (ranked.length === 0) return undefined;
 
-  const ordered = preferArtwork(ranked);
+  const ordered = orderForDisplay(ranked);
   const [primary] = ordered;
   if (!primary) return undefined;
 
