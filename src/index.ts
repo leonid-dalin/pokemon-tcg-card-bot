@@ -19,6 +19,7 @@ import { lookupById, lookupCard, lookupEmbeds, suggestNames } from "./lookup.js"
 import { extractMentions, parseSearchCommand } from "./mentions.js";
 import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
+import { reportInteractionFailure } from "./discord/interaction-failure.js";
 
 const MAX_EMBEDS_PER_MESSAGE = 5;
 
@@ -77,9 +78,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   } catch (error) {
     console.error("interaction failed", error);
-    if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: "Card lookup failed, try again.", ephemeral: true }).catch(() => {});
-    }
+    await reportInteractionFailure(interaction).catch(() => {});
   }
 });
 
