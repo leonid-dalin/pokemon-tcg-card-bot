@@ -51,4 +51,22 @@ describe("MentionBudget", () => {
     expect(blocked.allowed).toBe(false);
     if (!blocked.allowed) expect(blocked.retryAfterSeconds).toBeGreaterThanOrEqual(1);
   });
+
+  it("forgets refilled members once it tracks too many", () => {
+    const budget = new MentionBudget({ capacity: 1, refillSeconds: 5, maxKeys: 2 });
+    const start = 1_000_000;
+    budget.take("c:a", start);
+    budget.take("c:b", start);
+    budget.take("c:c", start + 5_000);
+    expect(budget.size).toBe(1);
+  });
+
+  it("keeps a member who is still throttled", () => {
+    const budget = new MentionBudget({ capacity: 1, refillSeconds: 5, maxKeys: 2 });
+    const start = 1_000_000;
+    budget.take("c:a", start);
+    budget.take("c:b", start + 4_000);
+    budget.take("c:c", start + 5_000);
+    expect(budget.take("c:b", start + 5_000).allowed).toBe(false);
+  });
 });

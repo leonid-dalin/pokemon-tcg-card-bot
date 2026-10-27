@@ -35,10 +35,10 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
 }
 
 /**
- * English pricing first, then any locale that has pricing. TCGdex has no ja
- * route, so the chain skips straight from en to the rest.
+ * English pricing first, then any locale that has pricing. TCGdex's ja catalogue
+ * uses its own ids, so an English id is never found there and ja is left out.
  */
-const PRICE_LOCALES = ["en", "ja", "fr", "de", "es", "it", "pt"] as const;
+const PRICE_LOCALES = ["en", "fr", "de", "es", "it", "pt"] as const;
 
 async function withEnglishPricing(client: TcgdexClient, card: Card): Promise<Card> {
   if (priceField(card)) return card;
@@ -102,15 +102,35 @@ export async function lookupById(
   id: string,
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
-  const pinned = (await client.getCard(id).catch(() => undefined)) ?? getPocketCard(id);
-  if (!pinned) return undefined;
-  const sameName = (await client.searchByName(pinned.name).catch(() => []))
+  // Only a 404 means the id is unknown to TCGdex. Any other failure is an
+  // outage, and answering "no card matched" would blame the asker for it.
+  let tcgdexCard: Card | undefined;
+  let outage: unknown;
+  try {
+    tcgdexCard = await client.getCard(id);
+  } catch (error) {
+    if (!isMissing(error)) outage = error;
+  }
+  const pocketCard = tcgdexCard ? undefined : getPocketCard(id);
+  const pinned = tcgdexCard ?? pocketCard;
+  if (!pinned) {
+    if (outage !== undefined) throw outage;
+    return undefined;
+  }
+
+  // A Pocket printing lists other Pocket printings, never the physical cards
+  // TCGdex returns for the same name.
+  const candidates = pocketCard
+    ? searchPocketByName(pinned.name)
+    : await client.searchByName(pinned.name).catch(() => []);
+  const sameName = candidates
     .filter((entry) => entry.id !== pinned.id && normaliseName(entry.name) === normaliseName(pinned.name))
     .slice(0, options.alternateLimit ?? 10);
+  const attribution = pocketCard ? POCKET_ATTRIBUTION : options.attribution;
   return {
     card: pinned,
     view: renderCard(pinned, {
-      ...(options.attribution ? { attribution: options.attribution } : {}),
+      ...(attribution ? { attribution } : {}),
       ...(options.cardUrl ? { cardUrl: options.cardUrl } : {}),
     }),
     alternates: sameName,

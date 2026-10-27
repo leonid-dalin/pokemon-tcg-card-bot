@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import type { Card, CardSummary } from "./types.js";
 
 /**
@@ -10,9 +11,13 @@ import type { Card, CardSummary } from "./types.js";
  * the package's v5 data instead: a collection file per set with printing
  * metadata, and a gameplay file with the attacks.
  */
-// Resolved from the working directory, not from import.meta.url: the compiled
-// build sits two levels deeper, where a relative path would miss node_modules.
-const PACKAGE_ROOT = join(process.cwd(), "node_modules", "pokemon-tcg-pocket-cards", "data", "v5");
+// Node's own resolver finds the package from this module, so the bot starts
+// from any working directory, in a checkout or from dist.
+const PACKAGE_ROOT = join(
+  dirname(createRequire(import.meta.url).resolve("pokemon-tcg-pocket-cards/package.json")),
+  "data",
+  "v5",
+);
 
 interface AlternateVersion {
   set_code: string;
@@ -43,7 +48,12 @@ interface GameplayAttack {
 interface GameplayRecord {
   id: string;
   name: string;
+  /** "Pokémon" or "Trainer". */
+  type?: string;
+  /** The energy type on a Pokémon, or Item, Supporter, Tool or Stadium on a Trainer. */
   subtype?: string;
+  /** Trainer wording. */
+  card_text?: string;
   stage?: string;
   evolves_from?: string;
   health?: number;
@@ -74,6 +84,10 @@ function decodeCost(cost?: string | null): string[] | undefined {
   return letters.length > 0 ? letters : undefined;
 }
 
+function alternateIdOf(alternate: AlternateVersion): string {
+  return `${alternate.set_code}-${String(alternate.id).padStart(3, "0")}`;
+}
+
 function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
 }
@@ -96,27 +110,35 @@ function loadIndex(): PocketIndex {
   const cards = new Map<string, Card>();
   const byName = new Map<string, CardSummary[]>();
 
+  // A reprint carries gameplay only under its first printing, which can sit in
+  // another set (Professor's Research a4b-373 reads its text from pa-007), so
+  // gameplay is indexed across every set before any card is built.
+  const collections: CollectionRecord[][] = [];
+  const gameplayById = new Map<string, GameplayRecord>();
   for (const setCode of sets) {
     const dir = join(root, setCode);
-    let collection: CollectionRecord[] = [];
-    let gameplay: GameplayRecord[] = [];
     try {
-      collection = readJson<CollectionRecord[]>(join(dir, `${setCode}.collection.json`));
+      collections.push(readJson<CollectionRecord[]>(join(dir, `${setCode}.collection.json`)));
     } catch {
       continue;
     }
     try {
-      gameplay = readJson<GameplayRecord[]>(join(dir, `${setCode}.gameplay.json`));
+      for (const record of readJson<GameplayRecord[]>(join(dir, `${setCode}.gameplay.json`))) {
+        gameplayById.set(record.id, record);
+      }
     } catch {
-      gameplay = [];
+      // a set without gameplay data still lists its printings
     }
+  }
 
-    const gameplayById = new Map(gameplay.map((record) => [record.id, record]));
-
+  for (const collection of collections) {
     for (const record of collection) {
-      const play = gameplayById.get(record.id);
-      const baseId = play ? record.id : (record.alternate_versions?.[0] ? record.id : record.id);
-      const parent = play ?? gameplayById.get(baseId);
+      const parent =
+        gameplayById.get(record.id) ??
+        (record.alternate_versions ?? [])
+          .map((alternate) => gameplayById.get(alternateIdOf(alternate)))
+          .find((play) => play !== undefined);
+      const trainer = parent?.type === "Trainer";
 
       const attacks = Object.values(parent?.attacks ?? {})
         .filter((attack) => attack.name)
@@ -133,9 +155,10 @@ function loadIndex(): PocketIndex {
         name: record.name,
         ...(record.image ? { image: record.image } : {}),
         ...(record.rarity ? { rarity: record.rarity } : {}),
-        category: "Pokemon",
+        category: trainer ? "Trainer" : "Pokemon",
         ...(parent?.stage ? { stage: parent.stage } : {}),
-        ...(parent?.subtype ? { types: [parent.subtype] } : {}),
+        ...(parent?.subtype ? (trainer ? { trainerType: parent.subtype } : { types: [parent.subtype] }) : {}),
+        ...(parent?.card_text ? { effect: parent.card_text } : {}),
         ...(parent?.health ? { hp: parent.health } : {}),
         ...(parent?.retreat !== undefined ? { retreat: parent.retreat } : {}),
         ...(parent?.weakness ? { weaknesses: [{ type: parent.weakness, value: "+20" }] } : {}),
@@ -160,14 +183,10 @@ function loadIndex(): PocketIndex {
       };
 
       cards.set(card.id, card);
-      const key = card.name.toLowerCase();
-      const list = byName.get(key) ?? [];
-      list.push({ id: card.id, name: card.name, ...(card.localId ? { localId: card.localId } : {}), ...(card.image ? { image: card.image } : {}) });
-      byName.set(key, list);
 
       // Every alternate printing is its own card id, and people link those.
       for (const alternate of record.alternate_versions ?? []) {
-        const alternateId = `${alternate.set_code}-${String(alternate.id).padStart(3, "0")}`;
+        const alternateId = alternateIdOf(alternate);
         if (cards.has(alternateId)) continue;
         const alternateCard: Card = {
           ...card,
@@ -181,11 +200,22 @@ function loadIndex(): PocketIndex {
           },
         };
         cards.set(alternateId, alternateCard);
-        const altList = byName.get(key) ?? [];
-        altList.push({ id: alternateId, name: alternateCard.name, localId: alternateCard.localId, ...(alternateCard.image ? { image: alternateCard.image } : {}) });
-        byName.set(key, altList);
       }
     }
+  }
+
+  // Built from the finished card map so each id appears once, even when a set
+  // lists a printing that an earlier set already named as its alternate.
+  for (const card of cards.values()) {
+    const key = card.name.toLowerCase();
+    const list = byName.get(key) ?? [];
+    list.push({
+      id: card.id,
+      name: card.name,
+      ...(card.localId ? { localId: card.localId } : {}),
+      ...(card.image ? { image: card.image } : {}),
+    });
+    byName.set(key, list);
   }
 
   cached = { cards, byName };

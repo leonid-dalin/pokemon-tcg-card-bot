@@ -63,6 +63,8 @@ export interface Card {
   abilities?: Ability[];
   /** Trainer and Energy card wording. */
   effect?: string;
+  /** Item, Supporter, Stadium or Tool on a Trainer card. */
+  trainerType?: string;
   legal?: { standard?: boolean; expanded?: boolean; unlimited?: boolean };
   set?: CardSetRef;
   variants_detailed?: VariantDetail[];

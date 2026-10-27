@@ -8,11 +8,15 @@ export interface ClientOptions {
   retries?: number;
   cardTtlMs?: number;
   setTtlMs?: number;
+  /** Most responses held at once. Autocomplete caches every prefix typed. */
+  maxEntries?: number;
 }
 
 interface CacheEntry {
   expires: number;
-  value: unknown;
+  /** Absent for a remembered 404. */
+  value?: unknown;
+  missing?: true;
 }
 
 export class TcgdexError extends Error {
@@ -36,6 +40,7 @@ export class TcgdexClient {
   private readonly retries: number;
   private readonly cardTtlMs: number;
   private readonly setTtlMs: number;
+  private readonly maxEntries: number;
   private readonly cache = new Map<string, CacheEntry>();
 
   constructor(options: ClientOptions = {}) {
@@ -44,12 +49,33 @@ export class TcgdexClient {
     this.retries = options.retries ?? 2;
     this.cardTtlMs = options.cardTtlMs ?? 10 * 60_000;
     this.setTtlMs = options.setTtlMs ?? 60 * 60_000;
+    this.maxEntries = Math.max(1, options.maxEntries ?? 1000);
+  }
+
+  private remember(path: string, entry: CacheEntry): void {
+    this.cache.delete(path);
+    if (this.cache.size >= this.maxEntries) {
+      const now = Date.now();
+      for (const [key, held] of this.cache) if (held.expires <= now) this.cache.delete(key);
+    }
+    // Map keeps insertion order, so the first key is the oldest entry.
+    while (this.cache.size >= this.maxEntries) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest === undefined) break;
+      this.cache.delete(oldest);
+    }
+    this.cache.set(path, entry);
   }
 
   private async getJson<T>(path: string, ttlMs: number): Promise<T> {
     // path already carries the language segment
     const cached = this.cache.get(path);
-    if (cached && cached.expires > Date.now()) return cached.value as T;
+    if (cached && cached.expires > Date.now()) {
+      // A 404 is remembered too, or every lookup of a card without prices asks
+      // again for the languages that do not carry it.
+      if (cached.missing) throw new TcgdexError(`not found: ${path}`, 404);
+      return cached.value as T;
+    }
 
     let lastError: unknown;
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
@@ -58,7 +84,10 @@ export class TcgdexClient {
           signal: AbortSignal.timeout(this.timeoutMs),
           headers: { accept: "application/json" },
         });
-        if (response.status === 404) throw new TcgdexError(`not found: ${path}`, 404);
+        if (response.status === 404) {
+          this.remember(path, { expires: Date.now() + ttlMs, missing: true });
+          throw new TcgdexError(`not found: ${path}`, 404);
+        }
         if (!response.ok) {
           if (response.status === 429 || response.status >= 500) {
             throw new TcgdexError(`upstream ${response.status}`, response.status);
@@ -66,7 +95,7 @@ export class TcgdexClient {
           throw new TcgdexError(`request failed: ${response.status}`, response.status);
         }
         const value = (await response.json()) as T;
-        this.cache.set(path, { expires: Date.now() + ttlMs, value });
+        this.remember(path, { expires: Date.now() + ttlMs, value });
         return value;
       } catch (error) {
         lastError = error;
@@ -106,7 +135,10 @@ export class TcgdexClient {
     return this.getJson<CardSummary[]>(`/${lang}/cards`, this.setTtlMs);
   }
 
-  /** TCGdex serves en, fr, de and others but not ja, so a ja request 404s. */
+  /**
+   * TCGdex has a ja catalogue, but its ids differ from the English ones, so an
+   * English id asked for under ja always 404s.
+   */
   async getCard(id: string, lang = "en"): Promise<Card> {
     return this.getJson<Card>(`/${lang}/cards/${encodeURIComponent(id)}`, this.cardTtlMs);
   }
