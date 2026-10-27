@@ -90,10 +90,10 @@ describe("lookupCard", () => {
     expect(lookup?.alternates.map((card) => card.id)).toEqual(["sv06-130"]);
   });
 
-  it("returns undefined when nothing matches, without fetching a card", async () => {
+  it("returns undefined when nothing matches in either source", async () => {
     const { calls } = stubFetch({ "/cards?name=": { body: summaries } });
     const client = new TcgdexClient();
-    await expect(lookupCard(client, "Snorlax")).resolves.toBeUndefined();
+    await expect(lookupCard(client, "Zzznotacard")).resolves.toBeUndefined();
     expect(calls.some((call) => call.includes("/cards/sv"))).toBe(false);
   });
 
@@ -180,6 +180,15 @@ describe("lookupCard", () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Charizard");
     expect(lookup?.card.id).toBe("sv03-125");
+  });
+
+  it("answers a pocket hint from the bundled pocket data", async () => {
+    const client = new TcgdexClient();
+    const lookup = await lookupCard(client, "Crustle ex", "ptcgp");
+    expect(lookup?.card.id).toBe("b4b-133");
+    expect(lookup?.view.fields.find((field) => field.name === "Set")?.value).toContain("Deluxe Pack: Mega");
+    expect(lookup?.view.fields.find((field) => field.name === "Attack")?.value).toContain("Boulder Crush");
+    expect(lookup?.view.fields.some((field) => field.name === "Legal")).toBe(false);
   });
 
   it("prefers a printing with art over a newer one without", async () => {

@@ -1,0 +1,232 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import type { Card, CardSummary } from "./types.js";
+
+/**
+ * Pocket cards from the PocketDecks `pokemon-tcg-pocket-cards` package.
+ *
+ * TCGdex covers the physical game well but its Pocket catalogue stops before
+ * Deluxe Pack: Mega, so cards like Crustle ex are missing entirely. This reads
+ * the package's v5 data instead: a collection file per set with printing
+ * metadata, and a gameplay file with the attacks.
+ */
+// Resolved from the working directory, not from import.meta.url: the compiled
+// build sits two levels deeper, where a relative path would miss node_modules.
+const PACKAGE_ROOT = join(process.cwd(), "node_modules", "pokemon-tcg-pocket-cards", "data", "v5");
+
+interface AlternateVersion {
+  set_code: string;
+  set_name: string;
+  id: number;
+  rarity?: string;
+}
+
+interface CollectionRecord {
+  id: string;
+  name: string;
+  set_code: string;
+  set_name: string;
+  release_date?: string;
+  rarity?: string;
+  artist?: string;
+  image?: string;
+  alternate_versions?: AlternateVersion[];
+}
+
+interface GameplayAttack {
+  cost?: string | null;
+  name?: string | null;
+  damage?: number | string | null;
+  effect?: string | null;
+}
+
+interface GameplayRecord {
+  id: string;
+  name: string;
+  subtype?: string;
+  stage?: string;
+  evolves_from?: string;
+  health?: number;
+  retreat?: number;
+  weakness?: string;
+  ability?: { exists?: boolean; name?: string | null; effect?: string | null };
+  attacks?: Record<string, GameplayAttack>;
+  ex?: boolean;
+  image?: string;
+}
+
+const ENERGY_BY_LETTER: Record<string, string> = {
+  G: "Grass",
+  R: "Fire",
+  W: "Water",
+  L: "Lightning",
+  P: "Psychic",
+  F: "Fighting",
+  D: "Darkness",
+  M: "Metal",
+  N: "Dragon",
+  C: "Colorless",
+};
+
+function decodeCost(cost?: string | null): string[] | undefined {
+  if (!cost) return undefined;
+  const letters = [...cost.toUpperCase()].map((letter) => ENERGY_BY_LETTER[letter] ?? letter);
+  return letters.length > 0 ? letters : undefined;
+}
+
+function readJson<T>(path: string): T {
+  return JSON.parse(readFileSync(path, "utf8")) as T;
+}
+
+interface PocketIndex {
+  cards: Map<string, Card>;
+  byName: Map<string, CardSummary[]>;
+}
+
+let cached: PocketIndex | undefined;
+
+function loadIndex(): PocketIndex {
+  if (cached) return cached;
+
+  const root = PACKAGE_ROOT;
+  const sets = readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  const cards = new Map<string, Card>();
+  const byName = new Map<string, CardSummary[]>();
+
+  for (const setCode of sets) {
+    const dir = join(root, setCode);
+    let collection: CollectionRecord[] = [];
+    let gameplay: GameplayRecord[] = [];
+    try {
+      collection = readJson<CollectionRecord[]>(join(dir, `${setCode}.collection.json`));
+    } catch {
+      continue;
+    }
+    try {
+      gameplay = readJson<GameplayRecord[]>(join(dir, `${setCode}.gameplay.json`));
+    } catch {
+      gameplay = [];
+    }
+
+    const gameplayById = new Map(gameplay.map((record) => [record.id, record]));
+
+    for (const record of collection) {
+      const play = gameplayById.get(record.id);
+      const baseId = play ? record.id : (record.alternate_versions?.[0] ? record.id : record.id);
+      const parent = play ?? gameplayById.get(baseId);
+
+      const attacks = Object.values(parent?.attacks ?? {})
+        .filter((attack) => attack.name)
+        .map((attack) => ({
+          ...(decodeCost(attack.cost) ? { cost: decodeCost(attack.cost) } : {}),
+          name: String(attack.name),
+          ...(attack.damage !== null && attack.damage !== undefined ? { damage: attack.damage } : {}),
+          ...(attack.effect ? { effect: attack.effect } : {}),
+        }));
+
+      const card: Card = {
+        id: record.id,
+        localId: record.id.split("-")[1],
+        name: record.name,
+        ...(record.image ? { image: record.image } : {}),
+        ...(record.rarity ? { rarity: record.rarity } : {}),
+        category: "Pokemon",
+        ...(parent?.stage ? { stage: parent.stage } : {}),
+        ...(parent?.subtype ? { types: [parent.subtype] } : {}),
+        ...(parent?.health ? { hp: parent.health } : {}),
+        ...(parent?.retreat !== undefined ? { retreat: parent.retreat } : {}),
+        ...(parent?.weakness ? { weaknesses: [{ type: parent.weakness, value: "+20" }] } : {}),
+        ...(parent?.ability?.exists && parent.ability.name
+          ? {
+              abilities: [
+                {
+                  type: "Ability",
+                  name: parent.ability.name,
+                  ...(parent.ability.effect ? { effect: parent.ability.effect } : {}),
+                },
+              ],
+            }
+          : {}),
+        ...(attacks.length > 0 ? { attacks } : {}),
+        ...(record.artist ? { illustrator: record.artist } : {}),
+        set: {
+          id: record.set_code,
+          name: record.set_name,
+          ...(record.release_date ? { releaseDate: record.release_date } : {}),
+        },
+      };
+
+      cards.set(card.id, card);
+      const key = card.name.toLowerCase();
+      const list = byName.get(key) ?? [];
+      list.push({ id: card.id, name: card.name, ...(card.localId ? { localId: card.localId } : {}), ...(card.image ? { image: card.image } : {}) });
+      byName.set(key, list);
+
+      // Every alternate printing is its own card id, and people link those.
+      for (const alternate of record.alternate_versions ?? []) {
+        const alternateId = `${alternate.set_code}-${String(alternate.id).padStart(3, "0")}`;
+        if (cards.has(alternateId)) continue;
+        const alternateCard: Card = {
+          ...card,
+          id: alternateId,
+          localId: String(alternate.id).padStart(3, "0"),
+          ...(alternate.rarity ? { rarity: alternate.rarity } : {}),
+          set: {
+            id: alternate.set_code,
+            name: alternate.set_name,
+            ...(record.release_date ? { releaseDate: record.release_date } : {}),
+          },
+        };
+        cards.set(alternateId, alternateCard);
+        const altList = byName.get(key) ?? [];
+        altList.push({ id: alternateId, name: alternateCard.name, localId: alternateCard.localId, ...(alternateCard.image ? { image: alternateCard.image } : {}) });
+        byName.set(key, altList);
+      }
+    }
+  }
+
+  cached = { cards, byName };
+  return cached;
+}
+
+export function pocketCardCount(): number {
+  return loadIndex().cards.size;
+}
+
+/** Name search across every Pocket printing, newest set first. */
+export function searchPocketByName(name: string): CardSummary[] {
+  const { byName } = loadIndex();
+  const query = name.trim().toLowerCase();
+  if (!query) return [];
+
+  const exact = byName.get(query) ?? [];
+  if (exact.length > 0) {
+    return [...exact].sort((a, b) => {
+      const setA = loadIndex().cards.get(a.id)?.set?.releaseDate ?? "";
+      const setB = loadIndex().cards.get(b.id)?.set?.releaseDate ?? "";
+      return setB.localeCompare(setA);
+    });
+  }
+
+  const partial: CardSummary[] = [];
+  for (const [key, list] of byName) {
+    if (key.includes(query) || query.includes(key)) partial.push(...list);
+  }
+  return partial;
+}
+
+export function getPocketCard(id: string): Card | undefined {
+  return loadIndex().cards.get(id);
+}
+
+export function listPocketSets(): { id: string; name: string }[] {
+  const { cards } = loadIndex();
+  const sets = new Map<string, string>();
+  for (const card of cards.values()) {
+    if (card.set) sets.set(card.set.id, card.set.name);
+  }
+  return [...sets.entries()].map(([id, name]) => ({ id, name }));
+}

@@ -13,9 +13,15 @@ Card Buddy is a well known Pokémon card bot, and its behaviour is the reference
 
 The one thing added on top is the inline mention. Card Buddy needs a command, so a card mentioned mid-sentence gets no reply. `[[...]]` fixes that, which is what the Hearthstone bot d0nkeybot does with `[[card mentions]]`.
 
-## Data source
+## Data sources
 
-[TCGdex](https://tcgdex.dev) serves the catalogue with no API key and no quota to manage. The bot reads:
+Two, because one is not enough.
+
+**Physical cards** come from [TCGdex](https://tcgdex.dev), no API key, no quota to manage.
+
+**Pokémon TCG Pocket** comes from the PocketDecks [`pokemon-tcg-pocket-cards`](https://github.com/chase-mew/pokemon-tcg-pocket-cards) package, 4,317 cards across 23 expansions. It is a dependency, so the data arrives with `yarn install` and needs no network at runtime. TCGdex's Pocket catalogue stops before Deluxe Pack: Mega, which is why a card like Crustle ex is missing there entirely; the package has it, including its alternate printings.
+
+A lookup tries TCGdex first and falls back to Pocket data when nothing matches, so `[[Crustle ex]]` and `[[Crustle ex|ptcgp]]` both resolve to `b4b-133`. The bot reads:
 
 - `GET /v2/en/cards?name=` for name search.
 - `GET /v2/en/cards/{id}` for the card, its pricing and its legality.

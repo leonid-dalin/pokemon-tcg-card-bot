@@ -2,7 +2,8 @@ import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { renderCard, type EmbedView } from "./render.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
-import { isPocketCard, isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
+import { getPocketCard, searchPocketByName } from "./api/pocket.js";
+import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
 
 export interface CardLookup {
   card: Card;
@@ -34,6 +35,41 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
 }
 
 /**
+ * Pocket lookups read the bundled PocketDecks package, because TCGdex has no
+ * Pocket set newer than Paldean Wonders and cards like Crustle ex are simply
+ * absent there.
+ */
+function lookupPocket(query: string, setHint: string | undefined, options: LookupOptions): CardLookup | undefined {
+  const all = searchPocketByName(query);
+  if (all.length === 0) return undefined;
+
+  const hint = setHint && !isPocketHint(setHint) ? setHint.trim().toLowerCase() : undefined;
+  const filtered = hint
+    ? all.filter((summary) => {
+        const card = getPocketCard(summary.id);
+        const setId = (card?.set?.id ?? "").toLowerCase();
+        const setName = (card?.set?.name ?? "").toLowerCase();
+        return setId === hint || setName.includes(hint);
+      })
+    : all;
+  const pool = filtered.length > 0 ? filtered : all;
+
+  const [primary] = pool;
+  if (!primary) return undefined;
+  const card = getPocketCard(primary.id);
+  if (!card) return undefined;
+
+  return {
+    card,
+    view: renderCard(card, {
+      ...(options.attribution ? { attribution: options.attribution } : {}),
+      ...(options.cardUrl ? { cardUrl: options.cardUrl } : {}),
+    }),
+    alternates: pool.filter((entry) => entry.id !== primary.id).slice(0, options.alternateLimit ?? 10),
+  };
+}
+
+/**
  * Resolve a name to a printing and render it. Returns undefined when nothing
  * matches, so callers can stay silent instead of posting an error for a typo.
  */
@@ -47,6 +83,7 @@ export async function lookupCard(
   // name (Stellar Crown). All three resolve offline against the set index.
   // "pocket" is a group, not a set, so it filters rather than pins one id.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
+  if (pocketOnly) return lookupPocket(query, setHint, options);
   const resolved = setHint && !pocketOnly ? resolveSetHint(setHint) : undefined;
   const summaries = await client.searchByName(query);
   const matched = rankPrintings(summaries, query, resolved ?? (pocketOnly ? undefined : setHint));
@@ -56,8 +93,10 @@ export async function lookupCard(
   const pinned = resolved
     ? matched.filter((card) => normaliseName(setIdOf(card.id)) === normaliseName(resolved))
     : matched;
-  const ranked = pocketOnly ? pinned.filter((card) => isPocketCard(card.id)) : pinned;
-  if (ranked.length === 0) return undefined;
+  const ranked = pinned;
+  // TCGdex stops before the newest Pocket sets, so an empty result falls back
+  // to the bundled Pocket data before giving up.
+  if (ranked.length === 0) return lookupPocket(query, setHint, options);
 
   const ordered = orderForDisplay(ranked, query);
   const [primary] = ordered;
@@ -87,7 +126,11 @@ export async function lookupCard(
 export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
   if (lookup.alternates.length === 0) return [lookup.view];
 
-  const ids = lookup.alternates.map((card) => `\`${card.id}\``).join(", ");
+  const seen = new Set<string>();
+  const ids = lookup.alternates
+    .filter((card) => (seen.has(card.id) ? false : (seen.add(card.id), true)))
+    .map((card) => `\`${card.id}\``)
+    .join(", ");
   const value = `${ids}
 Narrow it with \`[[${lookup.card.name}|setId]]\`.`;
   return [{ ...lookup.view, fields: [...lookup.view.fields, { name: "Other printings", value }] }];

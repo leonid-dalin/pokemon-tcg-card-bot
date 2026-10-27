@@ -22,7 +22,8 @@
     "index:sets": "tsx scripts/build-set-index.ts"
   },
   "dependencies": {
-    "discord.js": "^14.16.3"
+    "discord.js": "^14.16.3",
+    "pokemon-tcg-pocket-cards": "^5.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

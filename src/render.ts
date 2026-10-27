@@ -36,7 +36,10 @@ const FIELD_VALUE_LIMIT = 1024;
 const MAX_ATTACK_FIELDS = 4;
 
 export function cardImage(card: Card, size: "high" | "low" = "high"): string | undefined {
-  return card.image ? `${card.image}/${size}.webp` : undefined;
+  if (!card.image) return undefined;
+  // TCGdex serves a base path that needs a size suffix; the Pocket data ships
+  // complete URLs, so only append when there is no file extension already.
+  return /\.(png|webp|jpe?g|gif)$/i.test(card.image) ? card.image : `${card.image}/${size}.webp`;
 }
 
 export function cardColour(card: Card): number {
