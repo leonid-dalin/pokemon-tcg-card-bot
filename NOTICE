@@ -1,0 +1,29 @@
+pokemon-card-bot
+Copyright 2026 the pokemon-card-bot contributors
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+DATA
+
+Card data, images and set metadata come from TCGdex (https://tcgdex.dev), an open
+card database, and are used under its own terms. Prices come from the Cardmarket
+and TCGplayer listings TCGdex republishes.
+
+Pokémon and Pokémon TCG are trademarks of Nintendo, Creatures Inc. and GAME FREAK
+inc. This project is not affiliated with, endorsed by or sponsored by those
+companies, The Pokémon Company, or Discord.
+
+ASSETS
+
+assets/avatar.jpg and assets/avatar-source.jpg are a Pokémon Center product
+photograph, included because the operator of this instance asked for it as the
+bot's profile picture. They are NOT covered by the Apache License 2.0 that covers
+the source code. Replace or remove them before redistributing this project.
+
+PRIOR ART
+
+Card Buddy is a separate, closed-source Discord bot by another author. This
+project reproduces the same public information contract, meaning card art with set
+and number, rules text, legality and prices, derived from that bot's documented
+command behaviour. No source code, assets or data files from Card Buddy are
+included here, and this project is not a fork of it.
