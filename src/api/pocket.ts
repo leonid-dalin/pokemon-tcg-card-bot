@@ -43,7 +43,12 @@ interface GameplayAttack {
 interface GameplayRecord {
   id: string;
   name: string;
+  /** "Pokémon" or "Trainer". */
+  type?: string;
+  /** The energy type on a Pokémon, or Item, Supporter, Tool or Stadium on a Trainer. */
   subtype?: string;
+  /** Trainer wording. */
+  card_text?: string;
   stage?: string;
   evolves_from?: string;
   health?: number;
@@ -74,6 +79,10 @@ function decodeCost(cost?: string | null): string[] | undefined {
   return letters.length > 0 ? letters : undefined;
 }
 
+function alternateIdOf(alternate: AlternateVersion): string {
+  return `${alternate.set_code}-${String(alternate.id).padStart(3, "0")}`;
+}
+
 function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
 }
@@ -96,27 +105,35 @@ function loadIndex(): PocketIndex {
   const cards = new Map<string, Card>();
   const byName = new Map<string, CardSummary[]>();
 
+  // A reprint carries gameplay only under its first printing, which can sit in
+  // another set (Professor's Research a4b-373 reads its text from pa-007), so
+  // gameplay is indexed across every set before any card is built.
+  const collections: CollectionRecord[][] = [];
+  const gameplayById = new Map<string, GameplayRecord>();
   for (const setCode of sets) {
     const dir = join(root, setCode);
-    let collection: CollectionRecord[] = [];
-    let gameplay: GameplayRecord[] = [];
     try {
-      collection = readJson<CollectionRecord[]>(join(dir, `${setCode}.collection.json`));
+      collections.push(readJson<CollectionRecord[]>(join(dir, `${setCode}.collection.json`)));
     } catch {
       continue;
     }
     try {
-      gameplay = readJson<GameplayRecord[]>(join(dir, `${setCode}.gameplay.json`));
+      for (const record of readJson<GameplayRecord[]>(join(dir, `${setCode}.gameplay.json`))) {
+        gameplayById.set(record.id, record);
+      }
     } catch {
-      gameplay = [];
+      // a set without gameplay data still lists its printings
     }
+  }
 
-    const gameplayById = new Map(gameplay.map((record) => [record.id, record]));
-
+  for (const collection of collections) {
     for (const record of collection) {
-      const play = gameplayById.get(record.id);
-      const baseId = play ? record.id : (record.alternate_versions?.[0] ? record.id : record.id);
-      const parent = play ?? gameplayById.get(baseId);
+      const parent =
+        gameplayById.get(record.id) ??
+        (record.alternate_versions ?? [])
+          .map((alternate) => gameplayById.get(alternateIdOf(alternate)))
+          .find((play) => play !== undefined);
+      const trainer = parent?.type === "Trainer";
 
       const attacks = Object.values(parent?.attacks ?? {})
         .filter((attack) => attack.name)
@@ -133,9 +150,10 @@ function loadIndex(): PocketIndex {
         name: record.name,
         ...(record.image ? { image: record.image } : {}),
         ...(record.rarity ? { rarity: record.rarity } : {}),
-        category: "Pokemon",
+        category: trainer ? "Trainer" : "Pokemon",
         ...(parent?.stage ? { stage: parent.stage } : {}),
-        ...(parent?.subtype ? { types: [parent.subtype] } : {}),
+        ...(parent?.subtype ? (trainer ? { trainerType: parent.subtype } : { types: [parent.subtype] }) : {}),
+        ...(parent?.card_text ? { effect: parent.card_text } : {}),
         ...(parent?.health ? { hp: parent.health } : {}),
         ...(parent?.retreat !== undefined ? { retreat: parent.retreat } : {}),
         ...(parent?.weakness ? { weaknesses: [{ type: parent.weakness, value: "+20" }] } : {}),
@@ -163,7 +181,7 @@ function loadIndex(): PocketIndex {
 
       // Every alternate printing is its own card id, and people link those.
       for (const alternate of record.alternate_versions ?? []) {
-        const alternateId = `${alternate.set_code}-${String(alternate.id).padStart(3, "0")}`;
+        const alternateId = alternateIdOf(alternate);
         if (cards.has(alternateId)) continue;
         const alternateCard: Card = {
           ...card,
