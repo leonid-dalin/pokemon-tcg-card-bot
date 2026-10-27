@@ -2,6 +2,7 @@ import { readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
 import { REST, Routes } from "discord.js";
 import { loadConfig } from "../src/config.js";
+import { loadDotEnv } from "../src/env.js";
 
 /**
  * Set the bot's profile picture.
@@ -36,6 +37,8 @@ if (bytes > MAX_BYTES) {
   console.error(`${path} is ${(bytes / 1024 / 1024).toFixed(1)} MB; Discord accepts up to 8 MB`);
   process.exit(1);
 }
+
+loadDotEnv();
 
 const config = loadConfig(process.env);
 const avatar = `data:${mime};base64,${readFileSync(path).toString("base64")}`;

@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits } from "discord.js";
 import { TcgdexClient } from "./api/tcgdex.js";
 import { loadConfig } from "./config.js";
+import { loadDotEnv } from "./env.js";
 import {
   handleAutocomplete,
   handleCardCommand,
@@ -12,6 +13,8 @@ import { lookupCard, lookupEmbeds } from "./lookup.js";
 import { extractMentions } from "./mentions.js";
 
 const MAX_EMBEDS_PER_MESSAGE = 5;
+
+loadDotEnv();
 
 const config = loadConfig(process.env);
 const api = new TcgdexClient();

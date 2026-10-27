@@ -25,14 +25,22 @@ Responses are cached in memory, ten minutes for cards and an hour for sets, so a
 
 ## Setup
 
-1. Create an application at <https://discord.com/developers/applications>, add a bot, and copy its token.
-2. Under **Bot → Privileged Gateway Intents**, enable **Message Content**. Without it the bot sees slash commands but never the `[[...]]` mentions. Leave it off and set `MENTION_ENABLED=false` if you only want the slash command.
-3. Copy `.env.example` to `.env` and fill in `DISCORD_TOKEN` and `DISCORD_CLIENT_ID`. Set `DISCORD_GUILD_ID` while developing so commands appear instantly instead of within the hour.
-4. Invite the bot with the `bot` and `applications.commands` scopes and the Send Messages and Embed Links permissions.
-5. Install and register:
+1. Create an application at <https://discord.com/developers/applications> (New Application, name it, Create).
+2. **Application ID:** on **General Information**, the first page after creating the app, copy the field labelled **Application ID**.
+3. **Bot token:** in the left sidebar open **Bot**, find the **Token** section and press **Reset Token**, then **Copy**. It is shown once; if you navigate away you have to reset it again.
+4. Under **Bot → Privileged Gateway Intents**, enable **Message Content**. Without it the bot sees slash commands but never the `[[...]]` mentions. Leave it off and set `MENTION_ENABLED=false` if you only want the slash command.
+5. Copy `.env.example` to `.env` and paste the two values into `DISCORD_TOKEN` and `DISCORD_CLIENT_ID`. Set `DISCORD_GUILD_ID` while developing so commands appear instantly instead of within the hour.
+6. Check the credentials before running anything:
 
 ```bash
 yarn install
+yarn doctor       # prints the bot name, or Discord's error if the token is wrong
+```
+
+7. Invite the bot with the `bot` and `applications.commands` scopes and the Send Messages and Embed Links permissions.
+8. Register the commands and run:
+
+```bash
 yarn register     # publish /card and /set
 yarn dev          # run from source
 ```

@@ -1,6 +1,9 @@
 import { REST, Routes } from "discord.js";
 import { loadConfig } from "../config.js";
+import { loadDotEnv } from "../env.js";
 import { commandDefinitions } from "./commands.js";
+
+loadDotEnv();
 
 const config = loadConfig(process.env);
 const rest = new REST().setToken(config.token);
