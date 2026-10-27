@@ -61,6 +61,8 @@ export interface Card {
   resistances?: { type: string; value: string }[];
   attacks?: Attack[];
   abilities?: Ability[];
+  /** Trainer and Energy card wording. */
+  effect?: string;
   legal?: { standard?: boolean; expanded?: boolean; unlimited?: boolean };
   set?: CardSetRef;
   variants_detailed?: VariantDetail[];

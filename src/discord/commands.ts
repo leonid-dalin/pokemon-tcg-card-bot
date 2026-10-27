@@ -6,6 +6,7 @@ import {
 import type { TcgdexClient } from "../api/tcgdex.js";
 import { lookupCard, lookupEmbeds } from "../lookup.js";
 import { renderSearchResults, renderSet } from "../render.js";
+import { searchCardText } from "../text-search.js";
 import { printingRows } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed, toEmbeds } from "./embeds.js";
@@ -109,7 +110,7 @@ export async function handleSearchCommand(
   const text = interaction.options.getString("text", true).trim();
 
   await interaction.deferReply();
-  const cards = await context.client.searchByEffect(text);
+  const cards = searchCardText(text);
   if (cards.length === 0) {
     await interaction.editReply({ content: `No card wording mentions \`${text}\`.` });
     return;

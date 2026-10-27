@@ -24,7 +24,7 @@ Cardmarket and TCGplayer prices reach the bot through TCGdex. They are third-par
 
 ## The profile picture
 
-`assets/avatar.jpg` and `assets/avatar-source.jpg` are a Pokémon Center product photograph of the Nacli plush. They are not covered by Apache 2.0 and should be replaced before redistributing this project. The image was supplied by the operator of this instance for use as the bot's avatar
+`assets/avatar.jpg` and `assets/avatar-source.jpg` are a Pokémon Center product photograph of the Crustle plush. They are not covered by Apache 2.0 and should be replaced before redistributing this project. The image was supplied by the operator of this instance for use as the bot's avatar
 
 ## Code of Conduct
 

@@ -12,6 +12,7 @@ import {
 import { printingIdFrom, printingRows } from "./discord/printing-buttons.js";
 import { parseDecklist } from "./decklist.js";
 import { renderDecklist, renderSearchResults } from "./render.js";
+import { searchCardText } from "./text-search.js";
 import { toEmbeds } from "./discord/embeds.js";
 import type { CardSummary } from "./api/types.js";
 import { lookupById, lookupCard, lookupEmbeds, suggestNames } from "./lookup.js";
@@ -124,7 +125,7 @@ client.on(Events.MessageCreate, async (message) => {
       return;
     }
     try {
-      const cards = await api.searchByEffect(searchQuery);
+      const cards = searchCardText(searchQuery);
       await message
         .reply({
           ...(cards.length === 0

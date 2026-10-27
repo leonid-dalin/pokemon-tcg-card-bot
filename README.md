@@ -13,7 +13,7 @@ The reply carries the card art, set and number, regulation mark, rarity, attacks
 | --- | --- |
 | `/card name:<text> [set:<hint>]` | Shows a card with autocomplete on the name and an optional set hint |
 | `/set id:<setId>` | Shows a set with its card count, series and release date |
-| `/search text:<wording>` | Finds cards whose abilities or attacks contain that wording |
+| `/search text:<wording>` | Finds cards whose abilities, attacks or Trainer text contain every word you give |
 | `@bot search <wording>` | Same search from the message box, which is easier on a phone |
 | `[[Card name]]` | Replies with the card from any message |
 | `[[Card name\|hint]]` | Same, with a set id, printed code or set name pinning one printing |
@@ -110,6 +110,7 @@ CI runs the typecheck, the suite and a build on every push and pull request, on 
 - Name score decides the printing first, then artwork, then the newest set by real release date. A plain `[[Lapras]]` gives the newest Lapras, not whichever one the API lists first. Release dates and codes live in `src/data/set-index.ts`, built by `npm run index:sets`; rerun it when a set releases. A card with other printings carries an Other printings field listing them, with the `[[name|setId]]` syntax to reach an exact one. It stays one embed per mention, since two embeds read as two answers to one question.
 - Case, accents, apostrophes and spacing are normalised, so `pokemon catcher`, `Pokémon Catcher` and `Boss's Orders` all resolve.
 - `[[...]]` inside backticks or a fenced block does not trigger a reply, so you can document the syntax in the same channel.
+- Search reads a local index of ability, attack and Trainer text, built by `npm run index:text`. TCGdex only indexes Trainer wording itself, so an API-only search finds Old Rod for "Put a Trainer card from your discard pile into your hand" and misses Dedenne, whose attack says the same thing. Every query word has to appear, and results rank a card whose name matches the query above one that only matches in text.
 - Card ids work as hints, so the ids shown in the Other printings field can be pasted straight back.
 - Printings appear as buttons under the card. Pressing one swaps the embed for that printing.
 - Prices come from English listings first. When the English record carries none, the bot tries the other languages TCGdex serves, in order, and uses the first with a figure. TCGdex has no Japanese route, so the chain skips from English to the rest. Cardmarket's one, seven and thirty day averages appear as a trend line when the source reports them.

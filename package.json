@@ -19,7 +19,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "doctor": "tsx scripts/doctor.ts",
     "rename": "tsx scripts/rename.ts",
-    "index:sets": "tsx scripts/build-set-index.ts"
+    "index:sets": "tsx scripts/build-set-index.ts",
+    "index:text": "tsx scripts/build-text-index.ts"
   },
   "dependencies": {
     "discord.js": "^14.16.3",

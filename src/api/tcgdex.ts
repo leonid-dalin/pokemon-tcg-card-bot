@@ -101,6 +101,11 @@ export class TcgdexClient {
     return cards.slice(0, limit);
   }
 
+  /** Every card id and name in the set, without text. Used to build the text index. */
+  async listCards(lang = "en"): Promise<CardSummary[]> {
+    return this.getJson<CardSummary[]>(`/${lang}/cards`, this.setTtlMs);
+  }
+
   /** TCGdex serves en, fr, de and others but not ja, so a ja request 404s. */
   async getCard(id: string, lang = "en"): Promise<Card> {
     return this.getJson<Card>(`/${lang}/cards/${encodeURIComponent(id)}`, this.cardTtlMs);
