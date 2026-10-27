@@ -11,11 +11,11 @@ import {
 } from "./discord/commands.js";
 import { printingIdFrom, printingRows } from "./discord/printing-buttons.js";
 import { parseDecklist } from "./decklist.js";
-import { renderDecklist } from "./render.js";
+import { renderDecklist, renderSearchResults } from "./render.js";
 import { toEmbeds } from "./discord/embeds.js";
 import type { CardSummary } from "./api/types.js";
 import { lookupById, lookupCard, lookupEmbeds, suggestNames } from "./lookup.js";
-import { extractMentions } from "./mentions.js";
+import { extractMentions, parseSearchCommand } from "./mentions.js";
 import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 
@@ -104,11 +104,41 @@ client.on(Events.MessageCreate, async (message) => {
     return;
   }
 
-  const deck = parseDecklist(message.content);
+  const deck = config.decklistEnabled ? parseDecklist(message.content) : undefined;
   if (deck) {
     await message
       .reply({ embeds: toEmbeds([renderDecklist(deck)]), allowedMentions: { repliedUser: false } })
       .catch(() => {});
+    return;
+  }
+
+  // Slash commands need the command picker, which is awkward on a phone. A
+  // mention plus the word search does the same job from the message box.
+  const selfId = client.user?.id;
+  const searchQuery = selfId ? parseSearchCommand(message.content, selfId) : undefined;
+  if (searchQuery !== undefined) {
+    if (searchQuery.length === 0) {
+      await message
+        .reply({ content: "Add what to look for after search, for example: search stadium.", allowedMentions: { repliedUser: false } })
+        .catch(() => {});
+      return;
+    }
+    try {
+      const cards = await api.searchByEffect(searchQuery);
+      await message
+        .reply({
+          ...(cards.length === 0
+            ? { content: `No card wording mentions \`${searchQuery}\`.` }
+            : { embeds: toEmbeds([renderSearchResults(searchQuery, cards)]) }),
+          allowedMentions: { repliedUser: false },
+        })
+        .catch(() => {});
+    } catch (error) {
+      console.error("mention search failed", error);
+      await message
+        .reply({ content: "Card search failed, try again in a moment.", allowedMentions: { repliedUser: false } })
+        .catch(() => {});
+    }
     return;
   }
 

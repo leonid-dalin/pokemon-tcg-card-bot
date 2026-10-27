@@ -43,3 +43,19 @@ export function extractMentions(text: string, limit = 3): Mention[] {
 
   return mentions;
 }
+
+/**
+ * Read `@bot search <text>` from a message. Returns the query, an empty string
+ * when the command was used with no text, and undefined when the message is not
+ * a search command aimed at this bot.
+ */
+export function parseSearchCommand(content: string, selfId: string): string | undefined {
+  if (!content.includes("<@")) return undefined;
+  const mentioned = new RegExp(`<@!?${selfId}>`).test(content);
+  if (!mentioned) return undefined;
+
+  const withoutMention = content.replace(/<@!?\d+>/g, " ").trim();
+  const match = withoutMention.match(/^search\b[:\s]*(.*)$/i);
+  if (!match) return undefined;
+  return (match[1] ?? "").trim();
+}

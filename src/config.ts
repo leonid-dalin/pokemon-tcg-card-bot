@@ -3,6 +3,8 @@ export interface Config {
   clientId: string;
   guildId?: string;
   mentionEnabled: boolean;
+  /** Decklist parsing stays off until it can say something the list itself does not. */
+  decklistEnabled: boolean;
   /** 0 disables the throttle entirely. */
   mentionCooldownSeconds: number;
   attribution: string;
@@ -29,6 +31,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     clientId,
     ...(env.DISCORD_GUILD_ID?.trim() ? { guildId: env.DISCORD_GUILD_ID.trim() } : {}),
     mentionEnabled: parseBoolean(env.MENTION_ENABLED, true),
+    decklistEnabled: parseBoolean(env.DECKLIST_ENABLED, false),
     mentionCooldownSeconds: parsePositiveInt(env.MENTION_COOLDOWN_SECONDS, 0),
     attribution: env.ATTRIBUTION?.trim() || "Card data from TCGdex",
   };

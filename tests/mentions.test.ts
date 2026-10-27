@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { extractMentions } from "../src/mentions.js";
+import { loadConfig } from "../src/config.js";
+import { extractMentions, parseSearchCommand } from "../src/mentions.js";
 
 describe("extractMentions", () => {
   it("finds a bracketed card name", () => {
@@ -57,5 +58,55 @@ describe("extractMentions", () => {
 
   it("returns nothing when there is no marker", () => {
     expect(extractMentions("Dragapult ex is fine")).toEqual([]);
+  });
+});
+
+describe("parseSearchCommand", () => {
+  const selfId = "1564749707740192818";
+
+  it("reads the query after the mention", () => {
+    expect(parseSearchCommand(`<@${selfId}> search stadium`, selfId)).toBe("stadium");
+  });
+
+  it("accepts a colon and extra spacing", () => {
+    expect(parseSearchCommand(`<@${selfId}>  SEARCH:  search your deck for a Supporter`, selfId)).toBe(
+      "search your deck for a Supporter",
+    );
+  });
+
+  it("handles the nickname mention form", () => {
+    expect(parseSearchCommand(`<@!${selfId}> search iono`, selfId)).toBe("iono");
+  });
+
+  it("returns an empty string when the keyword has no text", () => {
+    expect(parseSearchCommand(`<@${selfId}> search`, selfId)).toBe("");
+  });
+
+  it("ignores a mention with no keyword", () => {
+    expect(parseSearchCommand(`<@${selfId}> what does this card do`, selfId)).toBeUndefined();
+  });
+
+  it("ignores a search word that is not at the start", () => {
+    expect(parseSearchCommand(`<@${selfId}> can you search stadium`, selfId)).toBeUndefined();
+  });
+
+  it("ignores a mention of a different bot", () => {
+    expect(parseSearchCommand("<@999> search stadium", selfId)).toBeUndefined();
+  });
+
+  it("ignores plain text", () => {
+    expect(parseSearchCommand("search stadium", selfId)).toBeUndefined();
+  });
+});
+
+describe("decklist toggle", () => {
+  const base = { DISCORD_TOKEN: "token", DISCORD_CLIENT_ID: "1" };
+
+  it("stays off unless asked for", () => {
+    expect(loadConfig(base).decklistEnabled).toBe(false);
+  });
+
+  it("turns on from the environment", () => {
+    expect(loadConfig({ ...base, DECKLIST_ENABLED: "true" }).decklistEnabled).toBe(true);
   });
 });

@@ -14,11 +14,12 @@ The reply carries the card art, set and number, regulation mark, rarity, attacks
 | `/card name:<text> [set:<hint>]` | Shows a card with autocomplete on the name and an optional set hint |
 | `/set id:<setId>` | Shows a set with its card count, series and release date |
 | `/search text:<wording>` | Finds cards whose abilities or attacks contain that wording |
+| `@bot search <wording>` | Same search from the message box, which is easier on a phone |
 | `[[Card name]]` | Replies with the card from any message |
 | `[[Card name\|hint]]` | Same, with a set id, printed code or set name pinning one printing |
 | `[[Card name\|pocket]]` | Restricts the lookup to Pokémon TCG Pocket |
 | `[[Card name\|sv08.5-073]]` | Pins one exact printing by card id |
-| a pasted decklist | Replies with the list formatted and the count checked against 60 |
+| a pasted decklist | Formats the list and checks the count against 60, off by default, see `DECKLIST_ENABLED` |
 
 ## Why this exists
 
