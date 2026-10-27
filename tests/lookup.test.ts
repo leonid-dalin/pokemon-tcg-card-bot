@@ -78,6 +78,16 @@ describe("TcgdexClient", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("holds no more responses than its limit", async () => {
+    const { calls } = stubFetch({ "/cards?name=": { body: summaries } });
+    const client = new TcgdexClient({ retries: 0, maxEntries: 2 });
+    for (const name of ["dr", "dra", "drag"]) await client.searchByName(name);
+    await client.searchByName("dr");
+    expect(calls.filter((url) => url.endsWith("name=dr"))).toHaveLength(2);
+    await client.searchByName("drag");
+    expect(calls.filter((url) => url.endsWith("name=drag"))).toHaveLength(1);
+  });
+
   it("caps how many search results come back", async () => {
     stubFetch({ "/cards?name=": { body: summaries } });
     const client = new TcgdexClient();
