@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRINTING_PREFIX, printingIdFrom, printingRows } from "../src/discord/printing-buttons.js";
+import { PRINTING_PREFIX, mentionRows, printingIdFrom, printingRows } from "../src/discord/printing-buttons.js";
 
 const card = (id: string) => ({ id, name: "Dragapult ex" });
 
@@ -44,5 +44,16 @@ describe("printingIdFrom", () => {
   it("ignores other components", () => {
     expect(printingIdFrom("other:thing")).toBeUndefined();
     expect(printingIdFrom(`${PRINTING_PREFIX}   `)).toBeUndefined();
+  });
+});
+
+describe("mentionRows", () => {
+  it("offers printings under a single card", () => {
+    expect(mentionRows([{ alternates: [card("sv06-130")] }])).toHaveLength(1);
+  });
+
+  it("offers none when the reply shows several cards", () => {
+    const lookups = [{ alternates: [card("sv06-130")] }, { alternates: [card("sv03-125")] }];
+    expect(mentionRows(lookups)).toEqual([]);
   });
 });

@@ -28,6 +28,15 @@ export function printingRows(alternates: CardSummary[]): ActionRowBuilder<Button
   return [row];
 }
 
+/**
+ * Buttons for a reply to `[[...]]` mentions. A press swaps the whole message for
+ * one printing, so buttons only appear when the reply shows a single card.
+ */
+export function mentionRows(lookups: { alternates: CardSummary[] }[]): ActionRowBuilder<ButtonBuilder>[] {
+  const [only] = lookups;
+  return lookups.length === 1 && only ? printingRows(only.alternates) : [];
+}
+
 export function printingIdFrom(customId: string): string | undefined {
   if (!customId.startsWith(PRINTING_PREFIX)) return undefined;
   const id = customId.slice(PRINTING_PREFIX.length).trim();

@@ -9,13 +9,12 @@ import {
   handleSetCommand,
   type CommandContext,
 } from "./discord/commands.js";
-import { printingIdFrom, printingRows } from "./discord/printing-buttons.js";
+import { mentionRows, printingIdFrom, printingRows } from "./discord/printing-buttons.js";
 import { parseDecklist } from "./decklist.js";
 import { renderDecklist, renderSearchResults } from "./render.js";
 import { searchCardText } from "./text-search.js";
 import { toEmbeds } from "./discord/embeds.js";
-import type { CardSummary } from "./api/types.js";
-import { lookupById, lookupCard, lookupEmbeds, suggestNames } from "./lookup.js";
+import { lookupById, lookupCard, lookupEmbeds, suggestNames, type CardLookup } from "./lookup.js";
 import { extractMentions, parseSearchCommand } from "./mentions.js";
 import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
@@ -161,7 +160,7 @@ client.on(Events.MessageCreate, async (message) => {
     const embeds = [];
     const misses: string[] = [];
     const suggestions = new Map<string, string>();
-    const buttonCards: CardSummary[] = [];
+    const found: CardLookup[] = [];
     for (const mention of mentions) {
       const lookup = await lookupCard(api, mention.name, mention.setHint, {
         attribution: config.attribution,
@@ -169,7 +168,7 @@ client.on(Events.MessageCreate, async (message) => {
       console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
       if (lookup) {
         embeds.push(...toEmbeds(lookupEmbeds(lookup)));
-        buttonCards.push(...lookup.alternates);
+        found.push(lookup);
       } else {
         misses.push(mention.raw);
         const closest = await suggestNames(api, mention.name);
@@ -187,7 +186,7 @@ client.on(Events.MessageCreate, async (message) => {
     // A mention is an explicit request, so a name that resolves to nothing gets
     // an answer. Silence here reads as a broken bot, not as a polite no-op.
     await message.reply({
-      ...(embeds.length > 0 ? { components: printingRows(buttonCards) } : {}),
+      ...(embeds.length > 0 ? { components: mentionRows(found) } : {}),
       ...(misses.length > 0
         ? {
             content: misses
