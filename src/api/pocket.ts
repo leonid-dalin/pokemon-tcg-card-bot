@@ -160,10 +160,6 @@ function loadIndex(): PocketIndex {
       };
 
       cards.set(card.id, card);
-      const key = card.name.toLowerCase();
-      const list = byName.get(key) ?? [];
-      list.push({ id: card.id, name: card.name, ...(card.localId ? { localId: card.localId } : {}), ...(card.image ? { image: card.image } : {}) });
-      byName.set(key, list);
 
       // Every alternate printing is its own card id, and people link those.
       for (const alternate of record.alternate_versions ?? []) {
@@ -181,11 +177,22 @@ function loadIndex(): PocketIndex {
           },
         };
         cards.set(alternateId, alternateCard);
-        const altList = byName.get(key) ?? [];
-        altList.push({ id: alternateId, name: alternateCard.name, localId: alternateCard.localId, ...(alternateCard.image ? { image: alternateCard.image } : {}) });
-        byName.set(key, altList);
       }
     }
+  }
+
+  // Built from the finished card map so each id appears once, even when a set
+  // lists a printing that an earlier set already named as its alternate.
+  for (const card of cards.values()) {
+    const key = card.name.toLowerCase();
+    const list = byName.get(key) ?? [];
+    list.push({
+      id: card.id,
+      name: card.name,
+      ...(card.localId ? { localId: card.localId } : {}),
+      ...(card.image ? { image: card.image } : {}),
+    });
+    byName.set(key, list);
   }
 
   cached = { cards, byName };

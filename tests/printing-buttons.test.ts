@@ -19,6 +19,16 @@ describe("printingRows", () => {
     expect(json.components[0]?.label).toBe("sv06-130");
   });
 
+  it("never repeats a custom id when a printing is listed twice", () => {
+    const rows = printingRows(["b4-212", "b4-212", "a1-128", "pa-010", "pa-010"].map(card));
+    const json = rows[0]?.toJSON() as { components: { custom_id: string }[] };
+    expect(json.components.map((component) => component.custom_id)).toEqual([
+      `${PRINTING_PREFIX}b4-212`,
+      `${PRINTING_PREFIX}a1-128`,
+      `${PRINTING_PREFIX}pa-010`,
+    ]);
+  });
+
   it("caps the row at five buttons, which is the Discord limit", () => {
     const rows = printingRows(["a-1", "a-2", "a-3", "a-4", "a-5", "a-6", "a-7"].map(card));
     const json = rows[0]?.toJSON() as { components: unknown[] };

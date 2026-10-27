@@ -10,7 +10,10 @@ const MAX_BUTTONS = 5;
  * needs no state of its own.
  */
 export function printingRows(alternates: CardSummary[]): ActionRowBuilder<ButtonBuilder>[] {
-  const shown = alternates.slice(0, MAX_BUTTONS);
+  // Discord rejects a message whose components repeat a custom id, so a
+  // printing listed twice would sink the whole reply.
+  const unique = [...new Map(alternates.map((card) => [card.id, card])).values()];
+  const shown = unique.slice(0, MAX_BUTTONS);
   if (shown.length === 0) return [];
 
   const row = new ActionRowBuilder<ButtonBuilder>();
