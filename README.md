@@ -37,7 +37,14 @@ yarn install
 yarn doctor       # prints the bot name, or Discord's error if the token is wrong
 ```
 
-7. Invite the bot with the `bot` and `applications.commands` scopes and the Send Messages and Embed Links permissions.
+7. Invite the bot with the `bot` and `applications.commands` scopes and this permissions integer:
+
+```
+277025475584
+```
+
+That is View Channels, Send Messages, Embed Links, Read Message History, Use Application Commands and Send Messages in Threads. The thread permission is easy to miss: without it a `[[card]]` mentioned inside a thread gets no reply, because the bot cannot post there.
+
 8. Register the commands and run:
 
 ```bash
