@@ -102,15 +102,35 @@ export async function lookupById(
   id: string,
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
-  const pinned = (await client.getCard(id).catch(() => undefined)) ?? getPocketCard(id);
-  if (!pinned) return undefined;
-  const sameName = (await client.searchByName(pinned.name).catch(() => []))
+  // Only a 404 means the id is unknown to TCGdex. Any other failure is an
+  // outage, and answering "no card matched" would blame the asker for it.
+  let tcgdexCard: Card | undefined;
+  let outage: unknown;
+  try {
+    tcgdexCard = await client.getCard(id);
+  } catch (error) {
+    if (!isMissing(error)) outage = error;
+  }
+  const pocketCard = tcgdexCard ? undefined : getPocketCard(id);
+  const pinned = tcgdexCard ?? pocketCard;
+  if (!pinned) {
+    if (outage !== undefined) throw outage;
+    return undefined;
+  }
+
+  // A Pocket printing lists other Pocket printings, never the physical cards
+  // TCGdex returns for the same name.
+  const candidates = pocketCard
+    ? searchPocketByName(pinned.name)
+    : await client.searchByName(pinned.name).catch(() => []);
+  const sameName = candidates
     .filter((entry) => entry.id !== pinned.id && normaliseName(entry.name) === normaliseName(pinned.name))
     .slice(0, options.alternateLimit ?? 10);
+  const attribution = pocketCard ? POCKET_ATTRIBUTION : options.attribution;
   return {
     card: pinned,
     view: renderCard(pinned, {
-      ...(options.attribution ? { attribution: options.attribution } : {}),
+      ...(attribution ? { attribution } : {}),
       ...(options.cardUrl ? { cardUrl: options.cardUrl } : {}),
     }),
     alternates: sameName,

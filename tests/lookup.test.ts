@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TcgdexClient, TcgdexError } from "../src/api/tcgdex.js";
 import type { Card } from "../src/api/types.js";
-import { lookupCard, lookupEmbeds } from "../src/lookup.js";
+import { POCKET_ATTRIBUTION, lookupById, lookupCard, lookupEmbeds } from "../src/lookup.js";
 
 const dragapult = JSON.parse(
   readFileSync(new URL("./fixtures/dragapult-ex-sv08.5-073.json", import.meta.url), "utf8"),
@@ -214,5 +214,29 @@ describe("lookupCard", () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Pikachu");
     expect(lookup?.card.id).toBe("sv06-051");
+  });
+});
+
+describe("lookupById", () => {
+  it("raises an outage instead of reporting the id as unknown", async () => {
+    stubFetch({ "/cards/sv08.5-073": { status: 503, body: {} } });
+    const client = new TcgdexClient({ retries: 0 });
+    await expect(lookupById(client, "sv08.5-073")).rejects.toBeInstanceOf(TcgdexError);
+  });
+
+  it("returns nothing for an id neither source knows", async () => {
+    stubFetch({});
+    const client = new TcgdexClient({ retries: 0 });
+    await expect(lookupById(client, "zz99-999")).resolves.toBeUndefined();
+  });
+
+  it("keeps a Pocket printing among Pocket printings and credits the Pocket data", async () => {
+    stubFetch({ "/cards?name=": { body: summaries } });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupById(client, "b4-212");
+    expect(lookup?.card.name).toBe("Mewtwo");
+    expect(lookup?.alternates.length).toBeGreaterThan(0);
+    expect(lookup?.alternates.every((entry) => /^(a|b|p)[a-z0-9]*-\d{3}$/.test(entry.id))).toBe(true);
+    expect(lookup?.view.footer).toContain(POCKET_ATTRIBUTION);
   });
 });
