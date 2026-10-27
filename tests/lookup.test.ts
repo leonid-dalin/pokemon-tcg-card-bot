@@ -182,6 +182,12 @@ describe("lookupCard", () => {
     expect(lookup?.card.id).toBe("sv03-125");
   });
 
+  it("returns nothing when the hint names no set at all", async () => {
+    stubFetch({ "/cards?name=": { body: summaries } });
+    const client = new TcgdexClient();
+    await expect(lookupCard(client, "Crustle", "zzz")).resolves.toBeUndefined();
+  });
+
   it("answers a pocket hint from the bundled pocket data", async () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Crustle ex", "ptcgp");

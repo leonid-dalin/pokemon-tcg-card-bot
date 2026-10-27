@@ -38,6 +38,11 @@ describe("resolveSetHint", () => {
     expect(resolveSetHint("Stellar")).toBe("sv07");
   });
 
+  it("reads a three-letter printed code", () => {
+    expect(resolveSetHint("DRI")).toBe("sv10");
+    expect(resolveSetHint("Dri")).toBe("sv10");
+  });
+
   it("returns undefined for nonsense", () => {
     expect(resolveSetHint("zzz")).toBeUndefined();
     expect(resolveSetHint("")).toBeUndefined();

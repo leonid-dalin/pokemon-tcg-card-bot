@@ -139,7 +139,11 @@ export async function lookupCard(
   // "pocket" is a group, not a set, so it filters rather than pins one id.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
   if (pocketOnly) return lookupPocket(query, setHint, options);
-  const resolved = setHint && !pocketOnly ? resolveSetHint(setHint) : undefined;
+  const resolved = setHint ? resolveSetHint(setHint) : undefined;
+
+  // A hint that names no set is a mistake, and falling back to the bare name
+  // would answer with a printing the asker did not ask for.
+  if (setHint && !resolved) return undefined;
   const summaries = await client.searchByName(query);
   const matched = rankPrintings(summaries, query, resolved ?? (pocketOnly ? undefined : setHint));
 
