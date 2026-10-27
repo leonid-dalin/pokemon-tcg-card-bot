@@ -37,6 +37,8 @@ yarn register     # publish /card and /set
 yarn dev          # run from source
 ```
 
+If your npm config blocks install scripts, `esbuild` arrives without its platform binary. Approve it once with `npm approve-scripts esbuild` and reinstall.
+
 For production, `yarn build` then `yarn start`.
 
 ## Profile picture
