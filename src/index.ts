@@ -11,6 +11,7 @@ import {
 import { toEmbeds } from "./discord/embeds.js";
 import { lookupCard, lookupEmbeds } from "./lookup.js";
 import { extractMentions } from "./mentions.js";
+import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 
 const MAX_EMBEDS_PER_MESSAGE = 5;
@@ -29,7 +30,10 @@ if (config.mentionEnabled) {
 }
 
 const client = new Client({ intents });
-const mentionCooldowns = new Map<string, number>();
+const budget =
+  config.mentionCooldownSeconds > 0
+    ? new MentionBudget({ refillSeconds: config.mentionCooldownSeconds })
+    : undefined;
 let warnedAboutContent = false;
 
 client.once(Events.ClientReady, (ready) => {
@@ -60,13 +64,21 @@ client.on(Events.MessageCreate, async (message) => {
   if (!config.mentionEnabled) return;
   if (message.author.bot || message.webhookId) return;
 
+  if (message.system) return;
+
   // With the Message Content intent switched off Discord still delivers the
   // event but strips the text, which looks like the bot ignoring everyone.
-  if (!message.content && !warnedAboutContent) {
-    warnedAboutContent = true;
-    console.warn(
-      "received a message with no content: enable Message Content under Bot -> Privileged Gateway Intents, then restart",
-    );
+  // Attachments, embeds and stickers are legitimately text-free, so they are
+  // not evidence of a missing intent.
+  if (!message.content) {
+    const hasRichContent =
+      message.attachments.size > 0 || message.embeds.length > 0 || message.stickers.size > 0;
+    if (!hasRichContent && !warnedAboutContent) {
+      warnedAboutContent = true;
+      console.warn(
+        "received a message with no content: enable Message Content under Bot -> Privileged Gateway Intents, then restart",
+      );
+    }
     return;
   }
 
@@ -74,17 +86,16 @@ client.on(Events.MessageCreate, async (message) => {
   if (mentions.length === 0) return;
 
   // Keyed per member, not per channel: a channel-wide budget lets one person's
-  // mention swallow everyone else's for the rest of the window.
-  const key = `${message.channelId}:${message.author.id}`;
-  const now = Date.now();
-  const until = mentionCooldowns.get(key) ?? 0;
-  if (now < until) {
-    console.log(
-      `skipped [[${mentions[0]?.raw ?? ""}]] from ${message.author.username}: ${Math.ceil((until - now) / 1000)}s of cooldown left`,
-    );
-    return;
+  // mention swallow everyone else's.
+  if (budget) {
+    const verdict = budget.take(`${message.channelId}:${message.author.id}`);
+    if (!verdict.allowed) {
+      console.log(
+        `skipped [[${mentions[0]?.raw ?? ""}]] from ${message.author.username}: ${verdict.retryAfterSeconds}s until the next one`,
+      );
+      return;
+    }
   }
-  mentionCooldowns.set(key, now + config.mentionCooldownMs);
 
   try {
     const embeds = [];
@@ -95,7 +106,7 @@ client.on(Events.MessageCreate, async (message) => {
       });
       console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
       if (lookup) embeds.push(...toEmbeds(lookupEmbeds(lookup)));
-      else misses.push(mention.name);
+      else misses.push(mention.raw);
       if (embeds.length >= MAX_EMBEDS_PER_MESSAGE) break;
     }
     if (embeds.length === 0 && misses.length === 0) return;

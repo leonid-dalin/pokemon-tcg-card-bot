@@ -3,7 +3,8 @@ export interface Config {
   clientId: string;
   guildId?: string;
   mentionEnabled: boolean;
-  mentionCooldownMs: number;
+  /** 0 disables the throttle entirely. */
+  mentionCooldownSeconds: number;
   attribution: string;
 }
 
@@ -28,7 +29,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     clientId,
     ...(env.DISCORD_GUILD_ID?.trim() ? { guildId: env.DISCORD_GUILD_ID.trim() } : {}),
     mentionEnabled: parseBoolean(env.MENTION_ENABLED, true),
-    mentionCooldownMs: parsePositiveInt(env.MENTION_COOLDOWN_SECONDS, 30) * 1000,
+    mentionCooldownSeconds: parsePositiveInt(env.MENTION_COOLDOWN_SECONDS, 0),
     attribution: env.ATTRIBUTION?.trim() || "Card data from TCGdex",
   };
 }
