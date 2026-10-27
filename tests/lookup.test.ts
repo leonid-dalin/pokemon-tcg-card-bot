@@ -137,6 +137,21 @@ describe("lookupCard", () => {
     expect(lookup?.card.id).toBe("swsh10.5-055");
   });
 
+  it("keeps an exact name ahead of a newer series that only contains it", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "me02-013", name: "Mega Charizard X ex", localId: "013", image: "https://assets.tcgdex.net/en/me/me02/13" },
+          { id: "sv03-125", name: "Charizard", localId: "125", image: "https://assets.tcgdex.net/en/sv/sv03/125" },
+        ],
+      },
+      "/cards/sv03-125": { body: { ...dragapult, id: "sv03-125", name: "Charizard", localId: "125" } },
+    });
+    const client = new TcgdexClient();
+    const lookup = await lookupCard(client, "Charizard");
+    expect(lookup?.card.id).toBe("sv03-125");
+  });
+
   it("prefers the newest series among art-bearing printings", async () => {
     stubFetch({
       "/cards?name=": {

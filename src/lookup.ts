@@ -1,7 +1,7 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { renderCard, type EmbedView } from "./render.js";
-import { normaliseName, rankPrintings, seriesRank } from "./resolve.js";
+import { normaliseName, rankPrintings, scoreCandidate, seriesRank } from "./resolve.js";
 
 export interface CardLookup {
   card: Card;
@@ -17,12 +17,15 @@ export interface LookupOptions {
 }
 
 /**
- * Order candidates for display: artwork first, then the newest series, then the
- * source order. TCGdex has no scan for a few promos, and a card embed without
- * art is a poor answer, so art outranks recency.
+ * Order candidates for display. Name exactness comes first, or "Charizard"
+ * loses to "Mega Charizard X ex" purely because Mega Evolution is newer. Then
+ * artwork, since TCGdex has no scan for a few promos, then the newest series,
+ * then the source order.
  */
-function orderForDisplay(ranked: CardSummary[]): CardSummary[] {
+function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
   return [...ranked].sort((a, b) => {
+    const score = scoreCandidate(query, b.name) - scoreCandidate(query, a.name);
+    if (score !== 0) return score;
     const art = (b.image ? 1 : 0) - (a.image ? 1 : 0);
     if (art !== 0) return art;
     return seriesRank(b.id) - seriesRank(a.id);
@@ -54,7 +57,7 @@ export async function lookupCard(
 
   if (ranked.length === 0) return undefined;
 
-  const ordered = orderForDisplay(ranked);
+  const ordered = orderForDisplay(ranked, query);
   const [primary] = ordered;
   if (!primary) return undefined;
 
