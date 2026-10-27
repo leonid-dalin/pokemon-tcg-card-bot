@@ -70,10 +70,18 @@ client.on(Events.MessageCreate, async (message) => {
   const mentions = extractMentions(message.content);
   if (mentions.length === 0) return;
 
+  // Keyed per member, not per channel: a channel-wide budget lets one person's
+  // mention swallow everyone else's for the rest of the window.
+  const key = `${message.channelId}:${message.author.id}`;
   const now = Date.now();
-  const until = mentionCooldowns.get(message.channelId) ?? 0;
-  if (now < until) return;
-  mentionCooldowns.set(message.channelId, now + config.mentionCooldownMs);
+  const until = mentionCooldowns.get(key) ?? 0;
+  if (now < until) {
+    console.log(
+      `skipped [[${mentions[0]?.raw ?? ""}]] from ${message.author.username}: ${Math.ceil((until - now) / 1000)}s of cooldown left`,
+    );
+    return;
+  }
+  mentionCooldowns.set(key, now + config.mentionCooldownMs);
 
   try {
     const embeds = [];
