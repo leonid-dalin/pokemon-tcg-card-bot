@@ -52,15 +52,22 @@ try {
     );
   }
 
-  const commands = (await rest.get(`/applications/${config.clientId}/commands`)) as {
-    name: string;
-    description: string;
-  }[];
-  console.log(
-    commands.length === 0
-      ? "no slash commands registered yet: run npm run register"
-      : `commands: ${commands.map((command) => `/${command.name}`).join(", ")}`,
-  );
+  type Command = { name: string; description: string };
+  const global = (await rest.get(`/applications/${config.clientId}/commands`)) as Command[];
+  const guild = config.guildId
+    ? ((await rest.get(
+        `/applications/${config.clientId}/guilds/${config.guildId}/commands`,
+      )) as Command[])
+    : [];
+
+  const describe = (label: string, list: Command[]) =>
+    list.length === 0 ? `${label}: none` : `${label}: ${list.map((command) => `/${command.name}`).join(", ")}`;
+
+  console.log(describe("global commands", global));
+  if (config.guildId) console.log(describe("guild commands", guild));
+  if (global.length === 0 && guild.length === 0) {
+    console.log("no slash commands registered yet: run npm run register");
+  }
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`token rejected: ${message}`);
