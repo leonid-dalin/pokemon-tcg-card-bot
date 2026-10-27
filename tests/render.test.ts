@@ -11,7 +11,24 @@ const charizard = fixture("charizard-ex-sv03-125.json");
 
 const fieldNames = (card: Card) => renderCard(card).fields.map((field) => field.name);
 
+// Field values copied from https://api.tcgdex.net/v2/en/cards/sv02-185 on 2026-10-28.
+const iono: Card = {
+  id: "sv02-185",
+  localId: "185",
+  name: "Iono",
+  category: "Trainer",
+  trainerType: "Supporter",
+  effect:
+    "Each player shuffles their hand and puts it on the bottom of their deck. If either player put any cards on the bottom of their deck in this way, each player draws a card for each of their remaining Prize cards.",
+};
+
 describe("renderCard", () => {
+  it("shows the wording and the kind of a Trainer card", () => {
+    const view = renderCard(iono);
+    expect(view.fields.find((field) => field.name === "Effect")?.value).toBe(iono.effect);
+    expect(view.fields.find((field) => field.name === "Card")?.value).toBe("Trainer · Supporter");
+  });
+
   it("titles the card with its set number", () => {
     expect(renderCard(dragapult).title).toBe("Dragapult ex · #073/131");
   });

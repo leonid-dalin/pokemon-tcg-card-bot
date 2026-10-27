@@ -163,6 +163,7 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
 
   const profile = [
     card.category,
+    card.trainerType,
     card.stage,
     card.types?.length ? card.types.join("/") : undefined,
     card.hp ? `${card.hp} HP` : undefined,
@@ -172,6 +173,8 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
   if (profile) fields.push({ name: "Card", value: truncate(profile), inline: true });
 
   if (card.rarity) fields.push({ name: "Rarity", value: truncate(card.rarity), inline: true });
+
+  if (card.effect) fields.push({ name: "Effect", value: truncate(card.effect, FIELD_VALUE_LIMIT) });
 
   for (const ability of (card.abilities ?? []).slice(0, 2)) {
     fields.push({ name: "Ability", value: truncate(`${abilityLabel(ability)}\n${ability.effect ?? ""}`) });
