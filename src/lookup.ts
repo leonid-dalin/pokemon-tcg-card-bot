@@ -34,6 +34,9 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
   });
 }
 
+/** Attribution for Pocket cards, which never come from TCGdex. */
+export const POCKET_ATTRIBUTION = "Pocket card data from pokemon-tcg-pocket-cards";
+
 /**
  * Pocket lookups read the bundled PocketDecks package, because TCGdex has no
  * Pocket set newer than Paldean Wonders and cards like Crustle ex are simply
@@ -62,7 +65,7 @@ function lookupPocket(query: string, setHint: string | undefined, options: Looku
   return {
     card,
     view: renderCard(card, {
-      ...(options.attribution ? { attribution: options.attribution } : {}),
+      attribution: POCKET_ATTRIBUTION,
       ...(options.cardUrl ? { cardUrl: options.cardUrl } : {}),
     }),
     alternates: pool.filter((entry) => entry.id !== primary.id).slice(0, options.alternateLimit ?? 10),

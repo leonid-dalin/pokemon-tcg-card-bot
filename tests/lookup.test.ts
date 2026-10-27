@@ -189,6 +189,8 @@ describe("lookupCard", () => {
     expect(lookup?.view.fields.find((field) => field.name === "Set")?.value).toContain("Deluxe Pack: Mega");
     expect(lookup?.view.fields.find((field) => field.name === "Attack")?.value).toContain("Boulder Crush");
     expect(lookup?.view.fields.some((field) => field.name === "Legal")).toBe(false);
+    expect(lookup?.view.footer).toContain("pokemon-tcg-pocket-cards");
+    expect(lookup?.view.footer).not.toContain("TCGdex");
   });
 
   it("prefers a printing with art over a newer one without", async () => {
