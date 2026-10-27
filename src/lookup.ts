@@ -1,7 +1,8 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { renderCard, type EmbedView } from "./render.js";
-import { normaliseName, rankPrintings, scoreCandidate, seriesRank } from "./resolve.js";
+import { normaliseName, rankPrintings, scoreCandidate } from "./resolve.js";
+import { resolveSetHint, setRecency } from "./set-index.js";
 
 export interface CardLookup {
   card: Card;
@@ -28,7 +29,7 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
     if (score !== 0) return score;
     const art = (b.image ? 1 : 0) - (a.image ? 1 : 0);
     if (art !== 0) return art;
-    return seriesRank(b.id) - seriesRank(a.id);
+    return setRecency(b.id) - setRecency(a.id);
   });
 }
 
@@ -42,19 +43,11 @@ export async function lookupCard(
   setHint?: string,
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
+  // A hint can be a set id (sv07), the printed code players use (SCR) or the set
+  // name (Stellar Crown). All three resolve offline against the set index.
+  const hint = setHint ? (resolveSetHint(setHint) ?? setHint) : undefined;
   const summaries = await client.searchByName(query);
-  let ranked = rankPrintings(summaries, query, setHint);
-
-  // A hint can be a set id (swsh10.5) or a set name (Pokemon GO). Names are not
-  // in the card id, so they need one lookup against the cached set list.
-  if (ranked.length === 0 && setHint) {
-    const sets = await client.listSets();
-    const wanted = normaliseName(setHint);
-    const match = sets.find((set) => normaliseName(set.name) === wanted) ??
-      sets.find((set) => normaliseName(set.name).includes(wanted));
-    if (match) ranked = rankPrintings(summaries, query, match.id);
-  }
-
+  const ranked = rankPrintings(summaries, query, hint);
   if (ranked.length === 0) return undefined;
 
   const ordered = orderForDisplay(ranked, query);
