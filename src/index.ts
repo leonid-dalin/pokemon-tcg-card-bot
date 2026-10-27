@@ -88,17 +88,25 @@ client.on(Events.MessageCreate, async (message) => {
 
   try {
     const embeds = [];
+    const misses: string[] = [];
     for (const mention of mentions) {
       const lookup = await lookupCard(api, mention.name, mention.setHint, {
         attribution: config.attribution,
       });
       console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
       if (lookup) embeds.push(...toEmbeds(lookupEmbeds(lookup)));
+      else misses.push(mention.name);
       if (embeds.length >= MAX_EMBEDS_PER_MESSAGE) break;
     }
-    if (embeds.length === 0) return;
+    if (embeds.length === 0 && misses.length === 0) return;
+
+    // A mention is an explicit request, so a name that resolves to nothing gets
+    // an answer. Silence here reads as a broken bot, not as a polite no-op.
     await message.reply({
-      embeds: embeds.slice(0, MAX_EMBEDS_PER_MESSAGE),
+      ...(misses.length > 0
+        ? { content: `No card matched ${misses.map((name) => `\`${name}\``).join(", ")}.` }
+        : {}),
+      ...(embeds.length > 0 ? { embeds: embeds.slice(0, MAX_EMBEDS_PER_MESSAGE) } : {}),
       allowedMentions: { repliedUser: false },
     });
   } catch (error) {

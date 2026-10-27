@@ -98,7 +98,7 @@ The suite runs offline. The API client tests stub `fetch`, and the render tests 
 ## Limits
 
 - TCGplayer pricing is sparse in TCGdex. Cardmarket is populated for nearly everything, so most embeds show one price source rather than two.
-- A name that matches nothing stays silent rather than posting an error, which keeps typos from turning into noise. The slash command does answer with a miss message.
+- A name that matches nothing gets a short `No card matched` reply, because a mention is an explicit request and silence reads as a broken bot. Plain text without brackets is still ignored, which keeps ordinary conversation quiet.
 
 ## Licence
 
