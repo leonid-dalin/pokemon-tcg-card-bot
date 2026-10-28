@@ -50,11 +50,11 @@ describe("printingIdFrom", () => {
 
 describe("mentionRows", () => {
   it("offers printings under a single card", () => {
-    expect(mentionRows([{ alternates: [card("sv06-130")] }])).toHaveLength(1);
+    expect(mentionRows([{ card, alternates: [card("sv06-130")] }])).toHaveLength(2);
   });
 
   it("offers none when the reply shows several cards", () => {
-    const lookups = [{ alternates: [card("sv06-130")] }, { alternates: [card("sv03-125")] }];
+    const lookups = [{ card, alternates: [card("sv06-130")] }, { card, alternates: [card("sv03-125")] }];
     expect(mentionRows(lookups)).toEqual([]);
   });
 });

@@ -81,7 +81,7 @@ describe("message handler", () => {
     expect(replies).toHaveLength(1);
     const reply = replies[0] as { embeds: unknown[]; components: unknown[] };
     expect(reply.embeds).toHaveLength(1);
-    expect(reply.components).toHaveLength(1);
+    expect(reply.components).toHaveLength(2);
     // A reply's own allowedMentions would replace the client default that
     // stops the bot pinging anyone.
     expect(replies.every((payload) => !("allowedMentions" in payload))).toBe(true);

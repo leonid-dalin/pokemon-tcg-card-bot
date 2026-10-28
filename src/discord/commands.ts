@@ -7,10 +7,10 @@ import {
 } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import { lookupById, lookupCard } from "../lookup.js";
-import { renderSet } from "../render.js";
+import { renderCardDetails, renderSet } from "../render.js";
 import { printedNumber } from "../printed.js";
 import { searchCardText } from "../text-search.js";
-import { printingIdFrom } from "./printing-buttons.js";
+import { printingIdFrom, detailsIdFrom } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
 import { cardReply, searchReply } from "./replies.js";
@@ -120,6 +120,22 @@ export async function handlePrintingButton(
   await interaction.editReply(cardReply(lookup));
 }
 
+export async function handleDetailsButton(
+  context: CommandContext,
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const id = detailsIdFrom(interaction.customId);
+  if (!id) return;
+  const lookup = await lookupById(context.client, id, { attribution: context.attribution });
+  if (!lookup) {
+    await interaction.reply({ content: `No card matched \`${id}\`.`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await interaction.reply({
+    embeds: [toEmbed(renderCardDetails(lookup.card, lookup.alternates, { attribution: context.attribution }))],
+    flags: MessageFlags.Ephemeral,
+  });
+}
 export async function handleSearchCommand(
   context: CommandContext,
   interaction: ChatInputCommandInteraction,

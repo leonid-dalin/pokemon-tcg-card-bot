@@ -5,14 +5,17 @@ import { lookupEmbeds, type CardLookup } from "../lookup.js";
 import { renderSearchResults } from "../render.js";
 import type { TextHit } from "../text-search.js";
 import { toEmbeds } from "./embeds.js";
-import { mentionRows, printingRows } from "./printing-buttons.js";
+import { detailsRow, detailsRows, printingRows } from "./printing-buttons.js";
 
 /** Most embeds Discord accepts in one message is ten; five keeps a reply readable. */
 export const MAX_EMBEDS_PER_MESSAGE = 5;
 
 /** One card with its printing buttons, as `/card` and a printing button show it. */
 export function cardReply(lookup: CardLookup) {
-  return { embeds: toEmbeds(lookupEmbeds(lookup)), components: printingRows(lookup.alternates) };
+  return {
+    embeds: toEmbeds(lookupEmbeds(lookup)),
+    components: [...printingRows(lookup.alternates), ...detailsRow(lookup.card.id)],
+  };
 }
 
 /** A text search answer, shared by `/search` and `@bot search`. */
@@ -44,8 +47,11 @@ export function mentionReply(found: CardLookup[], misses: MentionMiss[]) {
       return `${base} Closest: ${closest.map((card) => `\`${card.name}\` (${printedNumber(card.id)})`).join(", ")}.`;
     })
     .join("\n");
+  const components = found.length === 1 && found[0]
+    ? [...printingRows(found[0].alternates), ...detailsRow(found[0].card.id)]
+    : detailsRows(found);
   return {
-    ...(embeds.length > 0 ? { embeds, components: mentionRows(found) } : {}),
+    ...(embeds.length > 0 ? { embeds, components } : {}),
     ...(content ? { content } : {}),
   };
 }

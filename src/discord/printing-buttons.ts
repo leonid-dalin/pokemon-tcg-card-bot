@@ -3,16 +3,10 @@ import type { CardSummary } from "../api/types.js";
 import { printedNumber } from "../printed.js";
 
 export const PRINTING_PREFIX = "printing:";
+export const DETAILS_PREFIX = "details:";
 const MAX_BUTTONS = 5;
 
-/**
- * One row of buttons for the other printings of a card. The custom id carries
- * the card id, so the handler resolves it with the same lookup a hint uses and
- * needs no state of its own.
- */
 export function printingRows(alternates: CardSummary[]): ActionRowBuilder<ButtonBuilder>[] {
-  // Discord rejects a message whose components repeat a custom id, so a
-  // printing listed twice would sink the whole reply.
   const unique = [...new Map(alternates.map((card) => [card.id, card])).values()];
   const shown = unique.slice(0, MAX_BUTTONS);
   if (shown.length === 0) return [];
@@ -29,17 +23,42 @@ export function printingRows(alternates: CardSummary[]): ActionRowBuilder<Button
   return [row];
 }
 
-/**
- * Buttons for a reply to `[[...]]` mentions. A press swaps the whole message for
- * one printing, so buttons only appear when the reply shows a single card.
- */
-export function mentionRows(lookups: { alternates: CardSummary[] }[]): ActionRowBuilder<ButtonBuilder>[] {
+export function detailsRow(cardId: string, label = "Details"): ActionRowBuilder<ButtonBuilder>[] {
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`${DETAILS_PREFIX}${cardId}`).setLabel(label).setStyle(ButtonStyle.Secondary),
+    ),
+  ];
+}
+
+export function detailsRows(lookups: { card: { id: string; name: string } }[]): ActionRowBuilder<ButtonBuilder>[] {
+  if (lookups.length === 0) return [];
+  const row = new ActionRowBuilder<ButtonBuilder>();
+  for (const lookup of lookups.slice(0, MAX_BUTTONS)) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${DETAILS_PREFIX}${lookup.card.id}`)
+        .setLabel(`Details · ${lookup.card.name}`.slice(0, 80))
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  return [row];
+}
+
+export function mentionRows(lookups: { card: { id: string }; alternates: CardSummary[] }[]): ActionRowBuilder<ButtonBuilder>[] {
   const [only] = lookups;
-  return lookups.length === 1 && only ? printingRows(only.alternates) : [];
+  if (lookups.length !== 1 || !only) return [];
+  return [...printingRows(only.alternates), ...detailsRow(only.card.id)];
 }
 
 export function printingIdFrom(customId: string): string | undefined {
   if (!customId.startsWith(PRINTING_PREFIX)) return undefined;
   const id = customId.slice(PRINTING_PREFIX.length).trim();
+  return id.length > 0 ? id : undefined;
+}
+
+export function detailsIdFrom(customId: string): string | undefined {
+  if (!customId.startsWith(DETAILS_PREFIX)) return undefined;
+  const id = customId.slice(DETAILS_PREFIX.length).trim();
   return id.length > 0 ? id : undefined;
 }

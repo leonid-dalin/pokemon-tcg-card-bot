@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TcgdexClient, TcgdexError } from "../src/api/tcgdex.js";
 import type { Card } from "../src/api/types.js";
+import { renderCardDetails } from "../src/render.js";
 import { POCKET_ATTRIBUTION, lookupById, lookupCard, lookupEmbeds, suggestNames, type CardLookup } from "../src/lookup.js";
 
 /** The embed a lookup renders to, before Other printings are appended. */
@@ -114,7 +115,7 @@ describe("lookupCard", () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Dragapult ex");
     expect(lookup?.card.id).toBe("sv08.5-073");
-    expect(viewOf(lookup)?.title).toBe("Dragapult ex · #073/131");
+    expect(viewOf(lookup)?.title).toBe("Dragapult ex");
     expect(lookup?.alternates.map((card) => card.id)).toEqual(["sv06-130"]);
   });
 
@@ -220,8 +221,8 @@ describe("lookupCard", () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Crustle ex", "ptcgp");
     expect(lookup?.card.id).toBe("b4b-133");
-    expect(viewOf(lookup)?.fields.find((field) => field.name === "Set")?.value).toContain("Deluxe Pack: Mega");
-    expect(viewOf(lookup)?.fields.find((field) => field.name === "Attack")?.value).toContain("Boulder Crush");
+    expect(renderCardDetails(lookup!.card, [], { attribution: POCKET_ATTRIBUTION }).fields.find((field) => field.name === "Set")?.value).toContain("Deluxe Pack: Mega");
+    expect(viewOf(lookup)?.fields.some((field) => field.name.includes("Boulder Crush"))).toBe(true);
     expect(viewOf(lookup)?.fields.some((field) => field.name === "Legal")).toBe(false);
     expect(viewOf(lookup)?.footer).toContain("pokemon-tcg-pocket-cards");
     expect(viewOf(lookup)?.footer).not.toContain("TCGdex");

@@ -53,6 +53,7 @@ export interface Card {
   hp?: number;
   types?: string[];
   stage?: string;
+  evolveFrom?: string;
   suffix?: string;
   regulationMark?: string;
   illustrator?: string;

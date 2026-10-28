@@ -5,6 +5,7 @@ import { loadDotEnv } from "./env.js";
 import {
   handleAutocomplete,
   handleCardCommand,
+  handleDetailsButton,
   handlePrintingButton,
   handleSearchCommand,
   handleSetCommand,
@@ -41,7 +42,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isButton()) {
-      await handlePrintingButton(context, interaction);
+      if (interaction.customId.startsWith("details:")) {
+        await handleDetailsButton(context, interaction);
+      } else {
+        await handlePrintingButton(context, interaction);
+      }
       return;
     }
     if (!interaction.isChatInputCommand()) return;
