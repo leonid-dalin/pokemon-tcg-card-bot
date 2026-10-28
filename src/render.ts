@@ -95,6 +95,18 @@ interface PriceSummary {
   tcgplayer?: Pricing;
 }
 
+/** The TCGplayer card-level block may carry flat averages or nested per-variant
+ * market prices; either way the reply needs one flat figure. */
+function flattenTcgplayer(raw: NonNullable<Card["pricing"]>["tcgplayer"]): Pricing | undefined {
+  if (!raw) return undefined;
+  if (typeof raw.avg === "number" || typeof raw.trend === "number") return raw as Pricing;
+  const variants = Object.entries(raw as Record<string, { marketPrice?: number | null } | undefined>);
+  if (variants.length === 0) return undefined;
+  const normal = variants.find(([name]) => name === "normal") ?? variants.find(([, price]) => price?.marketPrice != null);
+  const market = normal?.[1]?.marketPrice;
+  return typeof market === "number" && !Number.isNaN(market) ? { unit: "USD", avg: market } : undefined;
+}
+
 function pickPricing(card: Card): PriceSummary {
   const perSource: PriceSummary = {};
   for (const variant of card.variants_detailed ?? []) {
@@ -107,7 +119,7 @@ function pickPricing(card: Card): PriceSummary {
   }
   const cardPricing = card.pricing;
   if (!perSource.cardmarket && cardPricing?.cardmarket) perSource.cardmarket = cardPricing.cardmarket;
-  if (!perSource.tcgplayer && cardPricing?.tcgplayer) perSource.tcgplayer = cardPricing.tcgplayer;
+  if (!perSource.tcgplayer) perSource.tcgplayer = flattenTcgplayer(cardPricing?.tcgplayer);
   return perSource;
 }
 
