@@ -79,9 +79,11 @@ sudo pokemon-card-bot update
 
 The timer checks about every 30-35 minutes, starting 10-15 minutes after boot. It reads the exact `master` commit through the public GitHub API and requires the matching published bundle and checksum. A missing bundle, failed download or checksum mismatch leaves the installed code running. No GitHub token is needed on the Pi
 
-Before activation, the updater runs a local card-data and SQLite check as the service user. It then stops the bot, snapshots `settings.db`, switches the release link and waits up to 180 seconds for a fresh status file from the new process confirming Discord readiness. Failed startup restores the previous code and settings snapshot, then restarts the previous release. Network outages during activation can therefore cause a rollback
+Before activation, the updater runs a local card-data and SQLite check as the service user with a minimal environment, so no operator secrets reach it. It then stops the bot, snapshots `settings.db`, switches the release link and waits up to 180 seconds for a fresh status file from the new process confirming Discord readiness. Failed startup restores the previous code and settings snapshot, then restarts the previous release. Network outages during activation can therefore cause a rollback
 
-The updater keeps the current and previous release, plus the three most recent settings snapshots. Automatic updates respect a manually stopped bot. To pause updates while investigating a problem:
+Activation is recorded in `/opt/pokemon-card-bot/update-state.json` before the bot stops, with a phase that advances only after each destructive step. The next update recovers an interrupted activation: a crash before the switch restarts the installed release, a crash after the switch but before readiness restores the previous code and settings, and a crash after readiness completes the success record. A power loss between phases therefore resolves on the first update run; the bot service also restarts independently through systemd
+
+The updater keeps the current and previous release, plus the three most recent upgrade checkpoints. Snapshots you create with `backup` are never pruned automatically. Automatic updates respect a manually stopped bot. To pause updates while investigating a problem:
 
 ```bash
 sudo systemctl disable --now pokemon-card-bot-update.timer
@@ -91,7 +93,9 @@ sudo pokemon-card-bot backup
 sudo pokemon-card-bot rollback --restore-settings
 ```
 
-Manual rollback restores the settings checkpoint taken before the last successful update. Settings changed after that checkpoint are lost; take a backup first. A rollback restores code and SQLite settings only. The environment file and invocation logs stay in place. The updater remembers a failed or rolled-back revision and skips it until master changes. Use `sudo pokemon-card-bot update --retry` to retry it after investigating, then re-enable the timer
+Manual rollback restores the settings checkpoint taken before the last successful update. Rollback validates the checkpoint and previous release before stopping the bot, so a missing checkpoint leaves the current release running. Settings changed after that checkpoint are lost; take a backup first. A rollback restores code and SQLite settings only. The environment file and invocation logs stay in place. The updater remembers a failed or rolled-back revision and skips it until master changes. Use `sudo pokemon-card-bot update --retry` to retry it after investigating, then re-enable the timer
+
+The bundle builder downloads the pinned Node runtime and its licence from the official `nodejs.org/dist` archive, verifies the archive against the published SHA-256 checksum and bundles both with the release
 
 SHA-256 checks detect transfer corruption. The release and checksum share GitHub's trust boundary; they are not an independent signature
 
@@ -106,6 +110,7 @@ SHA-256 checks detect transfer corruption. The release and checksum share GitHub
 | `/opt/pokemon-card-bot/releases/` | Installed release bundles |
 | `/opt/pokemon-card-bot/backups/` | Settings snapshots, owned by root |
 | `/opt/pokemon-card-bot/rollback.json` | Previous release and settings checkpoint |
+| `/opt/pokemon-card-bot/update-state.json` | In-progress update phase, used to recover an interrupted activation |
 
 Use `sudo pokemon-card-bot backup` for an online SQLite snapshot. Copy that snapshot and the environment file to secure storage off the SD card. Back up invocation logs separately if enabled. The updater's snapshots protect upgrades; they share the same SD card as the live database
 

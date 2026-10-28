@@ -15,6 +15,7 @@ import shutil
 import signal
 import sqlite3
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -136,6 +137,120 @@ def point_to(release):
     next_link.replace(ROOT / "current")
 
 
+def atomic_json(path, payload):
+    descriptor, temporary = tempfile.mkstemp(prefix=path.name + "-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w") as output:
+            json.dump(payload, output)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    except Exception:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
+def atomic_text(path, text):
+    descriptor, temporary = tempfile.mkstemp(prefix=path.name + "-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w") as output:
+            output.write(text)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    except Exception:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
+STATE = ROOT / "update-state.json"
+
+
+def begin_activation(release, previous, backup):
+    atomic_json(STATE, {"phase": "checkpointed", "release": release.name,
+                        "previous": previous.name, "backup": backup.name})
+
+
+def recover():
+    """Finish or undo an activation interrupted by cancellation or power loss."""
+    if not STATE.exists():
+        return
+    try:
+        state = json.loads(STATE.read_text())
+        phase = state["phase"]
+        release = ROOT / "releases" / valid_sha(state["release"])
+        previous = ROOT / "releases" / valid_sha(state["previous"])
+        backup = ROOT / "backups" / state["backup"]
+    except (OSError, ValueError, KeyError, TypeError):
+        print("Unreadable update state; see docs/deployment.md for manual recovery", file=sys.stderr)
+        raise SystemExit(1)
+    progress("Recovering an interrupted update")
+    if phase == "ready":
+        # The new release reached readiness; only the success record was missing.
+        if not (ROOT / "rollback.json").exists():
+            atomic_json(ROOT / "rollback.json", {"backup": state["backup"], "from": release.name})
+        STATE.unlink()
+        if not active():
+            systemctl("start", SERVICE)
+        return
+    was_running = active()
+    if was_running:
+        systemctl("stop", SERVICE)
+    if phase == "switched":
+        # Readiness was never confirmed, so restore the previous code and settings.
+        if backup.is_dir() and manifest(previous, previous.name):
+            restore(backup)
+            point_to(previous)
+            atomic_text(ROOT / "failed-revision", release.name)
+            progress(f"Interrupted before readiness; restored {previous.name}")
+        else:
+            progress("Rollback prerequisites are missing; keeping the switched release")
+    STATE.unlink()
+    if was_running or active():
+        systemctl("start", SERVICE)
+
+
+def activate(release):
+    previous = current()
+    if previous == release:
+        print("Already running the published revision")
+        return
+    if previous is None or not ENV.exists():
+        raise RuntimeError("fetch a release and import the environment before starting the bot")
+    if not active():
+        print("Bot is stopped; update skipped")
+        return
+    backup = ROOT / "backups" / f"{int(time.time_ns())}-{previous.name}"
+    progress("Stopping bot and taking a settings checkpoint")
+    snapshot(backup)
+    begin_activation(release, previous, backup)
+    try:
+        (backup / "previous").write_text(previous.name)
+        systemctl("stop", SERVICE)
+        point_to(release)
+        atomic_json(STATE, {"phase": "switched", "release": release.name,
+                            "previous": previous.name, "backup": backup.name})
+        progress(f"Starting {release.name} and waiting for Discord readiness")
+        systemctl("start", SERVICE)
+        wait_ready()
+        atomic_json(STATE, {"phase": "ready", "release": release.name,
+                            "previous": previous.name, "backup": backup.name})
+    except BaseException:
+        progress("Startup failed or interrupted; restoring previous code and settings")
+        with contextlib.suppress(Exception):
+            systemctl("stop", SERVICE)
+        restore(backup)
+        point_to(previous)
+        atomic_text(ROOT / "failed-revision", release.name)
+        STATE.unlink()
+        systemctl("start", SERVICE)
+        raise
+    atomic_json(ROOT / "rollback.json", {"backup": backup.name, "from": release.name})
+    STATE.unlink()
+    print(f"Running {release.name}; settings snapshot {backup.name}")
+    prune()
+
+
 def fetch(sha):
     valid_sha(sha)
     target = ROOT / "releases" / sha
@@ -167,8 +282,10 @@ def fetch(sha):
         # Run without credentials and as the service user before stopping the live bot.
         os.chmod(stage, 0o755)
         progress("Checking bundled runtime, card data and SQLite as the service user")
+        # A minimal environment keeps any operator secrets out of the preflight.
         run("runuser", "-u", "pokemon-card-bot", "--", str(unpacked / "bin/node"),
-            "--max-old-space-size=192", str(unpacked / "deploy/smoke.mjs"), cwd="/tmp", timeout=120)
+            "--max-old-space-size=192", str(unpacked / "deploy/smoke.mjs"), cwd="/tmp", timeout=120,
+            env={"PATH": "/usr/bin:/bin"})
         unpacked.rename(target)
     return target
 
@@ -228,43 +345,6 @@ def restore(source):
         replacement.replace(database)
 
 
-def activate(release):
-    previous = current()
-    if previous == release:
-        print("Already running the published revision")
-        return
-    if previous is None or not ENV.exists():
-        raise RuntimeError("fetch a release and import the environment before starting the bot")
-    if not active():
-        print("Bot is stopped; update skipped")
-        return
-    backup = ROOT / "backups" / f"{int(time.time_ns())}-{previous.name}"
-    progress("Stopping bot and taking a settings checkpoint")
-    systemctl("stop", SERVICE)
-    try:
-        snapshot(backup)
-    except Exception:
-        systemctl("start", SERVICE)
-        raise
-    (backup / "previous").write_text(previous.name)
-    try:
-        point_to(release)
-        progress(f"Starting {release.name} and waiting for Discord readiness")
-        systemctl("start", SERVICE)
-        wait_ready()
-    except Exception:
-        progress("Startup failed; restoring previous code and settings")
-        systemctl("stop", SERVICE)
-        restore(backup)
-        point_to(previous)
-        systemctl("start", SERVICE)
-        (ROOT / "failed-revision").write_text(release.name)
-        raise
-    (ROOT / "rollback.json").write_text(json.dumps({"backup": backup.name, "from": release.name}))
-    print(f"Running {release.name}; settings snapshot {backup.name}")
-    prune()
-
-
 def prune():
     keep = {current()}
     rollback = ROOT / "rollback.json"
@@ -277,27 +357,37 @@ def prune():
     for release in (ROOT / "releases").iterdir():
         if SHA.fullmatch(release.name) and release not in keep and not release.is_symlink():
             shutil.rmtree(release)
-    backups = sorted((ROOT / "backups").iterdir(), key=lambda path: path.name, reverse=True)
-    for backup in backups[3:]:
+    # Manual operator backups are never pruned; only upgrade checkpoints expire.
+    checkpoints = [path for path in (ROOT / "backups").iterdir()
+                   if path.is_dir() and not path.name.endswith("-manual")]
+    for backup in sorted(checkpoints, key=lambda path: path.name, reverse=True)[3:]:
         if backup.name not in keep_backups and backup.is_dir() and not backup.is_symlink():
             shutil.rmtree(backup)
 
 
 def rollback():
     info = json.loads((ROOT / "rollback.json").read_text())
-    if current().name != info["from"]:
+    installed = current()
+    if installed is None or installed.name != info["from"]:
         raise RuntimeError("rollback checkpoint does not match the current release")
     backup = ROOT / "backups" / info["backup"]
-    previous = valid_sha((backup / "previous").read_text().strip())
-    target = ROOT / "releases" / previous
-    manifest(target, previous)
+    if not backup.is_dir():
+        raise RuntimeError("rollback checkpoint is missing; the current release stays in place")
+    previous_name = valid_sha((backup / "previous").read_text().strip())
+    target = ROOT / "releases" / previous_name
+    manifest(target, previous_name)
     systemctl("stop", SERVICE)
-    restore(backup)
-    point_to(target)
-    (ROOT / "failed-revision").write_text(info["from"])
+    try:
+        restore(backup)
+        point_to(target)
+        systemctl("start", SERVICE)
+        wait_ready()
+    except Exception:
+        progress("Rollback did not reach readiness; check the service journal")
+        raise
+    atomic_text(ROOT / "failed-revision", info["from"])
     (ROOT / "rollback.json").unlink()
-    systemctl("start", SERVICE)
-    print(f"Restored {previous} and its settings checkpoint")
+    print(f"Restored {previous_name} and its settings checkpoint")
 
 
 def import_env(source):
@@ -356,6 +446,7 @@ def main():
             if args.command == "update" and not active():
                 print("Bot is stopped; update skipped")
                 return
+            recover()
             sha = published_head()
             if sha is None:
                 print("No tested bundle published for master yet; keeping the installed release")

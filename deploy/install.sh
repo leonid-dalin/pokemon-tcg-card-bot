@@ -3,6 +3,7 @@ set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
 [[ $(uname -m) == aarch64 ]] || { echo 'A 64-bit ARM operating system is required' >&2; exit 1; }
 command -v python3 >/dev/null
+python3 -c "import sqlite3" || { echo 'Python 3 with the sqlite3 module is required' >&2; exit 1; }
 command -v systemctl >/dev/null
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 getent passwd pokemon-card-bot >/dev/null || useradd --system --user-group --home-dir /nonexistent --shell /usr/sbin/nologin pokemon-card-bot

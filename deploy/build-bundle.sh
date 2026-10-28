@@ -12,13 +12,25 @@ output=$(realpath "$output")
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/bin" "$stage/src/data" "$stage/deploy" "$stage/docs"
-cp "$(command -v node)" "$stage/bin/node"
+node_version=$(cat .nvmrc)
+dist_url="https://nodejs.org/dist/v$node_version"
+runtime_tar="node-v$node_version-linux-arm64.tar.xz"
+curl --fail --silent --show-error --location "$dist_url/SHASUMS256.txt" -o "$stage/SHASUMS256.txt"
+expected=$(awk -v name="$runtime_tar" '$2 == name { print $1 }' "$stage/SHASUMS256.txt")
+[[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo "No pinned checksum for $runtime_tar" >&2; exit 1; }
+curl --fail --silent --show-error --location "$dist_url/$runtime_tar" -o "$stage/$runtime_tar"
+echo "$expected  $stage/$runtime_tar" | sha256sum --check --status \
+  || { echo "Node runtime checksum mismatch" >&2; exit 1; }
+tar -xJf "$stage/$runtime_tar" -C "$stage" \
+  "node-v$node_version-linux-arm64/bin/node" "node-v$node_version-linux-arm64/LICENSE"
+mv "$stage/node-v$node_version-linux-arm64/bin/node" "$stage/bin/node"
+mv "$stage/node-v$node_version-linux-arm64/LICENSE" "$stage/bin/LICENSE"
+rm -rf "$stage/node-v$node_version-linux-arm64" "$stage/$runtime_tar" "$stage/SHASUMS256.txt"
 cp -r dist "$stage/"
 cp src/data/text-index.json "$stage/src/data/"
 cp package.json package-lock.json LICENSE NOTICE "$stage/"
 cp docs/THIRD_PARTY_NOTICES.md "$stage/docs/"
 cp deploy/smoke.mjs deploy/import-env.mjs "$stage/deploy/"
-curl --fail --silent --show-error --location "https://nodejs.org/dist/v$node_version/LICENSE" -o "$stage/bin/LICENSE"
 printf '{"sha":"%s","platform":"linux","arch":"arm64","node":"%s"}\n' "$sha" "$node_version" > "$stage/BUILD.json"
 (
   cd "$stage"

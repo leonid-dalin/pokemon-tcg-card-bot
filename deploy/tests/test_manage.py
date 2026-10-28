@@ -1,6 +1,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import sqlite3
 import tarfile
 import tempfile
@@ -28,6 +29,7 @@ class DeploymentTests(unittest.TestCase):
         self.env.write_text("secret-placeholder")
         self.patches = [patch.object(m, "ROOT", self.root), patch.object(m, "DATA", self.data),
                         patch.object(m, "ENV", self.env),
+                        patch.object(m, "STATE", self.root / "update-state.json"),
                         patch.object(m.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=1000, pw_gid=1000))]
         for item in self.patches:
             item.start()
@@ -91,7 +93,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(self.env.read_text(), "secret-placeholder")
         self.assertEqual((self.root / "failed-revision").read_text(), NEW)
 
-    def test_failed_snapshot_restarts_original_release(self):
+    def test_failed_snapshot_leaves_bot_untouched(self):
         previous, release = self.release(OLD), self.release(NEW)
         m.point_to(previous)
         with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control, \
@@ -99,7 +101,90 @@ class DeploymentTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 m.activate(release)
             self.assertEqual(m.current(), previous)
-            self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+            control.assert_not_called()
+            self.assertFalse(m.STATE.exists())
+
+    def test_interrupted_after_switch_restores_previous_code_and_settings(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("original")
+        backup = self.root / "backups" / "interrupted"
+        m.snapshot(backup)
+        m.begin_activation(release, previous, backup)
+        m.atomic_json(m.STATE, {"phase": "switched", "release": release.name,
+                                "previous": previous.name, "backup": backup.name})
+        (backup / "previous").write_text(previous.name)
+        m.point_to(release)
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                patch.object(m.os, "chown"):
+            m.recover()
+        self.assertEqual(m.current(), previous)
+        self.assertEqual(self.value(), "original")
+        self.assertEqual((self.root / "failed-revision").read_text(), NEW)
+        self.assertFalse(m.STATE.exists())
+
+    def test_interrupted_before_switch_keeps_release_running(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        backup = self.root / "backups" / "checkpointed"
+        m.snapshot(backup)
+        m.begin_activation(release, previous, backup)
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
+            m.recover()
+        self.assertEqual(m.current(), previous)
+        self.assertFalse(m.STATE.exists())
+        self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+
+    def test_interrupted_after_readiness_completes_the_success_record(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(release)
+        backup = self.root / "backups" / "ready"
+        m.snapshot(backup)
+        m.begin_activation(release, previous, backup)
+        m.atomic_json(m.STATE, {"phase": "ready", "release": release.name,
+                                "previous": previous.name, "backup": backup.name})
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
+            m.recover()
+        self.assertFalse(m.STATE.exists())
+        info = json.loads((self.root / "rollback.json").read_text())
+        self.assertEqual(info["from"], NEW)
+        control.assert_not_called()
+
+    def test_rollback_with_missing_checkpoint_keeps_current_release(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("original")
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                patch.object(m, "wait_ready"), patch.object(m.os, "chown"):
+            m.activate(release)
+        shutil.rmtree(self.root / "backups" / next((self.root / "backups").iterdir()).name)
+        with patch.object(m, "systemctl") as control:
+            with self.assertRaisesRegex(RuntimeError, "missing"):
+                m.rollback()
+            control.assert_not_called()
+        self.assertEqual(m.current(), release)
+        self.assertEqual(self.value(), "original")
+
+    def test_prune_keeps_manual_backups_and_referenced_checkpoint(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(release)
+        (self.root / "backups" / "1-old").mkdir()
+        (self.root / "backups" / "2-old").mkdir()
+        (self.root / "backups" / "3-old").mkdir()
+        (self.root / "backups" / "4-old").mkdir()
+        manual = self.root / "backups" / "9-manual"
+        manual.mkdir()
+        referenced = self.root / "backups" / "0-ref"
+        referenced.mkdir()
+        (referenced / "previous").write_text(OLD)
+        (self.root / "rollback.json").write_text(json.dumps({"backup": "0-ref", "from": NEW}))
+        m.prune()
+        self.assertTrue(manual.exists())
+        self.assertTrue(referenced.exists())
+        self.assertTrue((self.root / "backups" / "4-old").exists())
+        self.assertTrue((self.root / "backups" / "3-old").exists())
+        self.assertTrue((self.root / "backups" / "2-old").exists())
+        self.assertFalse((self.root / "backups" / "1-old").exists())
 
     def test_success_keeps_previous_release_and_rollback_restores_settings(self):
         previous, release = self.release(OLD), self.release(NEW)
