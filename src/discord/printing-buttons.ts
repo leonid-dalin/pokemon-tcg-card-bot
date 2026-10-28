@@ -61,8 +61,10 @@ export function missMenu(closest: CardSummary[], index = 0): ActionRowBuilder<St
 
 export function detailsRows(lookups: { card: { id: string; name: string } }[]): ActionRowBuilder<ButtonBuilder>[] {
   if (lookups.length === 0) return [];
+  // A reply naming the same card twice would otherwise ship two buttons with one id, which Discord rejects.
+  const unique = [...new Map(lookups.map((lookup) => [lookup.card.id, lookup])).values()];
   const row = new ActionRowBuilder<ButtonBuilder>();
-  for (const lookup of lookups.slice(0, MAX_BUTTONS)) {
+  for (const lookup of unique.slice(0, MAX_BUTTONS)) {
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(`${DETAILS_PREFIX}${lookup.card.id}`)
