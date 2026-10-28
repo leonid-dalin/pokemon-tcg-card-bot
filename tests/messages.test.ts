@@ -54,7 +54,7 @@ function fakeMessage(
 function handler(overrides: Partial<MessageContext> = {}, config: Partial<MessageContext["config"]> = {}) {
   return createMessageHandler({
     api: fakeApi(),
-    config: { mentionEnabled: true, decklistEnabled: false, attribution: "Card data from TCGdex", energyEmoji: {}, ...config },
+    config: { mentionEnabled: true, decklistEnabled: false, mentionCooldownSeconds: 0, attribution: "Card data from TCGdex", energyEmoji: {}, ...config },
     pages: new PageStore(),
     selfId: () => BOT_ID,
     ...overrides,
@@ -282,5 +282,76 @@ describe("message handler", () => {
     await handler({ invocations: { record: (entry) => recorded.push(entry) } })(message);
     expect(replies).toHaveLength(1);
     expect(recorded).toEqual([]);
+  });
+
+  it("applies per-guild reply switches over the deployment defaults", async () => {
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: guildId !== "off", decklistReplies: guildId === "deckson", autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0, updatedAt: "" }) };
+    const muted = fakeMessage("[[Dragapult ex]]", { guildId: "off" });
+    await handler({ settings })(muted.message);
+    expect(muted.replies).toEqual([]);
+
+    const deckOn = fakeMessage(DECK, { guildId: "deckson" });
+    await handler({ settings })(deckOn.message);
+    expect(deckOn.replies).toHaveLength(1);
+
+    const deckOff = fakeMessage(DECK, { guildId: "on" });
+    await handler({ settings })(deckOff.message);
+    expect(deckOff.replies).toEqual([]);
+  });
+
+  it("suppresses replies when the guild settings cannot be read", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const settings = { get: () => { throw new Error("stored cooldown is corrupt"); } };
+    const { message, replies } = fakeMessage("[[Dragapult ex]]", { guildId: "g1" });
+    await handler({ settings })(message);
+    expect(replies).toEqual([]);
+  });
+
+  it("gives two guilds different cooldowns in the same process", async () => {
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: true, decklistReplies: false, autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: guildId === "strict" ? 60 : 0, updatedAt: "" }) };
+    const handle = handler({ settings });
+    const lax = ["l1", "l2", "l3", "l4"].map((id) => fakeMessage("[[Dragapult ex]]", { guildId: "lax", author: id }));
+    const strict = ["s1", "s2", "s3", "s4"].map((id) => fakeMessage("[[Dragapult ex]]", { guildId: "strict", author: "s" }));
+    for (const message of lax) await handle(message.message);
+    for (const message of strict) await handle(message.message);
+    expect(lax.map(({ replies }) => replies).map((r) => r.length)).toEqual([1, 1, 1, 1]);
+    expect(strict.map(({ replies }) => replies).map((r) => r.length)).toEqual([1, 1, 1, 0]);
+  });
+
+  it("applies a cooldown change to the next message in both directions", async () => {
+    let cooldown = 0;
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: true, decklistReplies: false, autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: cooldown, updatedAt: "" }) };
+    const handle = handler({ settings });
+    const send = () => fakeMessage("[[Dragapult ex]]", { guildId: "g1", author: "same" });
+
+    const before = [send(), send(), send(), send()];
+    for (const message of before) await handle(message.message);
+    expect(before.map(({ replies }) => replies.length)).toEqual([1, 1, 1, 1]);
+
+    cooldown = 60;
+    const after = [send(), send(), send(), send()];
+    for (const message of after) await handle(message.message);
+    expect(after.map(({ replies }) => replies.length)).toEqual([1, 1, 1, 0]);
+
+    cooldown = 0;
+    const restored = send();
+    await handle(restored.message);
+    expect(restored.replies).toHaveLength(1);
+  });
+
+  it("resolves deck cards from the guild override when the deployment default is off", async () => {
+    let lookups = 0;
+    const api = {
+      searchByName: async (name: string) => [{ id: "sv08.5-073", name: "Dragapult ex", localId: "073" }],
+      getCard: async (id: string) => {
+        lookups += 1;
+        return { ...dragapult, id };
+      },
+    } as unknown as TcgdexClient;
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: true, decklistReplies: true, autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0, updatedAt: "" }) };
+    const { message, replies } = fakeMessage(DECK, { guildId: "g1" });
+    await handler({ api, settings })(message);
+    expect(replies).toHaveLength(1);
+    expect(lookups).toBeGreaterThan(0);
   });
 });

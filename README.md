@@ -27,7 +27,7 @@ Names match regardless of case, accents, apostrophes and spacing, so `pokemon ca
 
 ## Requirements
 
-- Node.js 22.12 or newer; the test and build tooling needs at least that. CI runs the version in `.nvmrc`
+- Node.js 24 or newer (the settings store uses the built-in `node:sqlite`); CI runs the version in `.nvmrc`
 - A Discord application with a bot user
 - Network access to `api.tcgdex.net`. Pocket cards come from an npm package and need no network
 
