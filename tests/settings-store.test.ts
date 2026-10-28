@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { createRequire } from "node:module";
+import { Worker } from "node:worker_threads";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsStore } from "../src/settings-store.js";
 
@@ -141,16 +142,38 @@ describe("SettingsStore", () => {
     second.close();
   });
 
-  it("preserves both writers' fields when two connections patch the same guild", () => {
+  it("merges against a row another writer commits while the lock is held", async () => {
     const path = tempPath();
-    const writerA = new SettingsStore(path, DEFAULTS);
-    const writerB = new SettingsStore(path, DEFAULTS);
-    writerA.update("g1", { cooldownSeconds: 0 });
-    writerB.update("g1", { decklistReplies: true });
+    const seed = new SettingsStore(path, DEFAULTS);
+    seed.update("g1", { cooldownSeconds: 30 });
+    seed.close();
 
-    for (const store of [writerA, writerB]) {
-      expect(store.get("g1")).toMatchObject({ cooldownSeconds: 0, decklistReplies: true });
-      store.close();
+    const holderScript = `
+      const { workerData, parentPort } = require("node:worker_threads");
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(workerData.path);
+      db.exec("BEGIN IMMEDIATE");
+      db.exec("UPDATE guild_settings SET cooldown_seconds = 5");
+      parentPort.postMessage("locked");
+      setTimeout(() => {
+        db.exec("COMMIT");
+        db.close();
+        parentPort.postMessage("released");
+      }, 100);
+    `;
+    const worker = new Worker(holderScript, { eval: true, workerData: { path } });
+    const locked = new Promise<void>((resolve) => worker.on("message", (m) => m === "locked" && resolve()));
+    const released = new Promise<void>((resolve) => worker.on("message", (m) => m === "released" && resolve()));
+    await locked;
+
+    const writer = new SettingsStore(path, DEFAULTS);
+    try {
+      writer.update("g1", { decklistReplies: true });
+      expect(writer.get("g1")).toMatchObject({ cooldownSeconds: 5, decklistReplies: true });
+    } finally {
+      await released;
+      await worker.terminate().catch(() => undefined);
+      writer.close();
     }
   });
 });

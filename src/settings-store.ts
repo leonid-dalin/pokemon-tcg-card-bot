@@ -149,19 +149,20 @@ export class SettingsStore {
     if (patch.autoReplyChannelMode !== undefined && patch.autoReplyChannelMode !== "all" && patch.autoReplyChannelMode !== "selected") {
       throw new Error("autoReplyChannelMode must be all or selected");
     }
-    const current = this.currentWithinTransaction(guildId);
-    const next: GuildSettings = {
-      guildId,
-      messageReplies: patch.messageReplies ?? current.messageReplies,
-      decklistReplies: patch.decklistReplies ?? current.decklistReplies,
-      autoReplyChannelMode: patch.autoReplyChannelMode ?? current.autoReplyChannelMode,
-      selectedChannelIds: patch.selectedChannelIds ?? current.selectedChannelIds,
-      cooldownSeconds: patch.cooldownSeconds ?? current.cooldownSeconds,
-      updatedAt: new Date().toISOString(),
-    };
+    let saved: GuildSettings | undefined;
     this.db.exec("BEGIN IMMEDIATE");
     let committed = false;
     try {
+      const current = this.currentWithinTransaction(guildId);
+      const next: GuildSettings = {
+        guildId,
+        messageReplies: patch.messageReplies ?? current.messageReplies,
+        decklistReplies: patch.decklistReplies ?? current.decklistReplies,
+        autoReplyChannelMode: patch.autoReplyChannelMode ?? current.autoReplyChannelMode,
+        selectedChannelIds: patch.selectedChannelIds ?? current.selectedChannelIds,
+        cooldownSeconds: patch.cooldownSeconds ?? current.cooldownSeconds,
+        updatedAt: new Date().toISOString(),
+      };
       this.db
         .prepare(
           `INSERT INTO guild_settings
@@ -186,11 +187,12 @@ export class SettingsStore {
         );
       this.db.exec("COMMIT");
       committed = true;
+      saved = next;
     } catch (error) {
       if (!committed) this.db.exec("ROLLBACK");
       throw new Error(`could not save settings for guild ${guildId} (${errorCategory(error)})`);
     }
-    return next;
+    return saved!;
   }
 
   private currentWithinTransaction(guildId: string): GuildSettings {
