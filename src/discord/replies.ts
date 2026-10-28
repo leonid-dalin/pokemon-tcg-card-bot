@@ -1,6 +1,6 @@
 import type { CardSummary } from "../api/types.js";
 import { printedNumber } from "../printed.js";
-import { lookupEmbeds, type CardLookup } from "../lookup.js";
+import { isImageOnly, lookupEmbeds, type CardLookup } from "../lookup.js";
 import { matchingDetail, type TextGroup } from "../text-search.js";
 import { toEmbeds } from "./embeds.js";
 import { listReply, type ListPage, type PageStore } from "./pages.js";
@@ -11,9 +11,12 @@ export const MAX_EMBEDS_PER_MESSAGE = 5;
 
 /** One card with its printing buttons, as `/card` and a printing button show it. */
 export function cardReply(lookup: CardLookup, ownerId?: string) {
+  const components = isImageOnly(lookup)
+    ? []
+    : [...printingRows(lookup.alternates, ownerId), ...detailsRow(lookup.card.id)];
   return {
     embeds: toEmbeds(lookupEmbeds(lookup)),
-    components: [...printingRows(lookup.alternates, ownerId), ...detailsRow(lookup.card.id)],
+    ...(components.length > 0 ? { components } : {}),
   };
 }
 
@@ -61,8 +64,10 @@ export function mentionReply(found: CardLookup[], misses: MentionMiss[], ownerId
     .join("\n");
   const components = [
     ...(found.length === 1 && found[0]
-      ? [...printingRows(found[0].alternates, ownerId), ...detailsRow(found[0].card.id)]
-      : detailsRows(found)),
+      ? isImageOnly(found[0])
+        ? []
+        : [...printingRows(found[0].alternates, ownerId), ...detailsRow(found[0].card.id)]
+      : detailsRows(found.filter((lookup) => !isImageOnly(lookup)))),
     ...misses.flatMap((miss) => missMenu(miss.closest)),
   ];
   return {

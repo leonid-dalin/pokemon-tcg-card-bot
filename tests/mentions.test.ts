@@ -59,6 +59,22 @@ describe("extractMentions", () => {
   it("returns nothing when there is no marker", () => {
     expect(extractMentions("Dragapult ex is fine")).toEqual([]);
   });
+
+  it("marks an image-only mention", () => {
+    expect(extractMentions("[[!Dragapult ex|sv06]]")).toEqual([
+      { raw: "!Dragapult ex|sv06", name: "Dragapult ex", setHint: "sv06", imageOnly: true },
+    ]);
+  });
+
+  it("marks an image-only mention without a hint", () => {
+    expect(extractMentions("[[!Dragapult ex]]")).toEqual([
+      { raw: "!Dragapult ex", name: "Dragapult ex", imageOnly: true },
+    ]);
+  });
+
+  it("ignores an image-only mention inside backticks", () => {
+    expect(extractMentions("`[[!Dragapult ex]]`")).toEqual([]);
+  });
 });
 
 describe("parseSearchCommand", () => {

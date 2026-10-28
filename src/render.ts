@@ -212,6 +212,19 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
   return sharedCardView(card, options, fields, cardDescription(card));
 }
 
+/** The scan alone, for a mention that asks for the picture and nothing else. */
+export function renderCardImage(card: Card, options: RenderOptions = {}): EmbedView {
+  const image = cardImage(card);
+  return {
+    title: truncate(`${card.name} · ${printedNumber(card.id)}`, 250),
+    ...(image ? { url: image } : {}),
+    color: cardColour(card),
+    fields: [],
+    ...(image ? { imageUrl: image } : { description: "No scan is available for this printing." }),
+    footer: options.attribution ?? DEFAULT_ATTRIBUTION,
+  };
+}
+
 export function renderCardDetails(
   card: Card,
   alternates: { id: string; name: string }[],

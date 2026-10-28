@@ -2,6 +2,8 @@ export interface Mention {
   raw: string;
   name: string;
   setHint?: string;
+  /** The `!` prefix asks for the scan alone. */
+  imageOnly?: true;
 }
 
 const MENTION_PATTERN = /\[\[([^[\]]{1,80})\]\]/g;
@@ -29,7 +31,8 @@ export function extractMentions(text: string, limit = 3): Mention[] {
     // segment as the name and the last non-empty one as the hint, so
     // "crustle||ptcgp" still reaches Pocket instead of silently dropping it.
     const parts = inner.split("|").map((part) => part.trim()).filter(Boolean);
-    const name = (parts[0] ?? "").replace(/\s+/g, " ");
+    const imageOnly = parts[0]?.startsWith("!") ?? false;
+    const name = (parts[0] ?? "").replace(/^!/, "").replace(/\s+/g, " ");
     if (!name) continue;
 
     const key = name.toLowerCase();
@@ -37,7 +40,12 @@ export function extractMentions(text: string, limit = 3): Mention[] {
     seen.add(key);
 
     const setHint = parts.length > 1 ? parts[parts.length - 1] : undefined;
-    mentions.push(setHint ? { raw: inner, name, setHint } : { raw: inner, name });
+    mentions.push({
+      raw: inner,
+      name,
+      ...(setHint ? { setHint } : {}),
+      ...(imageOnly ? { imageOnly: true as const } : {}),
+    });
     if (mentions.length >= limit) break;
   }
 

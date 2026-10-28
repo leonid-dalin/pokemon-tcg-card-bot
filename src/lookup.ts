@@ -1,6 +1,6 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
-import { priceField, renderCard, type EmbedView } from "./render.js";
+import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
 import { printedNumber } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
@@ -12,6 +12,8 @@ export interface CardLookup {
   /** Footer credit naming the source that served the card. */
   attribution?: string;
   energyEmoji?: Record<string, string>;
+  /** The mention asked for the scan alone. */
+  imageOnly?: true;
 }
 
 export interface LookupOptions {
@@ -187,14 +189,26 @@ export async function lookupCard(
 }
 
 /**
+ * Whether this answer is the scan alone. A card with no scan has nothing to
+ * show but its front, so it keeps the normal answer.
+ */
+export function isImageOnly(lookup: CardLookup): boolean {
+  return lookup.imageOnly === true && cardImage(lookup.card) !== undefined;
+}
+
+/**
  * One embed per mention. Other printings ride along as a field rather than a
  * second embed, because two embeds read as two answers to one question.
  */
 export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
-  const view = renderCard(lookup.card, {
+  const options = {
     ...(lookup.attribution ? { attribution: lookup.attribution } : {}),
     ...(lookup.energyEmoji ? { energyEmoji: lookup.energyEmoji } : {}),
-  });
+  };
+  if (isImageOnly(lookup)) {
+    return [renderCardImage(lookup.card, options)];
+  }
+  const view = renderCard(lookup.card, options);
   if (lookup.alternates.length === 0) return [view];
 
   const seen = new Set<string>();

@@ -100,6 +100,17 @@ describe("message handler", () => {
     expect(menu.components[0]?.options[0]?.label).toBe("Dragapult ex · PRE 73");
   });
 
+  it("answers an image-only mention with the scan alone", async () => {
+    const { message, replies } = fakeMessage("[[!Dragapult ex]]");
+    await handler()(message);
+    expect(replies).toHaveLength(1);
+    const reply = replies[0] as { embeds: { data: { fields?: unknown[]; image?: { url: string } }[] }[]; components?: unknown[] };
+    expect(reply.embeds).toHaveLength(1);
+    expect(reply.embeds[0]?.data.fields).toBeUndefined();
+    expect(reply.embeds[0]?.data.image?.url).toBe("https://assets.tcgdex.net/en/sv/sv08.5/073/high.webp");
+    expect(reply.components).toBeUndefined();
+  });
+
   it("reports a failed lookup instead of staying silent", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { message, replies } = fakeMessage("[[Dragapult ex]]");

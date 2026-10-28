@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Card } from "../src/api/types.js";
-import { DEFAULT_ATTRIBUTION, cardColour, priceField, renderCard, renderCardDetails, renderSearchResults, renderSet } from "../src/render.js";
+import { isImageOnly, lookupEmbeds } from "../src/lookup.js";
+import { DEFAULT_ATTRIBUTION, cardColour, priceField, renderCard, renderCardDetails, renderCardImage, renderSearchResults, renderSet } from "../src/render.js";
 
 const fixture = (name: string): Card =>
   JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8")) as Card;
@@ -49,6 +50,29 @@ describe("renderCard", () => {
     expect(view.fields.map((field) => field.name)).toEqual(["Set", "Rarity", "Illustrator", "Legal", "Prices"]);
     expect(view.fields.find((field) => field.name === "Set")?.value).toContain("Chaos Rising");
     expect(view.fields.find((field) => field.name === "Set")?.value).toContain("CRI 48");
+  });
+
+  it("renders an image-only card with the scan and nothing else", () => {
+    const view = renderCardImage(dragapult);
+    expect(view.fields).toEqual([]);
+    expect(view.imageUrl).toBe("https://assets.tcgdex.net/en/sv/sv08.5/073/high.webp");
+    expect(view.title).toBe("Dragapult ex · PRE 73");
+    expect(view.footer).toBe("Card data from TCGdex");
+    expect(view.url).toBe(view.imageUrl);
+  });
+
+  it("keeps the attribution on an image-only card", () => {
+    const view = renderCardImage(dragapult, { attribution: "Card data from elsewhere" });
+    expect(view.footer).toBe("Card data from elsewhere");
+  });
+
+  it("falls back to the full card when the printing has no scan", () => {
+    const noScan: Card = { ...dragapult, image: undefined };
+    const lookup = { card: noScan, alternates: [], imageOnly: true as const };
+    expect(isImageOnly(lookup)).toBe(false);
+    const view = lookupEmbeds(lookup)[0];
+    expect(view.fields.length).toBeGreaterThan(0);
+    expect(view.imageUrl).toBeUndefined();
   });
 
   it("shows the wording and the kind of a Trainer card", () => {

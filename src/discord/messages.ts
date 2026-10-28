@@ -106,7 +106,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
           energyEmoji: config.energyEmoji,
         });
         console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
-        if (lookup) found.push(lookup);
+        if (lookup) found.push(mention.imageOnly ? { ...lookup, imageOnly: true } : lookup);
         else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5) });
         if (found.length >= MAX_EMBEDS_PER_MESSAGE) break;
       }
