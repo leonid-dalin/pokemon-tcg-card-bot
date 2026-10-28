@@ -43,10 +43,18 @@ interface ReplyPayload {
   embeds?: { description?: string; title?: string }[];
 }
 
-function embedText(embed: { title?: string; description?: string; data?: { title?: string; description?: string } }): string {
-  const title = embed.title ?? embed.data?.title;
-  const description = embed.description ?? embed.data?.description;
-  return [title, description].filter(Boolean).join("\n");
+function embedText(embed: {
+  title?: string;
+  description?: string;
+  fields?: { name?: string; value?: string }[];
+  data?: { title?: string; description?: string; fields?: { name?: string; value?: string }[] };
+}): string {
+  const plain = embed.data ?? {};
+  const title = embed.title ?? plain.title;
+  const description = embed.description ?? plain.description;
+  const fields = embed.fields ?? plain.fields ?? [];
+  const parts = [title, description, ...fields.map((field) => [field.name, field.value].filter(Boolean).join(": "))];
+  return parts.filter(Boolean).join("\n");
 }
 
 function replyText(payload: ReplyPayload): string {
@@ -87,15 +95,18 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     if (!deck && !wantsHelp && searchQuery === undefined && mentions.length === 0) return;
 
     const isAdmin = Boolean(message.member?.permissions?.has?.("ManageGuild"));
+    const redactUserMentions = (text: string) => text.replace(/<@[!&]?\d+>/g, "<@user>");
     const logReply = async (payload: ReplyPayload) => {
-      context.invocations?.record({
+      const entry = {
         ...(message.guildId ? { guildId: message.guildId } : {}),
         channelId: message.channelId,
         isAdmin,
-        trigger: message.content,
-        reply: replyText(payload),
-      });
-      await message.reply(payload as never).catch(() => {});
+        trigger: redactUserMentions(message.content),
+        reply: redactUserMentions(replyText(payload)),
+      };
+      await message.reply(payload as never).then(() => {
+        context.invocations?.record(entry);
+      }).catch(() => {});
     };
 
     // Apply the same per-member, per-channel budget to every message reply.

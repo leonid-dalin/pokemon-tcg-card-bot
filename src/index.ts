@@ -42,7 +42,7 @@ const budget =
 
 client.once(Events.ClientReady, (ready) => {
   invocations.prune();
-  setInterval(() => invocations.prune(), 86_400_000).unref();
+  setInterval(() => invocations.prune(), 3_600_000).unref();
   console.log(`logged in as ${ready.user.tag}; mention replies ${config.mentionEnabled ? "on" : "off"}`);
 });
 

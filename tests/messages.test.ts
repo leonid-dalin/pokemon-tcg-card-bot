@@ -258,4 +258,29 @@ describe("message handler", () => {
     expect(printed).toContain("skipped a reply");
     expect(printed).toMatch(/mention lookup failed \(\w+\)/);
   });
+
+  it("redacts user-mention tokens from the recorded invocation", async () => {
+    const recorded: Record<string, unknown>[] = [];
+    const { message } = fakeMessage(`<@123> look at [[Dragapult ex]]`, { guildId: "g1" });
+    await handler({ invocations: { record: (entry) => recorded.push(entry) } })(message);
+    const entry = JSON.stringify(recorded[0]);
+    expect(entry).not.toContain("123");
+    expect(entry).toContain("<@user>");
+  });
+
+  it("records nothing when the reply fails to send", async () => {
+    const recorded: Record<string, unknown>[] = [];
+    const replies: Record<string, unknown>[] = [];
+    const message = {
+      ...fakeMessage("[[Dragapult ex]]").message,
+      reply: async (payload: Record<string, unknown>) => {
+        replies.push(payload);
+        throw new Error("discord rejected it");
+      },
+    } as unknown as IncomingMessage;
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await handler({ invocations: { record: (entry) => recorded.push(entry) } })(message);
+    expect(replies).toHaveLength(1);
+    expect(recorded).toEqual([]);
+  });
 });

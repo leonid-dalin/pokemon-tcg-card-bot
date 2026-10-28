@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface InvocationEntry {
@@ -32,8 +32,9 @@ export class InvocationLog {
     if (!this.enabled || !this.dir) return;
     const stored: StoredInvocation = { ...entry, at: new Date(this.now()).toISOString() };
     try {
-      mkdirSync(this.dir, { recursive: true });
-      appendFileSync(this.file, `${JSON.stringify(stored)}\n`, "utf8");
+      mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+      chmodSync(this.dir, 0o700);
+      appendFileSync(this.file, `${JSON.stringify(stored)}\n`, { encoding: "utf8", mode: 0o600 });
     } catch {
       console.warn("could not write the invocation log");
     }
@@ -56,7 +57,7 @@ export class InvocationLog {
         kept.push(line);
       }
       const tmp = `${this.file}.tmp`;
-      writeFileSync(tmp, `${kept.join("\n")}\n`, "utf8");
+      writeFileSync(tmp, `${kept.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
       renameSync(tmp, this.file);
     } catch {
       console.warn("could not prune the invocation log");

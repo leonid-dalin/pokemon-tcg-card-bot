@@ -38,6 +38,11 @@ describe("loadConfig", () => {
     });
   });
 
+  it("caps the invocation retention at 60 days", () => {
+    expect(loadConfig({ ...required, INVOCATION_LOG_RETENTION_DAYS: "90" }).invocationLogRetentionDays).toBe(60);
+    expect(loadConfig({ ...required, INVOCATION_LOG_RETENTION_DAYS: "30" }).invocationLogRetentionDays).toBe(30);
+  });
+
   it("documents every setting it reads in .env.example", () => {
     const example = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
     const documented = [...example.matchAll(/^#?\s*([A-Z_]+)=/gm)].map((match) => match[1]).sort();

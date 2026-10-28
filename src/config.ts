@@ -59,6 +59,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     attribution: env.ATTRIBUTION?.trim() || DEFAULT_ATTRIBUTION,
     energyEmoji: parseEnergyEmoji(env.ENERGY_EMOJI),
     ...(env.INVOCATION_LOG_DIR?.trim() ? { invocationLogDir: env.INVOCATION_LOG_DIR.trim() } : {}),
-    invocationLogRetentionDays: parsePositiveInt(env.INVOCATION_LOG_RETENTION_DAYS, 60),
+    invocationLogRetentionDays: Math.min(parsePositiveInt(env.INVOCATION_LOG_RETENTION_DAYS, 60), 60),
   };
 }
