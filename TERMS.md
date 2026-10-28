@@ -6,6 +6,10 @@ By inviting or using Crustlebot you agree to these terms. They are deliberately 
 
 Crustlebot answers Pokémon card lookups in Discord: `[[card name]]` mentions, a `/card` and `/printings` command, wording searches, set checklists and, where the host enables it, a pasted deck list checked against the Standard format. Card facts come from public databases, credited in every reply
 
+## Open source
+
+This bot is free software under the [Apache License 2.0](https://github.com/leonid-dalin/pokemon-tcg-card-bot/blob/master/LICENSE): the full source is public, you can run your own copy, and the licence governs what you may do with the code. These terms cover using the hosted instances you meet in Discord; the licence covers the code
+
 ## What you may not do
 
 - Do not use the bot to spam, harass or flood channels

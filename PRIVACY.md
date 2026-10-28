@@ -18,4 +18,4 @@ The person running the bot (the server host) controls its configuration and can 
 
 ## Contact
 
-Open an issue on the repository if you have a question about this policy, or ask the person who runs your server's copy of the bot
+The easiest way to reach the maintainers is the repository's issue tracker: [open a question](https://github.com/leonid-dalin/pokemon-tcg-card-bot/issues/new?template=question.yml) and it lands as a template with everything needed to answer it. If you use the bot in someone else's server, that server's host can also answer configuration questions

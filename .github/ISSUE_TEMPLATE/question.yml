@@ -1,0 +1,11 @@
+name: Question
+description: Ask anything about the bot, its data or this policy
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: Say which server or card the question is about, if it helps
+    validations:
+      required: true
