@@ -23,6 +23,11 @@ coverage/
 .bot.pid
 *.log
 preview/
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # editors and operating systems
 .vscode/
