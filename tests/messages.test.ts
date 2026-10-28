@@ -48,7 +48,7 @@ function fakeMessage(content: string, overrides: Partial<{ bot: boolean; webhook
 function handler(overrides: Partial<MessageContext> = {}, config: Partial<MessageContext["config"]> = {}) {
   return createMessageHandler({
     api: fakeApi(),
-    config: { mentionEnabled: true, decklistEnabled: false, attribution: "Card data from TCGdex", ...config },
+    config: { mentionEnabled: true, decklistEnabled: false, attribution: "Card data from TCGdex", energyEmoji: {}, ...config },
     selfId: () => BOT_ID,
     ...overrides,
   });

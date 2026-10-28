@@ -20,6 +20,11 @@ describe("printingRows", () => {
     expect(json.components[0]?.custom_id).toContain("sv06-130");
   });
 
+  it("adds the owner to a new printing button id", () => {
+    const rows = printingRows([card("sv06-130")], "123456789");
+    const json = rows[0]?.toJSON() as { components: { custom_id: string }[] };
+    expect(json.components[0]?.custom_id).toBe(`${PRINTING_PREFIX}sv06-130:123456789`);
+  });
   it("never repeats a custom id when a printing is listed twice", () => {
     const rows = printingRows(["b4-212", "b4-212", "a1-128", "pa-010", "pa-010"].map(card));
     const json = rows[0]?.toJSON() as { components: { custom_id: string }[] };
@@ -38,8 +43,12 @@ describe("printingRows", () => {
 });
 
 describe("printingIdFrom", () => {
-  it("reads the card id back", () => {
-    expect(printingIdFrom(`${PRINTING_PREFIX}sv06-130`)).toBe("sv06-130");
+  it("reads the card id and owner back", () => {
+    expect(printingIdFrom(`${PRINTING_PREFIX}sv06-130:123456789`)).toEqual({ cardId: "sv06-130", ownerId: "123456789" });
+  });
+
+  it("keeps legacy buttons ownerless", () => {
+    expect(printingIdFrom(`${PRINTING_PREFIX}sv06-130`)).toEqual({ cardId: "sv06-130" });
   });
 
   it("ignores other components", () => {
@@ -50,7 +59,7 @@ describe("printingIdFrom", () => {
 
 describe("mentionRows", () => {
   it("offers printings under a single card", () => {
-    expect(mentionRows([{ card, alternates: [card("sv06-130")] }])).toHaveLength(2);
+    expect(mentionRows([{ card, alternates: [card("sv06-130")] }], "123456789")).toHaveLength(2);
   });
 
   it("offers none when the reply shows several cards", () => {

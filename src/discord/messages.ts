@@ -109,7 +109,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name) });
         if (found.length >= MAX_EMBEDS_PER_MESSAGE) break;
       }
-      await message.reply({ ...mentionReply(found, misses) });
+      await message.reply({ ...mentionReply(found, misses, message.author.id) });
     } catch (error) {
       console.error("mention lookup failed", error);
       // A dead API used to leave the channel with nothing at all.

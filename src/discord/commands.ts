@@ -102,7 +102,7 @@ export async function handleCardCommand(
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;
   }
-  await interaction.editReply(cardReply(lookup));
+  await interaction.editReply(cardReply(lookup, interaction.user.id));
 }
 
 /** A printing button swaps the card message for the printing it names. */
@@ -110,15 +110,22 @@ export async function handlePrintingButton(
   context: CommandContext,
   interaction: ButtonInteraction,
 ): Promise<void> {
-  const id = printingIdFrom(interaction.customId);
-  if (!id) return;
-  await interaction.deferUpdate();
-  const lookup = await lookupById(context.client, id, { attribution: context.attribution, energyEmoji: context.energyEmoji });
-  if (!lookup) {
-    await interaction.followUp({ content: `No card matched \`${id}\`.`, flags: MessageFlags.Ephemeral });
+  const parsed = printingIdFrom(interaction.customId);
+  if (!parsed) return;
+  if (parsed.ownerId && parsed.ownerId !== interaction.user.id) {
+    await interaction.reply({
+      content: "Only the person who asked can change this. Ask for your own copy with [[name]] or /card.",
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
-  await interaction.editReply(cardReply(lookup));
+  await interaction.deferUpdate();
+  const lookup = await lookupById(context.client, parsed.cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
+  if (!lookup) {
+    await interaction.followUp({ content: `No card matched \`${parsed.cardId}\`.`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await interaction.editReply(cardReply(lookup, parsed.ownerId));
 }
 
 export async function handleDetailsButton(

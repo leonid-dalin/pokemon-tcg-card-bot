@@ -11,10 +11,10 @@ import { detailsRow, detailsRows, printingRows } from "./printing-buttons.js";
 export const MAX_EMBEDS_PER_MESSAGE = 5;
 
 /** One card with its printing buttons, as `/card` and a printing button show it. */
-export function cardReply(lookup: CardLookup) {
+export function cardReply(lookup: CardLookup, ownerId?: string) {
   return {
     embeds: toEmbeds(lookupEmbeds(lookup)),
-    components: [...printingRows(lookup.alternates), ...detailsRow(lookup.card.id)],
+    components: [...printingRows(lookup.alternates, ownerId), ...detailsRow(lookup.card.id)],
   };
 }
 
@@ -38,7 +38,7 @@ export interface MentionMiss {
  * still gets a line, because silence after an explicit request reads as a
  * broken bot.
  */
-export function mentionReply(found: CardLookup[], misses: MentionMiss[]) {
+export function mentionReply(found: CardLookup[], misses: MentionMiss[], ownerId?: string) {
   const embeds = found.flatMap((lookup) => toEmbeds(lookupEmbeds(lookup))).slice(0, MAX_EMBEDS_PER_MESSAGE);
   const content = misses
     .map(({ raw, closest }) => {
@@ -48,7 +48,7 @@ export function mentionReply(found: CardLookup[], misses: MentionMiss[]) {
     })
     .join("\n");
   const components = found.length === 1 && found[0]
-    ? [...printingRows(found[0].alternates), ...detailsRow(found[0].card.id)]
+    ? [...printingRows(found[0].alternates, ownerId), ...detailsRow(found[0].card.id)]
     : detailsRows(found);
   return {
     ...(embeds.length > 0 ? { embeds, components } : {}),
