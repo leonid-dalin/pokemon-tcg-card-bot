@@ -45,7 +45,7 @@ The file also controls printing-button wording comparisons. Run the search and p
 
 ## Update Pocket cards
 
-Update `pokemon-tcg-pocket-cards` to the intended version with npm, then commit both `package.json` and `package-lock.json`. Review the dependency's terms in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) if its version or distribution terms change
+Update `pokemon-tcg-pocket-cards` to the intended version with npm, then commit both `package.json` and `package-lock.json`. Review the dependency's terms in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) if its version or distribution terms change
 
 The adapter reads the package's `data/v5` layout and translates its records into the shared card types. Check that layout when upgrading. [pocket.test.ts](../tests/pocket.test.ts) covers package lookups; [card-id.test.ts](../tests/card-id.test.ts) covers recognition of exact IDs, including package sets absent from the set index
 

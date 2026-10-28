@@ -2,7 +2,7 @@
 
 ## Before you start
 
-Read the [Code of Conduct](CODE_OF_CONDUCT.md), the [Security Policy](SECURITY.md) and the [third-party notices](THIRD_PARTY_NOTICES.md). The [contributor documentation](docs/README.md) covers the code structure, development workflow and data updates. Report vulnerabilities by email, never in a public issue
+Read the [Code of Conduct](CODE_OF_CONDUCT.md), the [Security Policy](SECURITY.md) and the [third-party notices](docs/THIRD_PARTY_NOTICES.md). The [contributor documentation](docs/README.md) covers the code structure, development workflow and data updates. Report vulnerabilities by email, never in a public issue
 
 ## Development setup
 
@@ -46,4 +46,4 @@ Changes need review from the owners in [CODEOWNERS](.github/CODEOWNERS). Answer 
 
 ## Licence
 
-Contributions to this project's own code are accepted under the [Apache License 2.0](LICENSE). Third-party libraries, card data and images keep their own terms; check [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before adding a dependency or a data source
+Contributions to this project's own code are accepted under the [Apache License 2.0](LICENSE). Third-party libraries, card data and images keep their own terms; check [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md) before adding a dependency or a data source

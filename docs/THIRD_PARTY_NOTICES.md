@@ -1,6 +1,6 @@
 # Third-party notices
 
-This project's own code is licensed under the Apache License 2.0, see [LICENSE](LICENSE). The material below keeps its own terms, and those terms govern that material
+This project's own code is licensed under the Apache License 2.0, see [LICENSE](../LICENSE). The material below keeps its own terms, and those terms govern that material
 
 ## Runtime dependencies
 
@@ -28,7 +28,7 @@ Cardmarket and TCGplayer prices reach the bot through TCGdex. They are third-par
 
 ## Code of Conduct
 
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) is adapted from the Contributor Covenant, version 3.0, which is licensed under CC BY-SA 4.0. That file keeps its own licence and its attribution section
+[CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) is adapted from the Contributor Covenant, version 3.0, which is licensed under CC BY-SA 4.0. That file keeps its own licence and its attribution section
 
 ## Development dependencies
 
