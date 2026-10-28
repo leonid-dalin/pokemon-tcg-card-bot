@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { isCardId } from "../src/lookup.js";
+import { getPocketCard } from "../src/api/pocket.js";
 
 const evidence = JSON.parse(readFileSync("tests/fixtures/pr3-evidence.json", "utf8"));
 
@@ -22,6 +23,12 @@ describe("card id grammar", () => {
     expect(isCardId("Porygon-Z")).toBe(false);
     expect(isCardId("Buddy-Buddy Poffin")).toBe(false);
     expect(isCardId("N")).toBe(false);
+  });
+
+  it("recognises package ids that the physical set index does not hold", () => {
+    expect(isCardId("b4b-133")).toBe(true);
+    expect(isCardId("pa-014")).toBe(true);
+    expect(getPocketCard("b4b-133")?.name).toBe("Crustle ex");
   });
 
   it("recognises the recorded autocomplete card", () => {

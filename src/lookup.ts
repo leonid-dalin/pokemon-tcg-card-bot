@@ -108,7 +108,9 @@ export const isCardId = (value: string): boolean => {
   const at = value.lastIndexOf("-");
   if (at <= 0 || at === value.length - 1) return false;
   if (!LOCAL_ID.test(value.slice(at + 1))) return false;
-  return SET_IDS.has(normaliseName(value.slice(0, at)));
+  // A Pocket set can be missing from the physical index while the bundled
+  // package knows the exact printing, so an exact package record counts too.
+  return SET_IDS.has(normaliseName(value.slice(0, at))) || getPocketCard(value) !== undefined;
 };
 
 /** Attribution for Pocket cards, which never come from TCGdex. */
