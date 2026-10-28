@@ -150,9 +150,10 @@ function findHits(entries: TextHit[], query: string): { card: TextHit; nameHits:
     const nameWords = new Set(normaliseName(card.name).match(WORD) ?? []);
     let matchedAll: boolean;
     if (tokens.length === 0) {
-      // A query the tokeniser empties, like `N`, can still name a card exactly.
+      // A query the tokeniser empties, like `N`, can still name a card exactly,
+      // quoted or not.
       matchedAll = phrase
-        ? (` ${phraseText(card)} `).includes(` ${phrase} `)
+        ? (` ${phraseText(card)} `).includes(` ${phrase} `) || normaliseName(card.name) === normalisedQuery
         : normaliseName(card.name) === normalisedQuery;
     } else if (phrase) {
       // Quoted: the words have to sit next to each other, as whole words.
@@ -318,9 +319,19 @@ function partText(part: TextPart): string {
  * label of the part it came from. An index without parts has no labels.
  */
 export function matchingDetail(hit: TextHit, query: string, maxLength = 160): string {
-  const tokens = queryTokens(unquote(query));
+  const raw = unquote(query);
+  const tokens = queryTokens(raw);
+  const quoted = isPhrase(query);
+  const phrase = quoted ? queryWords(raw).join(" ") : undefined;
   let best: { part: TextPart; sentence: string; matches: number } | undefined;
   for (const part of hit.parts ?? []) {
+    // A quoted query must be explained by the part that actually prints the
+    // phrase: a card whose other attacks mention the words in passing would
+    // otherwise win the unordered score and show the wrong wording.
+    if (phrase) {
+      const partWords = (normaliseName(partText(part)).match(WORD) ?? []).join(" ");
+      if (!(` ${partWords} `).includes(` ${phrase} `)) continue;
+    }
     for (const ranked of rankSentences(partText(part), tokens)) {
       if (!best || ranked.matches > best.matches) {
         best = { part, sentence: ranked.sentence, matches: ranked.matches };
@@ -332,14 +343,13 @@ export function matchingDetail(hit: TextHit, query: string, maxLength = 160): st
   // A single sentence that holds every query word says the whole reason for the
   // row. When the words are spread over several, joining them beats showing one
   // sentence that is missing the rest.
-  const quoted = isPhrase(query);
   const sentence = best.matches === tokens.length
     ? best.sentence
     : spreadSentences(best.part, tokens) ?? best.sentence;
   const room = Math.max(40, maxLength - label.length - 2);
   // A quoted phrase keeps its one-letter words in the window, so `attach a
   // basic energy` centres on the whole phrase, not `attach basic energy`.
-  const shown = quoted ? phraseExcerpt(sentence, queryWords(unquote(query)), room) : highlight(sentence, tokens, room);
+  const shown = quoted ? phraseExcerpt(sentence, phrase!.split(" "), room) : highlight(sentence, tokens, room);
   return `${label}: ${shown}`;
 }
 
