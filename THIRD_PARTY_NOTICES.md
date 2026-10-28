@@ -8,7 +8,7 @@ discord.js is licensed under Apache-2.0 and is used for the gateway connection, 
 
 pokemon-tcg-pocket-cards by PocketDecks is licensed under AGPL-3.0-or-later. It supplies every Pokémon TCG Pocket card. The bot reads its data files at runtime, so no card data is copied into this repository. Worth knowing before you redistribute anything:
 
-- The package ships data, not code: 424 JSON files and type declarations, with no runtime JavaScript. This repository depends on it through `package.json` and `yarn.lock`, so anyone installing the project fetches it themselves and this repository distributes none of it.
+- The package ships data, not code: 424 JSON files and type declarations, with no runtime JavaScript. This repository depends on it through `package.json` and `package-lock.json`, so anyone installing the project fetches it themselves and this repository distributes none of it.
 - The package stays a separate work with its own licence. This repository's Apache 2.0 grant does not extend to it, and cannot. Depend on it and your own code stays Apache 2.0.
 - Do not vendor the JSON into this repository. Copying the files in would make this repository a distributor of AGPL material, and that is the case where the copyleft obligations attach to the copy.
 - If you ship a container or an archive that includes `node_modules`, that artefact redistributes the package. Include its licence and a pointer to its source alongside your own.

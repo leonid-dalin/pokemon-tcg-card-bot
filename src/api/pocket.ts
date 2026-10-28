@@ -222,10 +222,6 @@ function loadIndex(): PocketIndex {
   return cached;
 }
 
-export function pocketCardCount(): number {
-  return loadIndex().cards.size;
-}
-
 /** Name search across every Pocket printing, newest set first. */
 export function searchPocketByName(name: string): CardSummary[] {
   const { byName } = loadIndex();
@@ -252,11 +248,3 @@ export function getPocketCard(id: string): Card | undefined {
   return loadIndex().cards.get(id);
 }
 
-export function listPocketSets(): { id: string; name: string }[] {
-  const { cards } = loadIndex();
-  const sets = new Map<string, string>();
-  for (const card of cards.values()) {
-    if (card.set) sets.set(card.set.id, card.set.name);
-  }
-  return [...sets.entries()].map(([id, name]) => ({ id, name }));
-}

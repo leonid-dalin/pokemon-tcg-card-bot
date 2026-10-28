@@ -33,6 +33,9 @@ const TYPE_COLOURS: Record<string, number> = {
 };
 
 const DEFAULT_COLOUR = 0x5865f2;
+
+/** Footer credit when nothing more specific is configured. */
+export const DEFAULT_ATTRIBUTION = "Card data from TCGdex";
 const FIELD_VALUE_LIMIT = 1024;
 const MAX_ATTACK_FIELDS = 4;
 
@@ -137,8 +140,6 @@ function legalityLine(card: Card): string | undefined {
 }
 
 export interface RenderOptions {
-  /** Public page for the card, if you host one. Defaults to the card image. */
-  cardUrl?: (card: Card) => string | undefined;
   /** Attribution appended to every embed footer. */
   attribution?: string;
 }
@@ -204,16 +205,16 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
   if (card.illustrator) fields.push({ name: "Illustrator", value: truncate(card.illustrator), inline: true });
 
   const updated = formatDate(card.updated);
-  const footer = [options.attribution ?? "Card data from TCGdex", updated ? `data ${updated}` : undefined]
+  const footer = [options.attribution ?? DEFAULT_ATTRIBUTION, updated ? `data ${updated}` : undefined]
     .filter(Boolean)
     .join(" · ");
 
   const image = cardImage(card);
-  const url = options.cardUrl?.(card) ?? image;
 
   return {
     title: truncate(title, 250),
-    ...(url ? { url } : {}),
+    // The title links to the full-size scan.
+    ...(image ? { url: image } : {}),
     color: cardColour(card),
     fields,
     ...(image ? { imageUrl: image } : { description: "No scan is available for this printing." }),
@@ -223,7 +224,11 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
 }
 
 /** List view for a text search, capped so the description stays inside limits. */
-export function renderSearchResults(query: string, cards: { id: string; name: string }[]): EmbedView {
+export function renderSearchResults(
+  query: string,
+  cards: { id: string; name: string }[],
+  attribution = DEFAULT_ATTRIBUTION,
+): EmbedView {
   const lines = cards
     .slice(0, 15)
     .map((card) => `\`${card.id}\` ${card.name}`)
@@ -234,7 +239,7 @@ export function renderSearchResults(query: string, cards: { id: string; name: st
     description: truncate(`${lines}${cards.length > 15 ? `
 and ${cards.length - 15} more` : ""}`, 4000),
     fields: [],
-    footer: "Card data from TCGdex",
+    footer: attribution,
   };
 }
 
@@ -261,7 +266,7 @@ export function renderDecklist(deck: ParsedDeck): EmbedView {
   };
 }
 
-export function renderSet(set: SetSummary | CardSetRef): EmbedView {
+export function renderSet(set: SetSummary | CardSetRef, attribution = DEFAULT_ATTRIBUTION): EmbedView {
   const count = set.cardCount?.official ?? set.cardCount?.total;
   const fields: EmbedField[] = [];
   if (count) fields.push({ name: "Cards", value: String(count), inline: true });
@@ -273,6 +278,6 @@ export function renderSet(set: SetSummary | CardSetRef): EmbedView {
     color: DEFAULT_COLOUR,
     fields,
     ...(set.logo ? { imageUrl: `${set.logo}.webp` } : {}),
-    footer: "Card data from TCGdex",
+    footer: attribution,
   };
 }

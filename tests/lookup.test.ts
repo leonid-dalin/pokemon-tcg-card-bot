@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TcgdexClient, TcgdexError } from "../src/api/tcgdex.js";
 import type { Card } from "../src/api/types.js";
-import { POCKET_ATTRIBUTION, lookupById, lookupCard, lookupEmbeds } from "../src/lookup.js";
+import { POCKET_ATTRIBUTION, lookupById, lookupCard, lookupEmbeds, suggestNames, type CardLookup } from "../src/lookup.js";
+
+/** The embed a lookup renders to, before Other printings are appended. */
+const viewOf = (lookup?: CardLookup) => (lookup ? lookupEmbeds({ ...lookup, alternates: [] })[0] : undefined);
 
 const dragapult = JSON.parse(
   readFileSync(new URL("./fixtures/dragapult-ex-sv08.5-073.json", import.meta.url), "utf8"),
@@ -70,6 +73,13 @@ describe("TcgdexClient", () => {
     await expect(client.getCard("nope-1")).rejects.toBeInstanceOf(TcgdexError);
   });
 
+  it("does not retry a missing card", async () => {
+    const { calls } = stubFetch({ "/cards/nope-2": { status: 404, body: {} } });
+    const client = new TcgdexClient({ retries: 2 });
+    await expect(client.getCard("nope-2")).rejects.toMatchObject({ status: 404 });
+    expect(calls).toHaveLength(1);
+  });
+
   it("remembers a missing card so a repeat lookup stays off the network", async () => {
     const { calls } = stubFetch({ "/cards/zz99-999": { status: 404, body: {} } });
     const client = new TcgdexClient({ retries: 0 });
@@ -104,7 +114,7 @@ describe("lookupCard", () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Dragapult ex");
     expect(lookup?.card.id).toBe("sv08.5-073");
-    expect(lookup?.view.title).toBe("Dragapult ex · #073/131");
+    expect(viewOf(lookup)?.title).toBe("Dragapult ex · #073/131");
     expect(lookup?.alternates.map((card) => card.id)).toEqual(["sv06-130"]);
   });
 
@@ -210,11 +220,11 @@ describe("lookupCard", () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Crustle ex", "ptcgp");
     expect(lookup?.card.id).toBe("b4b-133");
-    expect(lookup?.view.fields.find((field) => field.name === "Set")?.value).toContain("Deluxe Pack: Mega");
-    expect(lookup?.view.fields.find((field) => field.name === "Attack")?.value).toContain("Boulder Crush");
-    expect(lookup?.view.fields.some((field) => field.name === "Legal")).toBe(false);
-    expect(lookup?.view.footer).toContain("pokemon-tcg-pocket-cards");
-    expect(lookup?.view.footer).not.toContain("TCGdex");
+    expect(viewOf(lookup)?.fields.find((field) => field.name === "Set")?.value).toContain("Deluxe Pack: Mega");
+    expect(viewOf(lookup)?.fields.find((field) => field.name === "Attack")?.value).toContain("Boulder Crush");
+    expect(viewOf(lookup)?.fields.some((field) => field.name === "Legal")).toBe(false);
+    expect(viewOf(lookup)?.footer).toContain("pokemon-tcg-pocket-cards");
+    expect(viewOf(lookup)?.footer).not.toContain("TCGdex");
   });
 
   it("prefers a printing with art over a newer one without", async () => {
@@ -255,7 +265,7 @@ describe("lookupById", () => {
     expect(lookup?.card.name).toBe("Mewtwo");
     expect(lookup?.alternates.length).toBeGreaterThan(0);
     expect(lookup?.alternates.every((entry) => /^(a|b|p)[a-z0-9]*-\d{3}$/.test(entry.id))).toBe(true);
-    expect(lookup?.view.footer).toContain(POCKET_ATTRIBUTION);
+    expect(viewOf(lookup)?.footer).toContain(POCKET_ATTRIBUTION);
   });
 });
 
@@ -270,5 +280,49 @@ describe("price fallback", () => {
     await lookupCard(client, "Dragapult ex", "sv08.5");
     expect(calls.some((url) => url.includes("/fr/cards/sv08.5-073"))).toBe(true);
     expect(calls.some((url) => url.includes("/ja/"))).toBe(false);
+  });
+});
+
+describe("lookup contracts", () => {
+  it("pins the exact printing when the hint is a card id", async () => {
+    const { calls } = stubFetch({
+      "/cards?name=": { body: summaries },
+      "/cards/sv06-130": { body: { ...dragapult, id: "sv06-130", localId: "130" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "Dragapult ex", "sv06-130");
+    expect(lookup?.card.id).toBe("sv06-130");
+    expect(calls.some((url) => url.includes("/cards/sv06-130"))).toBe(true);
+  });
+
+  it("lists only printings with the same name as other printings", async () => {
+    stubFetch({
+      // "Mega Dragapult ex" contains the query, so ranking keeps it as a candidate.
+      "/cards?name=": { body: [...summaries, { id: "me03-050", name: "Mega Dragapult ex", localId: "050" }] },
+      "/cards/sv08.5-073": { body: dragapult },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "Dragapult ex");
+    expect(lookup?.alternates.map((card) => card.id)).toEqual(["sv06-130"]);
+  });
+
+  it("suggests names by dropping the last word of a missed query", async () => {
+    stubFetch({ "/cards?name=Crustle": { body: [{ id: "sv06-012", name: "Crustle", localId: "012" }] } });
+    const client = new TcgdexClient({ retries: 0 });
+    await expect(suggestNames(client, "Crustle ex")).resolves.toEqual([
+      { id: "sv06-012", name: "Crustle", localId: "012" },
+    ]);
+    await expect(suggestNames(client, "Crustle")).resolves.toEqual([]);
+  });
+});
+
+describe("other printings", () => {
+  it("lists only same-name printings for a Pocket partial match too", async () => {
+    stubFetch({});
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "Mewtw", "pocket");
+    expect(lookup).toBeDefined();
+    expect(lookup?.alternates.length).toBeGreaterThan(0);
+    expect(lookup?.alternates.every((entry) => entry.name === lookup.card.name)).toBe(true);
   });
 });
