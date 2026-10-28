@@ -10,7 +10,7 @@ You will get an acknowledgement within a few days. If the report holds up, expec
 
 ## Supported versions
 
-Only the current `main` branch receives fixes. There are no maintained release branches, so a fix lands on `main` and you redeploy
+Only the current `master` branch receives fixes. There are no maintained release branches, so a fix lands on `master` and you redeploy
 
 ## What counts as a vulnerability
 

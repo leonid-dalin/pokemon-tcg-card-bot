@@ -6,11 +6,11 @@ Read the [Code of Conduct](CODE_OF_CONDUCT.md), the [Security Policy](SECURITY.m
 
 ## Development setup
 
-Node 24 is what CI uses. The bot needs a Discord application to run, but the test suite does not, so you can work on most of the code without one
+CI runs the Node version in `.nvmrc`. The bot needs a Discord application to run, but the test suite does not, so you can work on most of the code without one
 
 ```bash
 npm ci
-npm test        # offline, 73 tests
+npm test        # offline
 npm run typecheck
 ```
 
@@ -18,11 +18,11 @@ To run it against a real server, copy `.env.example` to `.env`, fill in the toke
 
 ```bash
 npm run doctor      # validates the token before anything touches the gateway
-npm run register    # publishes /card and /set
-npm run dev         # needs a terminal, see the note below
+npm run register    # publishes /card, /set and /search
+npm run dev         # runs from source
 ```
 
-`npm run dev` runs through `tsx`, which requires a real terminal. In a service manager or a container use `npm run build` then `npm start`
+In a service manager or a container, use `npm run build` then `npm start`
 
 Two tools help when you change lookup behaviour. `npm run preview "Card name"` runs the real lookup and render path against the live APIs, prints the embed payload and writes a Discord-styled HTML page to `preview/`. `npm run index:sets` rebuilds `src/data/set-index.ts` from all 220 set endpoints, which is what you run after a new set releases
 
@@ -36,7 +36,7 @@ Do not commit a token, `.env`, a local database, `node_modules`, `dist`, or anyt
 
 ## Pull requests
 
-Open against `main` with a short summary, the checks you ran, relevant issue links, and any limitation or follow-up you know about. Keep commits small enough to review, and separate behaviour changes from documentation changes when a task contains both
+Open against `master` with a short summary, the checks you ran, relevant issue links, and any limitation or follow-up you know about. Keep commits small enough to review, and separate behaviour changes from documentation changes when a task contains both
 
 Commit subjects follow Conventional Commits, for example `fix: pin a resolved set exactly`. Write them in EN-UK, imperative present tense, with no trailing period
 
