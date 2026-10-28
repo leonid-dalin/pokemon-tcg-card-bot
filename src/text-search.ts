@@ -57,8 +57,18 @@ export function textIndexSize(): number {
   return load().length;
 }
 
+/**
+ * The query's words, folded the same way card text is. Punctuation is
+ * stripped, so a trailing full stop or a hyphenated card name matches as its
+ * words rather than as one odd token.
+ */
 function queryTokens(query: string): string[] {
-  return normaliseName(query).split(" ").filter((token) => token.length > 1);
+  return normaliseName(query).match(WORD)?.filter((token) => token.length > 1) ?? [];
+}
+
+/** Every word of a query, one-letter articles included, for a quoted phrase. */
+function queryWords(query: string): string[] {
+  return normaliseName(query).match(WORD) ?? [];
 }
 
 const normalisedCache = new WeakMap<object, string>();
@@ -127,15 +137,15 @@ function findHits(entries: TextHit[], query: string): { card: TextHit; nameHits:
   const raw = unquote(query);
   const tokens = queryTokens(raw);
   if (tokens.length === 0) return [];
-  const phrase = isPhrase(query) ? tokens.join(" ") : undefined;
+  const phrase = isPhrase(query) ? queryWords(unquote(query)).join(" ") : undefined;
   const hits: { card: TextHit; nameHits: number; exact: boolean }[] = [];
 
   for (const card of entries) {
     const nameWords = new Set(normaliseName(card.name).match(WORD) ?? []);
     let matchedAll: boolean;
     if (phrase) {
-      // Quoted: the words have to sit next to each other, in order.
-      matchedAll = phraseText(card).includes(phrase) || normaliseName(card.name) === normaliseName(raw);
+      // Quoted: the words have to sit next to each other, as whole words.
+      matchedAll = (` ${phraseText(card)} `).includes(` ${phrase} `) || normaliseName(card.name) === normaliseName(raw);
     } else {
       const words = wordsOf(card);
       matchedAll = tokens.every((token) => words.has(token));

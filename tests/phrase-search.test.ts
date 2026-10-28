@@ -13,7 +13,10 @@ describe("unquoted search", () => {
     // Copycat prints hand, not "and"; a card printing only "hand" must not match.
     const hits = searchCardText("hand");
     expect(hits.some((hit) => hit.name === "Copycat")).toBe(true);
-    expect(searchCardText("and").some((hit) => /^hand$/i.test(hit.text))).toBe(false);
+    const wholeWord = (hay: string, word: string) => new RegExp(`(^|[^a-z0-9])${word}($|[^a-z0-9])`, "i").test(hay);
+    for (const hit of searchCardText("and")) {
+      expect(wholeWord(hit.text, "and") || wholeWord(hit.name, "and")).toBe(true);
+    }
   });
 });
 
