@@ -40,7 +40,8 @@ export function searchReply(
     const base = `No card wording mentions \`${words}\`.`;
     return { content: quoted ? `${base} A quoted search needs those words printed in that order.` : base };
   }
-  const shown = groups.slice(0, MAX_ITEMS);
+  const shown = shownGroups(groups);
+  const categoryCounts = universeCounts(groups);
   const page: ListPage = {
     title: `${groups.length} cards mention "${unquote(query).slice(0, TITLE_LIMIT)}"`,
     items: shown.map(({ representative, printings }) => ({
@@ -53,9 +54,43 @@ export function searchReply(
     ownerId,
     footer: groups.length > MAX_ITEMS ? `${attribution} · the first ${MAX_ITEMS} of ${groups.length}` : attribution,
     filterable: shown.some((group) => group.representative.category !== undefined),
+    categoryCounts,
   };
   const token = pages.put(page);
   return listReply(page, token, 0);
+}
+
+/** The storage cap, which bounds every category view as well as the overall list. */
+const CAP = MAX_ITEMS;
+
+/**
+ * What a search stores: the first CAP hits overall, plus the first CAP of each
+ * category in original order, deduplicated. Filtering then reaches the late
+ * categories instead of losing them to the overall cap, while storage stays
+ * bounded (at most four caps for the three categories plus all).
+ */
+function shownGroups(groups: TextGroup[]): TextGroup[] {
+  const keep = new Set(groups.slice(0, CAP).map((group) => group.representative.id));
+  for (const category of ["Pokemon", "Trainer", "Energy"]) {
+    let counted = 0;
+    for (const group of groups) {
+      if (group.representative.category !== category) continue;
+      if (counted >= CAP) break;
+      keep.add(group.representative.id);
+      counted += 1;
+    }
+  }
+  return groups.filter((group) => keep.has(group.representative.id));
+}
+
+/** Category totals over every match, before any cap: what the filter menu promises. */
+function universeCounts(groups: TextGroup[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const group of groups) {
+    const category = group.representative.category;
+    if (category) counts[category] = (counts[category] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export interface MentionMiss {

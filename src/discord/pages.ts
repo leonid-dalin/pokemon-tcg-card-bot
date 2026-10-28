@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } from "discord.js";
-import { filterGroups, filterOptions, groupCounts, type Filter } from "../search-filter.js";
+import { CATEGORIES, filterGroups, filterOptions, groupCounts, type Filter } from "../search-filter.js";
 
 export interface ListItem {
   cardId: string;
@@ -17,6 +17,8 @@ export interface ListPage {
   footer: string;
   /** Every item carries a category the filter can use. */
   filterable?: boolean;
+  /** Category totals over every match, before the cap; the menu promises these. */
+  categoryCounts?: Record<string, number>;
 }
 
 export class PageStore {
@@ -119,7 +121,7 @@ export function listReply(page: ListPage, token: string, index: number, filter?:
   if (page.filterable) {
     // Choices come from the whole page, not the narrowed list, so a reader can
     // always widen the view again after picking one category.
-    const choices = filterChoices(page.items);
+    const choices = filterChoices(page.items, page.categoryCounts);
     // A row that can only select the current category would not change the list.
     if (choices.length > 2) {
       const menu = new StringSelectMenuBuilder()
@@ -159,8 +161,18 @@ function filteredItems(page: ListPage, filter?: string): ListItem[] {
   return page.items.filter((_, index) => kept.has(groups[index]!));
 }
 
-/** A filter choice per category that would show at least one card. */
-function filterChoices(items: ListItem[]): { label: string; value: string }[] {
+/** A filter choice per category that would show at least one card. Counts come
+ * from the complete universe when the page carries them, so a capped list still
+ * promises the real totals. */
+function filterChoices(items: ListItem[], universe?: Record<string, number>): { label: string; value: string }[] {
+  if (universe) {
+    const all = Object.values(universe).reduce((total, count) => total + count, 0);
+    const available = ([...CATEGORIES] as Filter[]).filter((filter) => (universe[filter] ?? 0) > 0);
+    return [
+      { label: `${FILTER_LABELS.all} (${all})`, value: "all" },
+      ...available.map((filter) => ({ label: `${FILTER_LABELS[filter] ?? filter} (${universe[filter]})`, value: filter })),
+    ];
+  }
   const groups = items.map(asGroup);
   const counts = groupCounts(groups);
   return filterOptions(groups).map((filter) => ({ label: `${FILTER_LABELS[filter] ?? filter} (${counts[filter]})`, value: filter }));
