@@ -43,7 +43,14 @@ export interface VariantDetail {
   } | null;
 }
 
+/** Card-level pricing, which some records carry without variant detail. */
+export interface CardPricing {
+  cardmarket?: Pricing | null;
+  tcgplayer?: Pricing | null;
+}
+
 export interface Card {
+  pricing?: CardPricing | null;
   id: string;
   localId?: string;
   name: string;

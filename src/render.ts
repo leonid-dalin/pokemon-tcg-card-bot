@@ -5,6 +5,10 @@ import { isBasicEnergy } from "./deck-check.js";
 import { energyCost } from "./energy.js";
 import { isPocketCard, prizeCount } from "./prizes.js";
 import { printedNumber } from "./printed.js";
+import { normaliseName } from "./resolve.js";
+import { SET_INDEX } from "./data/set-index.js";
+
+const setById = new Map(SET_INDEX.map((entry) => [normaliseName(entry.id), entry]));
 
 export interface EmbedField {
   name: string;
@@ -92,17 +96,19 @@ interface PriceSummary {
 }
 
 function pickPricing(card: Card): PriceSummary {
+  const perSource: PriceSummary = {};
   for (const variant of card.variants_detailed ?? []) {
     const pricing = variant.pricing;
     if (!pricing) continue;
-    if (pricing.cardmarket || pricing.tcgplayer) {
-      return {
-        ...(pricing.cardmarket ? { cardmarket: pricing.cardmarket } : {}),
-        ...(pricing.tcgplayer ? { tcgplayer: pricing.tcgplayer } : {}),
-      };
-    }
+    // Per-source accumulation: a variant that prices only TCGplayer must not
+    // hide the Cardmarket figure another variant or the card itself carries.
+    if (pricing.cardmarket && !perSource.cardmarket) perSource.cardmarket = pricing.cardmarket;
+    if (pricing.tcgplayer && !perSource.tcgplayer) perSource.tcgplayer = pricing.tcgplayer;
   }
-  return {};
+  const cardPricing = card.pricing;
+  if (!perSource.cardmarket && cardPricing?.cardmarket) perSource.cardmarket = cardPricing.cardmarket;
+  if (!perSource.tcgplayer && cardPricing?.tcgplayer) perSource.tcgplayer = cardPricing.tcgplayer;
+  return perSource;
 }
 
 /** The Cardmarket average for a card, which the price field and the deck price share. */
@@ -241,10 +247,13 @@ export function renderCardDetails(
 ): EmbedView {
   const fields: EmbedField[] = [];
   const set = card.set;
+  // The card response embeds only a set summary, so the release date falls back
+  // to the committed set index. A source-provided date stays first choice.
+  const indexedSet = setById.get(normaliseName(set?.id ?? ""));
   const setValue = [
     set?.name,
     printedNumber(card.id),
-    formatDate(set?.releaseDate),
+    formatDate(set?.releaseDate ?? indexedSet?.releaseDate),
     set?.serie?.name,
   ]
     .filter(Boolean)
