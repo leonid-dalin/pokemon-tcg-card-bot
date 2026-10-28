@@ -5,9 +5,10 @@ import type { MentionBudget } from "../cooldown.js";
 import { parseDecklist } from "../decklist.js";
 import { resolveDeckCards } from "../deck-check.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
-import { extractMentions, parseSearchCommand } from "../mentions.js";
+import { extractMentions, parseHelpCommand, parseSearchCommand } from "../mentions.js";
 import { renderDecklist } from "../render.js";
 import { searchCardGroups } from "../text-search.js";
+import { helpView } from "../help.js";
 import { toEmbeds } from "./embeds.js";
 import { MAX_EMBEDS_PER_MESSAGE, mentionReply, searchReply, type MentionMiss } from "./replies.js";
 
@@ -60,9 +61,12 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     // Slash commands need the command picker, which is awkward on a phone. A
     // mention plus the word search does the same job from the message box.
     const selfId = context.selfId();
-    const searchQuery = !deck && selfId ? parseSearchCommand(message.content, selfId) : undefined;
-    const mentions = deck || searchQuery !== undefined ? [] : extractMentions(message.content);
-    if (!deck && searchQuery === undefined && mentions.length === 0) return;
+    // Help is checked before search, because a bare mention is a help request
+    // and the search reader answers undefined for it.
+    const wantsHelp = !deck && selfId ? parseHelpCommand(message.content, selfId) : undefined;
+    const searchQuery = !deck && !wantsHelp && selfId ? parseSearchCommand(message.content, selfId) : undefined;
+    const mentions = deck || wantsHelp || searchQuery !== undefined ? [] : extractMentions(message.content);
+    if (!deck && !wantsHelp && searchQuery === undefined && mentions.length === 0) return;
 
     // Every reply draws on the same budget, so a decklist or a search cannot be
     // used to get round the limit on mentions. Keyed per member, not per
@@ -74,6 +78,11 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         console.log(`skipped a reply to ${message.author.username}: ${verdict.retryAfterSeconds}s until the next one`);
         return;
       }
+    }
+
+    if (wantsHelp) {
+      await message.reply({ embeds: toEmbeds([helpView()]) }).catch(() => {});
+      return;
     }
 
     if (deck) {

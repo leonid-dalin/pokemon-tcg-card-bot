@@ -67,3 +67,15 @@ export function parseSearchCommand(content: string, selfId: string): string | un
   if (!match) return undefined;
   return (match[1] ?? "").trim();
 }
+
+/**
+ * Read a bare mention or `@bot help`. A bare mention asks what the bot can do,
+ * which is what someone types when they have just seen it answer. A mention
+ * followed by anything else is a question the bot cannot answer.
+ */
+export function parseHelpCommand(content: string, selfId: string): boolean {
+  if (!content.includes("<@")) return false;
+  if (!new RegExp(`<@!?${selfId}>`).test(content)) return false;
+  const withoutMention = content.replace(/<@!?\d+>/g, " ").trim();
+  return withoutMention === "" || /^help[.!]?$/i.test(withoutMention);
+}

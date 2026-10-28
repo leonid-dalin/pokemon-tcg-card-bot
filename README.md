@@ -11,6 +11,8 @@ A Discord bot for Pokémon TCG and Pokémon TCG Pocket cards, answered from a sl
 | `/set id:<set id>` | The set: card count, series and release date |
 | `/set id:<set id> checklist:true` | Every card in the set, fifteen to a page |
 | `/search text:<words>` | Cards whose ability, attack or Trainer text contains every word, five to a page |
+| `/help` | What the bot can do |
+| `@bot` or `@bot help` | The same help card from the message box |
 | `@bot search <words>` | The same search from the message box, which is easier on a phone |
 | `[[Card name]]` | The card, from any message. Up to three per message |
 | `[[Card name\|hint]]` | One printing. The hint can be a set id (`sv07`), a printed code (`SCR`) or a set name (`Stellar Crown`) |

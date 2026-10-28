@@ -13,6 +13,7 @@ import { printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
 import { printingItems, printingsOf } from "../printings.js";
 import { setChecklistReply } from "../set-checklist.js";
+import { helpView } from "../help.js";
 import { printingIdFrom, detailsIdFrom, MISS_MENU_ID } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
@@ -81,7 +82,11 @@ export const printingsCommand = new SlashCommandBuilder()
       .setAutocomplete(true),
   );
 
-export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand];
+export const helpCommand = new SlashCommandBuilder()
+  .setName("help")
+  .setDescription("List what the bot can do");
+
+export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand];
 
 export async function handleAutocomplete(
   context: CommandContext,
@@ -234,6 +239,10 @@ export async function handleSetCommand(
   } catch {
     await interaction.editReply({ content: `No set matched \`${id}\`.` });
   }
+}
+
+export async function handleHelpCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.reply({ embeds: [toEmbed(helpView())] });
 }
 
 export async function handlePrintingsCommand(

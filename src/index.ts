@@ -6,6 +6,7 @@ import {
   handleAutocomplete,
   handleCardCommand,
   handleDetailsButton,
+  handleHelpCommand,
   handleOpenCardMenu,
   handlePageButton,
   handlePrintingButton,
@@ -68,6 +69,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleSearchCommand(context, interaction);
     } else if (interaction.commandName === "printings") {
       await handlePrintingsCommand(context, interaction);
+    } else if (interaction.commandName === "help") {
+      await handleHelpCommand(interaction);
     }
   } catch (error) {
     console.error("interaction failed", error);

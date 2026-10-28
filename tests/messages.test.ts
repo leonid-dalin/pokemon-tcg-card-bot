@@ -89,6 +89,36 @@ describe("message handler", () => {
     expect(replies.every((payload) => !("allowedMentions" in payload))).toBe(true);
   });
 
+  it("answers a bare mention with the help card", async () => {
+    const { message, replies } = fakeMessage(`<@${BOT_ID}>`);
+    await handler()(message);
+    expect(replies).toHaveLength(1);
+    const embed = (replies[0]?.embeds as { data: { title?: string; fields?: unknown[] } }[])[0]?.data;
+    expect(embed?.title).toBe("Pokémon TCG card bot");
+    expect(embed?.fields?.length).toBe(3);
+  });
+
+  it("answers the word help after a mention", async () => {
+    const { message, replies } = fakeMessage(`<@${BOT_ID}> help`);
+    await handler()(message);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]?.content).toBeUndefined();
+  });
+
+  it("lets a mention search win over help", async () => {
+    const { message, replies } = fakeMessage(`<@${BOT_ID}> search draw 2 cards`);
+    await handler()(message);
+    expect(replies[0]?.embeds).toHaveLength(1);
+    const title = (replies[0]?.embeds as { data: { title?: string } }[])[0]?.data.title;
+    expect(title).toMatch(/^\d+ cards mention "draw 2 cards"$/);
+  });
+
+  it("stays quiet when a mention asks something it cannot answer", async () => {
+    const { message, replies } = fakeMessage(`<@${BOT_ID}> which deck is best`);
+    await handler()(message);
+    expect(replies).toEqual([]);
+  });
+
   it("answers a miss with the closest names in a menu", async () => {
     const { message, replies } = fakeMessage("[[Dragapult zzz]]");
     await handler()(message);
