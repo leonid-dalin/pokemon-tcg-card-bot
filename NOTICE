@@ -20,12 +20,4 @@ photograph, included because the operator of this instance asked for it as the
 bot's profile picture. They are NOT covered by the Apache License 2.0 that covers
 the source code. Replace or remove them before redistributing this project.
 
-PRIOR ART
-
-Card Buddy is a separate, closed-source Discord bot by another author. This
-project reproduces the same public information contract, meaning card art with set
-and number, rules text, legality and prices, derived from that bot's documented
-command behaviour. No source code, assets or data files from Card Buddy are
-included here, and this project is not a fork of it.
-
 Full dependency, data and image terms are in THIRD_PARTY_NOTICES.md.

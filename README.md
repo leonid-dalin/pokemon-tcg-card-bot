@@ -6,17 +6,22 @@ A Discord bot for Pokémon TCG and Pokémon TCG Pocket cards, answered from a sl
 
 | You type | The bot replies with |
 | --- | --- |
-| `/card name:<name> [set:<hint>]` | The card, with name autocomplete and an optional set hint |
+| `/card name:<name> [set:<hint>]` | The card front, with name autocomplete and an optional set hint |
+| `/printings name:<name>` | Every printing of that name, newest first, ten to a page |
 | `/set id:<set id>` | The set: card count, series and release date |
-| `/search text:<words>` | Up to 15 cards whose ability, attack or Trainer text contains every word |
+| `/set id:<set id> checklist:true` | Every card in the set, fifteen to a page |
+| `/search text:<words>` | Cards whose ability, attack or Trainer text contains every word, five to a page |
 | `@bot search <words>` | The same search from the message box, which is easier on a phone |
 | `[[Card name]]` | The card, from any message. Up to three per message |
 | `[[Card name\|hint]]` | One printing. The hint can be a set id (`sv07`), a printed code (`SCR`) or a set name (`Stellar Crown`) |
 | `[[Card name\|sv08.5-073]]` | The exact printing with that card id |
 | `[[Card name\|pocket]]` | The Pocket version. `ptcgp` and `tcgp` work as well |
-| A pasted decklist | The list, formatted and counted against 60. Off unless `DECKLIST_ENABLED=true` |
+| `[[!Card name]]` | The scan alone, with no fields and no buttons |
+| A pasted decklist | The list, counted against 60, with cards that are not Standard legal and a Cardmarket price. Off unless `DECKLIST_ENABLED=true` |
 
-A card reply shows the art, set and number, regulation mark, rarity, rules text, attacks and abilities, weakness and retreat, format legality, prices and the illustrator. Names match regardless of case, accents, apostrophes and spacing, so `pokemon catcher` finds Pokémon Catcher. A card with other printings lists their ids, and you can paste one back as a hint. When the reply shows a single card, those printings also appear as buttons, and pressing one swaps the card in place. A name that matches nothing gets `No card matched` and the closest names. `[[...]]` inside backticks or a code block is ignored, so you can explain the syntax in the same channel
+A card reply shows the front first: the name linked to its scan, then HP, type, stage, what it evolves from and how many prizes it gives up, then the wording of Trainers and Energy, one field per ability and per attack with the cost as energy tokens, and weakness, resistance and retreat. Everything printed on the card but not played with sits behind the `Details` button, which answers only whoever presses it: the set and release date, rarity, illustrator, format legality, prices and the other printings. Card ids are written the way players write them, so `me04-048` reads `CRI 48` and a Pocket card reads `B4B 133`.
+
+Names match regardless of case, accents, apostrophes and spacing, so `pokemon catcher` finds Pokémon Catcher. Printing buttons swap the card in place, and only the person who asked for the reply may press them. A name that matches nothing gets `No card matched` and a menu of the closest names. `[[...]]` inside backticks or a code block is ignored, so you can explain the syntax in the same channel
 
 ## Requirements
 
@@ -40,7 +45,7 @@ A card reply shows the art, set and number, regulation mark, rarity, rules text,
 5. Register the slash commands, then start the bot:
 
    ```bash
-   npm run register        # publishes /card, /set and /search
+   npm run register        # publishes /card, /printings, /set and /search
    npm run dev             # runs from source
    ```
 
@@ -56,11 +61,14 @@ The bot reads these from the environment or from `.env`. `.env.example` lists th
 | `DISCORD_CLIENT_ID` | required | The Application ID |
 | `DISCORD_GUILD_ID` | unset | Registers the slash commands in this server only. Unset, they are registered globally |
 | `MENTION_ENABLED` | `true` | Answers `[[...]]` mentions, `@bot search` and decklists. Needs the Message Content intent |
-| `DECKLIST_ENABLED` | `false` | Formats pasted decklists |
+| `DECKLIST_ENABLED` | `false` | Formats pasted decklists, flags cards that are not Standard legal and prices the deck |
 | `MENTION_COOLDOWN_SECONDS` | `0` (`30` in `.env.example`) | Per-member throttle. Each member gets a burst of three replies, then one more every this many seconds. `0` turns it off |
 | `ATTRIBUTION` | `Card data from TCGdex` | Footer credit on every embed. Pocket cards always credit their own source |
+| `ENERGY_EMOJI` | `{}` | JSON object of energy type to emoji markup, used in attack costs. The owner uploads the icons as application emoji |
 
 The throttle counts every reply to a message, whether it answers a mention, a search or a decklist. It is kept per member and per channel, so one person cannot use up anyone else's replies. The bot never pings anyone: replies carry no user, role or `@everyone` mentions
+
+Paged lists keep their place in memory for fifteen minutes, so the age of an old reply shows up as `This list has expired. Run the command again.`
 
 ## Running in production
 
@@ -110,14 +118,10 @@ Responses are cached in memory, ten minutes for cards and an hour for sets, up t
 - `another instance is already running`: stop the other copy. A pid file left by a crash is ignored once its process is gone
 - Prices show only Cardmarket: TCGdex has little TCGplayer data, so most cards carry one source
 
-## Background
-
-The reply carries what Card Buddy, a well-known Pokémon card bot, shows: art first, then set and number, rules text, legality and both price sources. No code, assets or data from Card Buddy are used. The inline `[[card]]` syntax comes from Hearthstone bots such as d0nkeybot, so a card mentioned mid-sentence gets an answer without a command
-
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report vulnerabilities by email as described in [SECURITY.md](SECURITY.md), never in a public issue. Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Licence
 
-This project's code is licensed under the Apache License 2.0, see [LICENSE](LICENSE). Card data, the Pocket package and the avatar image keep their own terms, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Pocket package is AGPL-3.0, so read the notices before you redistribute a build that includes `node_modules`
+This project's code is licensed under the Apache License 2.0, see [LICENSE](LICENSE). Card data, the Pocket package and the avatar image keep their own terms, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Pocket package is AGPL-3.0, so read the notices before you redistribute a build that includes `node_modules`. Credit for the ideas this bot borrows sits in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md)
