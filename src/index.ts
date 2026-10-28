@@ -23,7 +23,7 @@ if (!acquireSingleInstanceLock()) process.exit(1);
 
 const config = loadConfig(process.env);
 const api = new TcgdexClient();
-const context: CommandContext = { client: api, attribution: config.attribution };
+const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji };
 
 const client = new Client(clientOptions(config));
 const budget =

@@ -12,7 +12,7 @@ import { MAX_EMBEDS_PER_MESSAGE, mentionReply, searchReply, type MentionMiss } f
 
 export interface MessageContext {
   api: TcgdexClient;
-  config: Pick<Config, "mentionEnabled" | "decklistEnabled" | "attribution">;
+  config: Pick<Config, "mentionEnabled" | "decklistEnabled" | "attribution" | "energyEmoji">;
   budget?: MentionBudget | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
@@ -100,7 +100,10 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       const found: CardLookup[] = [];
       const misses: MentionMiss[] = [];
       for (const mention of mentions) {
-        const lookup = await lookupCard(api, mention.name, mention.setHint, { attribution: config.attribution });
+        const lookup = await lookupCard(api, mention.name, mention.setHint, {
+          attribution: config.attribution,
+          energyEmoji: config.energyEmoji,
+        });
         console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
         if (lookup) found.push(lookup);
         else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name) });

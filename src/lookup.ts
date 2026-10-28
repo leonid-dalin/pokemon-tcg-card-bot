@@ -11,11 +11,12 @@ export interface CardLookup {
   alternates: CardSummary[];
   /** Footer credit naming the source that served the card. */
   attribution?: string;
+  energyEmoji?: Record<string, string>;
 }
 
 export interface LookupOptions {
   attribution?: string;
-  /** How many other printings to list when a name matches several. */
+  energyEmoji?: Record<string, string>;
   alternateLimit?: number;
 }
 
@@ -63,13 +64,14 @@ function toLookup(
   card: Card,
   candidates: CardSummary[],
   attribution: string | undefined,
+  energyEmoji?: Record<string, string>,
   limit = 10,
 ): CardLookup {
   const name = normaliseName(card.name);
   const alternates = candidates
     .filter((entry) => entry.id !== card.id && normaliseName(entry.name) === name)
     .slice(0, limit);
-  return { card, alternates, ...(attribution ? { attribution } : {}) };
+  return { card, alternates, ...(attribution ? { attribution } : {}), ...(energyEmoji ? { energyEmoji } : {}) };
 }
 
 /** A full card id, which pins one exact printing rather than a set. */
@@ -102,7 +104,7 @@ function lookupPocket(query: string, setHint: string | undefined, options: Looku
   if (!primary) return undefined;
   const card = getPocketCard(primary.id);
   if (!card) return undefined;
-  return toLookup(card, pool, POCKET_ATTRIBUTION, options.alternateLimit);
+  return toLookup(card, pool, POCKET_ATTRIBUTION, options.energyEmoji, options.alternateLimit);
 }
 
 /**
@@ -134,7 +136,7 @@ export async function lookupById(
   const candidates = pocketCard
     ? searchPocketByName(pinned.name)
     : await client.searchByName(pinned.name).catch(() => []);
-  return toLookup(pinned, candidates, pocketCard ? POCKET_ATTRIBUTION : options.attribution, options.alternateLimit);
+  return toLookup(pinned, candidates, pocketCard ? POCKET_ATTRIBUTION : options.attribution, options.energyEmoji, options.alternateLimit);
 }
 
 /**
@@ -181,7 +183,7 @@ export async function lookupCard(
   if (!primary) return undefined;
 
   const card = await withEnglishPricing(client, await client.getCard(primary.id));
-  return toLookup(card, ordered, options.attribution, options.alternateLimit);
+  return toLookup(card, ordered, options.attribution, options.energyEmoji, options.alternateLimit);
 }
 
 /**
@@ -189,7 +191,10 @@ export async function lookupCard(
  * second embed, because two embeds read as two answers to one question.
  */
 export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
-  const view = renderCard(lookup.card, lookup.attribution ? { attribution: lookup.attribution } : {});
+  const view = renderCard(lookup.card, {
+    ...(lookup.attribution ? { attribution: lookup.attribution } : {}),
+    ...(lookup.energyEmoji ? { energyEmoji: lookup.energyEmoji } : {}),
+  });
   if (lookup.alternates.length === 0) return [view];
 
   const seen = new Set<string>();

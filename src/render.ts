@@ -1,5 +1,6 @@
 import type { Attack, Card, CardSetRef, Pricing, SetSummary } from "./api/types.js";
 import type { ParsedDeck } from "./decklist.js";
+import { energyCost } from "./energy.js";
 import { printedNumber } from "./printed.js";
 
 export interface EmbedField {
@@ -65,8 +66,8 @@ function attackName(attack: Attack): string {
   return truncate(`${attack.name}${attack.damage !== undefined && attack.damage !== null ? `  ${attack.damage}` : ""}`, 250);
 }
 
-function attackValue(attack: Attack): string {
-  const cost = attack.cost?.length ? attack.cost.join("+") : undefined;
+function attackValue(attack: Attack, emoji: Record<string, string>): string {
+  const cost = energyCost(attack.cost, emoji);
   return truncate([cost, attack.effect].filter(Boolean).join("\n"));
 }
 
@@ -145,6 +146,7 @@ function legalityLine(card: Card): string | undefined {
 
 export interface RenderOptions {
   attribution?: string;
+  energyEmoji?: Record<string, string>;
 }
 
 function cardProfile(card: Card): string | undefined {
@@ -193,7 +195,7 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
     fields.push({ name: `Ability: ${ability.name}`, value: truncate(ability.effect ?? "", FIELD_VALUE_LIMIT) });
   }
   for (const attack of card.attacks ?? []) {
-    fields.push({ name: attackName(attack), value: attackValue(attack), inline: false });
+    fields.push({ name: attackName(attack), value: attackValue(attack, options.energyEmoji ?? {}), inline: false });
   }
   for (const weakness of card.weaknesses ?? []) {
     fields.push({ name: "Weakness", value: `${weakness.type} ${weakness.value}`, inline: true });

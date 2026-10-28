@@ -13,6 +13,7 @@ describe("loadConfig", () => {
       decklistEnabled: false,
       mentionCooldownSeconds: 0,
       attribution: "Card data from TCGdex",
+      energyEmoji: {},
     });
   });
 
@@ -24,6 +25,7 @@ describe("loadConfig", () => {
       DECKLIST_ENABLED: "yes",
       MENTION_COOLDOWN_SECONDS: "30",
       ATTRIBUTION: "Data from somewhere",
+      ENERGY_EMOJI: '{"Fighting":"<:fighting:123>"}',
     });
     expect(config).toMatchObject({
       guildId: "456",
@@ -31,6 +33,7 @@ describe("loadConfig", () => {
       decklistEnabled: true,
       mentionCooldownSeconds: 30,
       attribution: "Data from somewhere",
+      energyEmoji: { Fighting: "<:fighting:123>" },
     });
   });
 
@@ -40,6 +43,12 @@ describe("loadConfig", () => {
     const source = readFileSync(new URL("../src/config.ts", import.meta.url), "utf8");
     const read = [...new Set([...source.matchAll(/env\.([A-Z_]+)/g)].map((match) => match[1]))].sort();
     expect(documented).toEqual(read);
+  });
+
+  it("rejects a non-object energy emoji setting", () => {
+    expect(() => loadConfig({ ...required, ENERGY_EMOJI: "[]" })).toThrow(
+      "ENERGY_EMOJI must be a JSON object of energy type to emoji",
+    );
   });
 
   it.each(["DISCORD_TOKEN", "DISCORD_CLIENT_ID"])("refuses to start without %s", (key) => {

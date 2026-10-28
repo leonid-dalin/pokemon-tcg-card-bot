@@ -18,6 +18,7 @@ import { cardReply, searchReply } from "./replies.js";
 export interface CommandContext {
   client: TcgdexClient;
   attribution: string;
+  energyEmoji: Record<string, string>;
 }
 
 export const cardCommand = new SlashCommandBuilder()
@@ -96,7 +97,7 @@ export async function handleCardCommand(
   const setHint = interaction.options.getString("set")?.trim() || undefined;
 
   await interaction.deferReply();
-  const lookup = await lookupCard(context.client, query, setHint, { attribution: context.attribution });
+  const lookup = await lookupCard(context.client, query, setHint, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;
@@ -112,7 +113,7 @@ export async function handlePrintingButton(
   const id = printingIdFrom(interaction.customId);
   if (!id) return;
   await interaction.deferUpdate();
-  const lookup = await lookupById(context.client, id, { attribution: context.attribution });
+  const lookup = await lookupById(context.client, id, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.followUp({ content: `No card matched \`${id}\`.`, flags: MessageFlags.Ephemeral });
     return;
@@ -126,7 +127,7 @@ export async function handleDetailsButton(
 ): Promise<void> {
   const id = detailsIdFrom(interaction.customId);
   if (!id) return;
-  const lookup = await lookupById(context.client, id, { attribution: context.attribution });
+  const lookup = await lookupById(context.client, id, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.reply({ content: `No card matched \`${id}\`.`, flags: MessageFlags.Ephemeral });
     return;

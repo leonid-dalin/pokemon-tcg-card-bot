@@ -34,6 +34,16 @@ describe("renderCard", () => {
     expect(JSON.stringify(view)).not.toContain("—");
   });
 
+  it("starts attack values with compact energy tokens", () => {
+    const attacks = renderCard(megaGallade).fields;
+    expect(attacks.find((field) => field.name === "Gale Slash  50+")?.value).toMatch(/^\[F\]/);
+    expect(attacks.find((field) => field.name === "Marvelous Edge  240")?.value).toMatch(/^\[F\]\[F\]\[C\]/);
+  });
+  it("uses configured energy emoji in attack values", () => {
+    const attacks = renderCard(megaGallade, { energyEmoji: { Fighting: "<:f:1>" } }).fields;
+    expect(attacks.find((field) => field.name === "Gale Slash  50+")?.value).toMatch(/^<:f:1>/);
+    expect(attacks.find((field) => field.name === "Marvelous Edge  240")?.value).toMatch(/^<:f:1><:f:1>\[C\]/);
+  });
   it("renders card details separately", () => {
     const view = renderCardDetails(megaGallade, [], { attribution: "Card data from TCGdex" });
     expect(view.fields.map((field) => field.name)).toEqual(["Set", "Rarity", "Illustrator", "Legal", "Prices"]);
