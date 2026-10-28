@@ -3,12 +3,16 @@ import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
 import { printedNumber } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
+import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
 
 export interface CardLookup {
   card: Card;
+  /** Every other printing of the name, which the Other printings field lists. */
   alternates: CardSummary[];
+  /** The printings whose wording matches the card, which get buttons. */
+  matchingPrintings?: CardSummary[];
   /** Footer credit naming the source that served the card. */
   attribution?: string;
   energyEmoji?: Record<string, string>;
@@ -73,7 +77,22 @@ function toLookup(
   const alternates = candidates
     .filter((entry) => entry.id !== card.id && normaliseName(entry.name) === name)
     .slice(0, limit);
-  return { card, alternates, ...(attribution ? { attribution } : {}), ...(energyEmoji ? { energyEmoji } : {}) };
+  return { card, alternates, matchingPrintings: printingsForButtons(card, alternates), ...(attribution ? { attribution } : {}), ...(energyEmoji ? { energyEmoji } : {}) };
+}
+
+/**
+ * The printings a reply may offer as buttons: those that word the card the
+ * same way. Pokémon reprints often change abilities and attacks between sets,
+ * so a button to a different wording is a different card wearing the name;
+ * those stay in the Other printings field instead. A card the index does not
+ * know, and Trainer or Energy wording, never changes, so every printing keeps
+ * its button there.
+ */
+export function printingsForButtons(card: Card, candidates: CardSummary[]): CardSummary[] {
+  const alternates = candidates.filter((entry) => entry.id !== card.id);
+  const primary = indexedText(card.id);
+  if (primary === undefined || card.category !== "Pokemon") return alternates;
+  return alternates.filter((entry) => indexedText(entry.id) === primary);
 }
 
 /** A full card id, which pins one exact printing rather than a set. */
@@ -256,9 +275,7 @@ export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
     .filter((card) => (seen.has(card.id) ? false : (seen.add(card.id), true)))
     .map((card) => `\`${printedNumber(card.id)}\``)
     .join(", ");
-  const value = `${ids}
-Narrow it with \`[[${lookup.card.name}|setId]]\`.`;
-  return [{ ...view, fields: [...view.fields, { name: "Other printings", value }] }];
+  return [{ ...view, fields: [...view.fields, { name: "Other printings", value: ids }] }];
 }
 
 export function isMissing(error: unknown): boolean {

@@ -57,6 +57,12 @@ export function textIndexSize(): number {
   return load().length;
 }
 
+/** The card wording the index holds for an id, folded like the search folds it. */
+export function indexedText(id: string): string | undefined {
+  const hit = load().find((entry) => entry.id === id);
+  return hit ? normaliseName(hit.text) : undefined;
+}
+
 /**
  * The query's words, folded the same way card text is. Punctuation is
  * stripped, so a trailing full stop or a hyphenated card name matches as its

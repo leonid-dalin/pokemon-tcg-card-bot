@@ -147,7 +147,6 @@ describe("lookupCard", () => {
     expect(embeds).toHaveLength(1);
     const printings = embeds[0]?.fields.find((field) => field.name === "Other printings");
     expect(printings?.value).toContain("TWM 130");
-    expect(printings?.value).toContain("[[Dragapult ex|setId]]");
   });
 
   it("accepts a set name as the hint", async () => {
