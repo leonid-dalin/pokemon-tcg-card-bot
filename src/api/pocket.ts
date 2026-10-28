@@ -3,16 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Card, CardSummary } from "./types.js";
 
-/**
- * Pocket cards from the PocketDecks `pokemon-tcg-pocket-cards` package.
- *
- * TCGdex covers the physical game well but its Pocket catalogue stops before
- * Deluxe Pack: Mega, so cards like Crustle ex are missing entirely. This reads
- * the package's v5 data instead: a collection file per set with printing
- * metadata, and a gameplay file with the attacks.
- */
-// Node's own resolver finds the package from this module, so the bot starts
-// from any working directory, in a checkout or from dist.
+// Resolve package data relative to this module, independent of the working directory.
 const PACKAGE_ROOT = join(
   dirname(createRequire(import.meta.url).resolve("pokemon-tcg-pocket-cards/package.json")),
   "data",
@@ -48,11 +39,11 @@ interface GameplayAttack {
 interface GameplayRecord {
   id: string;
   name: string;
-  /** "Pokémon" or "Trainer". */
+  /** Card category in the source data. */
   type?: string;
-  /** The energy type on a Pokémon, or Item, Supporter, Tool or Stadium on a Trainer. */
+  /** Pokémon type or Trainer subtype. */
   subtype?: string;
-  /** Trainer wording. */
+  /** Rules text for a Trainer card. */
   card_text?: string;
   stage?: string;
   evolves_from?: string;
@@ -110,9 +101,8 @@ function loadIndex(): PocketIndex {
   const cards = new Map<string, Card>();
   const byName = new Map<string, CardSummary[]>();
 
-  // A reprint carries gameplay only under its first printing, which can sit in
-  // another set (Professor's Research a4b-373 reads its text from pa-007), so
-  // gameplay is indexed across every set before any card is built.
+  // Index gameplay separately because a reprint may refer to data stored under
+  // its original printing in another set.
   const collections: CollectionRecord[][] = [];
   const gameplayById = new Map<string, GameplayRecord>();
   for (const setCode of sets) {
@@ -127,7 +117,7 @@ function loadIndex(): PocketIndex {
         gameplayById.set(record.id, record);
       }
     } catch {
-      // a set without gameplay data still lists its printings
+      // Collection records can still provide printings when gameplay is absent.
     }
   }
 
@@ -184,7 +174,7 @@ function loadIndex(): PocketIndex {
 
       cards.set(card.id, card);
 
-      // Every alternate printing is its own card id, and people link those.
+      // Keep alternate printings addressable by their own ids.
       for (const alternate of record.alternate_versions ?? []) {
         const alternateId = alternateIdOf(alternate);
         if (cards.has(alternateId)) continue;
@@ -204,8 +194,7 @@ function loadIndex(): PocketIndex {
     }
   }
 
-  // Built from the finished card map so each id appears once, even when a set
-  // lists a printing that an earlier set already named as its alternate.
+  // Build name results from the final map to avoid duplicate ids.
   for (const card of cards.values()) {
     const key = card.name.toLowerCase();
     const list = byName.get(key) ?? [];
@@ -222,7 +211,7 @@ function loadIndex(): PocketIndex {
   return cached;
 }
 
-/** Name search across every Pocket printing, newest set first. */
+/** Searches Pocket printings by name; exact-name results sort newest first. */
 export function searchPocketByName(name: string): CardSummary[] {
   const { byName } = loadIndex();
   const query = name.trim().toLowerCase();
@@ -244,9 +233,9 @@ export function searchPocketByName(name: string): CardSummary[] {
   return partial;
 }
 
+/** Returns a package record by case-insensitive ID, or undefined if absent. */
 export function getPocketCard(id: string): Card | undefined {
-  // Package keys are lowercase, so an id from a source that cases differently
-  // (TCGdex Pocket sets, a user link) still resolves.
+  // Accept differently cased input without changing package keys.
   return loadIndex().cards.get(id) ?? loadIndex().cards.get(id.toLowerCase());
 }
 

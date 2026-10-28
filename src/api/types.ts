@@ -43,12 +43,11 @@ export interface VariantDetail {
   } | null;
 }
 
-/** Card-level pricing, which some records carry without variant detail. The
- * TCGplayer half may nest per-variant market prices instead of flat averages. */
 export interface TcgplayerVariantPrice {
   marketPrice?: number | null;
 }
 
+/** Card-level pricing, including flat or per-variant TCGplayer records. */
 export interface CardPricing {
   cardmarket?: Pricing | null;
   tcgplayer?: Pricing | ({ [variant: string]: TcgplayerVariantPrice | undefined } & Partial<Pricing>) | null;
@@ -74,9 +73,9 @@ export interface Card {
   resistances?: { type: string; value: string }[];
   attacks?: Attack[];
   abilities?: Ability[];
-  /** Trainer and Energy card wording. */
+  /** Rules text, including Trainer and Energy wording. */
   effect?: string;
-  /** Item, Supporter, Stadium or Tool on a Trainer card. */
+  /** Trainer subtype, such as Item, Supporter, Stadium or Tool. */
   trainerType?: string;
   legal?: { standard?: boolean; expanded?: boolean; unlimited?: boolean };
   set?: CardSetRef;

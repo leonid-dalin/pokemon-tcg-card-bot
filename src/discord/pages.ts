@@ -15,17 +15,17 @@ export interface ListPage {
   perPage: number;
   ownerId: string;
   footer: string;
-  /** Every item carries a category the filter can use. */
+  /** Show category filter controls for this page. */
   filterable?: boolean;
-  /** Category totals over every match, before the cap; the menu promises these. */
+  /** Counts across all matches, used for filter labels and truncation notices. */
   categoryCounts?: Record<string, number>;
-  /** How many cards matched in total, before any cap or category. */
+  /** Total matches before the display cap. */
   universeTotal?: number;
-  /** The most items one view may show. Only a search sets this; ordinary
-   * lists stay complete at any size. */
+  /** Per-view display limit. Searches set this; other lists have no limit. */
   displayCap?: number;
 }
 
+/** Bounded list storage with fixed expiry times; reads do not renew a page. */
 export class PageStore {
   private readonly pages = new Map<string, { page: ListPage; expires: number }>();
   private readonly maxEntries: number;
@@ -38,6 +38,7 @@ export class PageStore {
     this.now = options.now ?? Date.now;
   }
 
+  /** Stores a page under a new token, evicting oldest entries when full. */
   put(page: ListPage): string {
     this.prune();
     while (this.pages.size >= this.maxEntries) {
@@ -53,6 +54,7 @@ export class PageStore {
     return token;
   }
 
+  /** Returns an unexpired page, or undefined for a missing or expired token. */
   get(token: string): ListPage | undefined {
     const entry = this.pages.get(token);
     if (!entry) return undefined;
@@ -87,13 +89,12 @@ export function pageIndexFrom(customId: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-/** The filter a page button carries forward, so a press keeps the narrowed list. */
 export function pageFilterFrom(customId: string): string | undefined {
   const match = /^page:[^:]+:\d+:([^:]+)$/.exec(customId);
   return match?.[1];
 }
 
-/** The truncation notice a view deserves: uncapped views claim nothing. */
+// Add a notice when the matching item count exceeds the view's display cap.
 function viewFooter(page: ListPage, applied: string | undefined): string {
   if (page.displayCap === undefined) return page.footer;
   const total = applied === undefined || applied === "all"
@@ -103,15 +104,14 @@ function viewFooter(page: ListPage, applied: string | undefined): string {
   return `${page.footer} · the first ${page.displayCap} of ${total}`;
 }
 
-/** The display cap for an unfiltered view, shared with the search store. */
+/** Maximum number of search results shown in one view. */
 export const LIST_CAP = 250;
 
 export function listReply(page: ListPage, token: string, index: number, filter?: string): {
   embeds: EmbedBuilder[];
   components: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[];
 } {
-  // Only a search page carries a display cap, and it applies to every view of
-  // that page. Ordinary lists stay complete at any size.
+  // Apply the search cap to both the full list and filtered views.
   const cap = page.displayCap;
   const narrowed =
     filter === undefined || filter === "all"
@@ -121,14 +121,12 @@ export function listReply(page: ListPage, token: string, index: number, filter?:
       : cap
         ? filteredItems(page, filter).slice(0, cap)
         : filteredItems(page, filter);
-  // A filter that matches nothing must not blank the message: keep the full
-  // list and say the choice found nothing.
+  // Reset an empty filter to the full stored item set.
   const emptyChoice = narrowed.length === 0 && page.items.length > 0 && filter !== undefined && filter !== "all";
   const items = emptyChoice ? page.items : narrowed;
   const applied = emptyChoice ? undefined : filter;
   const current = clampIndex({ ...page, items }, index);
-  // A search page derives its truncation notice from the view actually shown:
-  // the all view against the whole universe, a category against its own count.
+  // Use the total for the active view in the truncation notice.
   const footer = viewFooter(page, applied);
   const totalPages = Math.max(1, Math.ceil(items.length / page.perPage));
   const start = current * page.perPage;
@@ -150,10 +148,9 @@ export function listReply(page: ListPage, token: string, index: number, filter?:
   }
 
   if (page.filterable) {
-    // Choices come from the whole page, not the narrowed list, so a reader can
-    // always widen the view again after picking one category.
+    // Keep all filter choices available after narrowing the list.
     const choices = filterChoices(page.items, page.categoryCounts);
-    // A row that can only select the current category would not change the list.
+    // Omit the filter menu when it has no alternative category.
     if (choices.length > 2) {
       const menu = new StringSelectMenuBuilder()
         .setCustomId(`filter:${token}`)
@@ -181,7 +178,6 @@ export const FILTER_LABELS: Record<string, string> = {
   Energy: "Energy",
 };
 
-/** A list item seen through the shared filter helpers, which read only the category. */
 function asGroup(item: ListItem): { representative: { category: string | undefined } } {
   return { representative: { category: item.category } };
 }
@@ -192,9 +188,7 @@ function filteredItems(page: ListPage, filter?: string): ListItem[] {
   return page.items.filter((_, index) => kept.has(groups[index]!));
 }
 
-/** A filter choice per category that would show at least one card. Counts come
- * from the complete universe when the page carries them, so a capped list still
- * promises the real totals. */
+// Use complete match totals for filter labels when the page supplies them.
 function filterChoices(items: ListItem[], universe?: Record<string, number>): { label: string; value: string }[] {
   if (universe) {
     const all = Object.values(universe).reduce((total, count) => total + count, 0);
@@ -209,7 +203,6 @@ function filterChoices(items: ListItem[], universe?: Record<string, number>): { 
   return filterOptions(groups).map((filter) => ({ label: `${FILTER_LABELS[filter] ?? filter} (${counts[filter]})`, value: filter }));
 }
 
-/** The page token carried by a filter menu, which is the whole id after `filter:`. */
 export function filterTokenFrom(customId: string): string | undefined {
   const match = /^filter:([^:]+)$/.exec(customId);
   return match?.[1];

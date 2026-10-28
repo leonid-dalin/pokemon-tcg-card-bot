@@ -1,8 +1,9 @@
+/** Category order used by search filter menus. */
 export const CATEGORIES = ["Pokemon", "Trainer", "Energy"] as const;
 export type Category = (typeof CATEGORIES)[number];
 export type Filter = "all" | Category;
 
-/** Anything with a representative that names its category; a search group or a list item. */
+/** Shared category view of search groups and adapted list items. */
 export type Categorised = { representative: { category: string | undefined } };
 
 export function categoryOf(group: Categorised): Category | undefined {
@@ -13,6 +14,7 @@ export function filterGroups<T extends Categorised>(groups: T[], filter: Filter)
   return filter === "all" ? groups : groups.filter((group) => categoryOf(group) === filter);
 }
 
+/** Counts all groups; unrecognised categories contribute only to the all total. */
 export function groupCounts(groups: Categorised[]): Record<Filter, number> {
   const counts: Record<Filter, number> = { all: groups.length, Pokemon: 0, Trainer: 0, Energy: 0 };
   for (const group of groups) {
@@ -22,7 +24,7 @@ export function groupCounts(groups: Categorised[]): Record<Filter, number> {
   return counts;
 }
 
-/** Only the filters that would show a card, so an empty category is not offered. */
+/** Returns all plus non-empty categories, in menu order. */
 export function filterOptions(groups: Categorised[]): Filter[] {
   const counts = groupCounts(groups);
   return (["all", ...CATEGORIES] as Filter[]).filter((filter) => filter === "all" || counts[filter] > 0);

@@ -5,7 +5,7 @@ import { cardmarketUrl, limitlessUrl } from "../links.js";
 
 export const PRINTING_PREFIX = "printing:";
 export const DETAILS_PREFIX = "details:";
-/** `open:miss` and `open:miss<N>`; the number separates two misses in one reply. */
+/** Prefix for miss menus; the suffix gives each miss in a reply a distinct id. */
 export const MISS_MENU_PREFIX = "open:miss";
 export const MISS_MENU_ID = MISS_MENU_PREFIX;
 const MAX_BUTTONS = 5;
@@ -34,9 +34,7 @@ export function printingRows(alternates: CardSummary[], ownerId?: string): Actio
 }
 
 export function detailsRow(cardId: string, label = "Details"): ActionRowBuilder<ButtonBuilder>[] {
-  // Limitless rides in the Details row: a link button needs no owner check,
-  // because it only opens a page. Cardmarket belongs on the details embed
-  // instead, where a reader asked about the card as a listing.
+  // Only Limitless appears here as a URL button; the details response adds Cardmarket separately.
   const links: ButtonBuilder[] = [];
   const limitless = limitlessUrl(cardId);
   if (limitless) {
@@ -50,10 +48,7 @@ export function detailsRow(cardId: string, label = "Details"): ActionRowBuilder<
   ];
 }
 
-/**
- * The Cardmarket link as its own row, for the details embed reply. Undefined
- * when the card has no Cardmarket listing, such as a Pocket card.
- */
+/** Builds a Cardmarket search row when the card has an indexed set code. */
 export function cardmarketRow(cardId: string, name: string): ActionRowBuilder<ButtonBuilder> | undefined {
   const cardmarket = cardmarketUrl(cardId, name);
   if (!cardmarket) return undefined;
@@ -62,12 +57,7 @@ export function cardmarketRow(cardId: string, name: string): ActionRowBuilder<Bu
   );
 }
 
-/**
- * The closest cards after a miss, as a menu. Anyone may pick one: the card is
- * posted as a new reply, so nothing shared changes. Each menu carries its miss
- * index, because a reply with two misses holds two of them and Discord rejects
- * duplicate custom ids.
- */
+/** Builds a suggestion menu with a distinct component ID for each miss. */
 export function missMenu(closest: CardSummary[], index = 0): ActionRowBuilder<StringSelectMenuBuilder>[] {
   if (closest.length === 0) return [];
   const options = closest.slice(0, MAX_OPTIONS).map((card) => ({
@@ -83,7 +73,7 @@ export function missMenu(closest: CardSummary[], index = 0): ActionRowBuilder<St
 
 export function detailsRows(lookups: { card: { id: string; name: string } }[]): ActionRowBuilder<ButtonBuilder>[] {
   if (lookups.length === 0) return [];
-  // A reply naming the same card twice would otherwise ship two buttons with one id, which Discord rejects.
+  // Deduplicate card ids because Discord requires unique component ids per message.
   const unique = [...new Map(lookups.map((lookup) => [lookup.card.id, lookup])).values()];
   const row = new ActionRowBuilder<ButtonBuilder>();
   for (const lookup of unique.slice(0, MAX_BUTTONS)) {

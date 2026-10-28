@@ -29,7 +29,7 @@ describe("getPocketCard", () => {
     expect(reprint?.attacks).toEqual(original?.attacks);
   });
 
-  // Weakness in Pocket always adds 20 damage, so the package stores only the type.
+  // The adapter renders a supplied weakness type with a +20 modifier.
   it("gives a Pokémon its weakness type with the fixed +20", () => {
     expect(getPocketCard("b4-070")?.weaknesses).toEqual([{ type: "Darkness", value: "+20" }]);
   });

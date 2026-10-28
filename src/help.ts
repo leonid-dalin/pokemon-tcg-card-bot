@@ -2,10 +2,7 @@ import type { EmbedView } from "./render.js";
 
 const COLOUR = 0x5865f2;
 
-/**
- * What the bot shows before anyone has used it. The slash command and a
- * mention both render this, so they cannot describe different bots.
- */
+/** Introductory text shared by slash-command and mention help replies. */
 export const HELP_INTRO =
   "Mention the bot in any message, or run a slash command, and it answers with the card you asked for. The reply starts with the card front: HP, type, stage, what it evolves from, the attacks with their costs, weakness and retreat. Press `Details` for the set, rarity, illustrator, legality and prices.";
 

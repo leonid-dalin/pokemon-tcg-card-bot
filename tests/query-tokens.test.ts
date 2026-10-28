@@ -38,7 +38,6 @@ describe("quoted phrase with a one-letter word", () => {
   });
 
   it("does not match a phrase that only appears inside longer words", () => {
-    // `band` contains `and` but is not the word, so a phrase of "and" must not take it.
     const found = searchCardGroups(`"and a"`);
     for (const group of found) {
       expect(wholeWord(group.representative.text, "and")).toBe(true);

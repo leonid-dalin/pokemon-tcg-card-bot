@@ -2,14 +2,8 @@ import { REST, Routes } from "discord.js";
 import { loadConfig } from "../src/config.js";
 import { loadDotEnv } from "../src/env.js";
 
-/**
- * Rename the bot user.
- *
- *   npm run rename Crustlebot
- *
- * PATCH /users/@me accepts a username for bot accounts only. Discord allows two
- * username changes per hour, so a rejected name costs one of them.
- */
+// Set the authenticated bot's username from the first argument.
+// Usage: npm run rename Crustlebot
 const name = (process.argv[2] ?? "").trim();
 
 if (!name) {

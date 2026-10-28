@@ -4,7 +4,7 @@ const LOCK_PATH = ".bot.pid";
 
 function isRunning(pid: number): boolean {
   try {
-    // Signal 0 performs the permission and existence check without signalling.
+    // Signal 0 checks whether the process exists without sending a signal.
     process.kill(pid, 0);
     return true;
   } catch {
@@ -12,11 +12,7 @@ function isRunning(pid: number): boolean {
   }
 }
 
-/**
- * Refuse to start a second copy. Two instances sharing one token both answer
- * every mention, so a single prompt produces two replies and nothing in the
- * logs looks wrong from either process.
- */
+/** Checks the PID file for an existing instance and registers exit cleanup. */
 export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
   if (existsSync(path)) {
     const pid = Number.parseInt(readFileSync(path, "utf8").trim(), 10);
@@ -31,7 +27,7 @@ export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
     try {
       if (Number.parseInt(readFileSync(path, "utf8").trim(), 10) === process.pid) unlinkSync(path);
     } catch {
-      // already gone
+      // Lock cleanup is best-effort.
     }
   };
   process.on("exit", release);

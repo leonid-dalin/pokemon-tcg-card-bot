@@ -124,8 +124,7 @@ export async function handleCardCommand(
   const setHint = interaction.options.getString("set")?.trim() || undefined;
 
   await interaction.deferReply();
-  // Autocomplete lists card ids, so a picked printing has to be pinned rather
-  // than searched for by the id text as if it were a name.
+  // Look up autocomplete values by card id.
   const lookup = isCardId(query)
     ? await lookupById(context.client, query, { attribution: context.attribution, energyEmoji: context.energyEmoji })
     : await lookupCard(context.client, query, setHint, { attribution: context.attribution, energyEmoji: context.energyEmoji });
@@ -136,7 +135,7 @@ export async function handleCardCommand(
   await interaction.editReply(cardReply(lookup, interaction.user.id));
 }
 
-/** A printing button swaps the card message for the printing it names. */
+/** Replaces the card reply after checking the printing button's optional owner ID. */
 export async function handlePrintingButton(
   context: CommandContext,
   interaction: ButtonInteraction,
@@ -156,8 +155,7 @@ export async function handlePrintingButton(
     await interaction.followUp({ content: `No card matched \`${parsed.cardId}\`.`, flags: MessageFlags.Ephemeral });
     return;
   }
-  // The replacement drops any miss menu the original reply carried, so the
-  // prompt that pointed at it has to go too; an omitted field would keep it.
+  // Clear the original miss prompt when replacing the reply.
   await interaction.editReply({ ...cardReply(lookup, parsed.ownerId), content: null });
 }
 
@@ -173,7 +171,7 @@ export async function handleDetailsButton(
     await interaction.editReply({ content: `No card matched \`${id}\`.` });
     return;
   }
-  // A Pocket card answers with the Pocket source, so the footer has to follow the lookup.
+  // Use the lookup's source attribution for Pocket cards.
   await interaction.editReply({
     embeds: [toEmbed(renderCardDetails(lookup.card, lookup.alternates, { attribution: lookup.attribution ?? context.attribution }))],
     ...(cardmarketRow(lookup.card.id, lookup.card.name) ? { components: [cardmarketRow(lookup.card.id, lookup.card.name)!] } : {}),
@@ -198,12 +196,12 @@ export async function handlePageButton(
   await interaction.update(listReply(page, token, index, pageFilterFrom(interaction.customId)));
 }
 
-/** Narrowing a search to Pokemon, Trainers or Energy is a view change, so it edits the message in place. */
+/** Applies the selected category after checking list ownership and expiry. */
 export async function handleFilterMenu(
   context: CommandContext,
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  // The chosen category is the menu's value; the custom id only carries the token.
+  // The category is the selected value; the custom id carries the page token.
   const filter = interaction.values[0];
   const token = filterTokenFrom(interaction.customId);
   if (!filter || !token) return;
@@ -233,8 +231,7 @@ export async function handleOpenCardMenu(
       return;
     }
   }
-  // The lookup goes to TCGdex, which can outlast the three seconds a component
-  // has to answer.
+  // A card lookup may exceed Discord's three-second interaction response window.
   await interaction.deferReply();
   const lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
@@ -277,10 +274,10 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
   await interaction.reply({ embeds: [toEmbed(helpView())] });
 }
 
-/** Pocket ids are `a1-001`, the package promos `pa-014`, or `p-a-001`; TCGdex ids never start with those sets. */
+/** Pocket set prefixes, including promo ids, distinguish Pocket cards from physical-card ids. */
 const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
 
-/** Both sources get named when the list mixes them, since each row came from one or the other. */
+/** Include Pocket attribution when any listed printing uses a Pocket id. */
 function footerFor(printings: { id: string }[], attribution: string): string {
   const pocket = printings.some((printing) => POCKET_ID.test(printing.id));
   const physical = printings.some((printing) => !POCKET_ID.test(printing.id));
@@ -295,8 +292,7 @@ export async function handlePrintingsCommand(
   const query = interaction.options.getString("name", true).trim();
   await interaction.deferReply();
 
-  // A picked autocomplete entry is a card id, so resolve it first and list that
-  // card's name; a typed name goes straight to the listing.
+  // Autocomplete values are card ids; use the resolved name for the listing.
   const pinned = isCardId(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
   const printings = await printingsOf(context.client, pinned?.card.name ?? query);
   if (printings.length === 0) {
@@ -309,7 +305,7 @@ export async function handlePrintingsCommand(
     items: printingItems(printings),
     perPage: 10,
     ownerId: interaction.user.id,
-    // A mixed list has to credit both sources, or the footer hides where half the rows came from.
+    // Credit Pocket when it appears alongside physical printings.
     footer: footerFor(printings, context.attribution),
   };
   const token = context.pages.put(page);

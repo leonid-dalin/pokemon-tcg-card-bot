@@ -2,22 +2,9 @@ import { writeFileSync } from "node:fs";
 import { TcgdexClient, TcgdexError } from "../src/api/tcgdex.js";
 import type { Card } from "../src/api/types.js";
 
-/**
- * Build the searchable text index.
- *
- * TCGdex only indexes Trainer wording under `effect`. Attacks and abilities are
- * not searchable there, so a phrase like "Put a Trainer card from your discard
- * pile into your hand" finds Old Rod but misses Dedenne, whose attack says the
- * same thing. This walks every card once and keeps the text worth searching.
- *
- * Each entry records its parts as well, so a result can say whether an
- * ability, an attack or Trainer wording matched, and its category, so a search
- * can be narrowed to Pokemon, Trainers or Energy.
- *
- *   npm run index:text
- *
- * It is a few minutes of requests, so run it when a set releases, not on boot.
- */
+// Build src/data/text-index.json from card effects, abilities and attacks.
+// Store named parts for excerpts and categories for search filters.
+// Usage: npm run index:text
 const CONCURRENCY = 6;
 
 interface IndexedPart {
@@ -77,7 +64,7 @@ for (let start = 0; start < summaries.length; start += CONCURRENCY) {
         const category: IndexedCard["category"] = card.category === "Trainer" || card.category === "Energy" ? card.category : "Pokemon";
         return text.length > 0 ? { id: summary.id, name: summary.name, text, category, parts: partsOf(card) } : undefined;
       } catch (error) {
-        // A card the list names but the API does not serve has no text to index.
+        // Skip missing records; other fetch failures prevent replacing the index.
         if (error instanceof TcgdexError && error.status === 404) return undefined;
         failures.push(summary.id);
         return undefined;
@@ -89,9 +76,8 @@ for (let start = 0; start < summaries.length; start += CONCURRENCY) {
   if (done % 1000 < CONCURRENCY) console.log(`inspected ${done}/${summaries.length}, kept ${entries.length}`);
 }
 
-// A partial index would silently drop cards from search, so any failure keeps
-// the previous index. Set the exit code rather than calling process.exit, which
-// trips a libuv assertion while undici is still closing its sockets.
+// Preserve the previous index after non-404 failures.
+// Setting exitCode allows pending transport cleanup to finish.
 if (failures.length > 0) {
   console.error(`${failures.length} cards failed, index left unchanged: ${failures.slice(0, 20).join(", ")}`);
   process.exitCode = 1;

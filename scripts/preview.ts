@@ -4,12 +4,8 @@ import { TcgdexClient } from "../src/api/tcgdex.js";
 import { lookupCard, lookupEmbeds } from "../src/lookup.js";
 import type { EmbedView } from "../src/render.js";
 
-/**
- * Render real lookups without connecting to Discord. Use it to check a card, a
- * mention and the HTML preview before deploying.
- *
- *   npm run preview "Dragapult ex" "Charizard|sv03.5" "Mega Kangaskhan ex"
- */
+// Print lookup embed JSON and write HTML previews without a Discord connection.
+// Usage: npm run preview "Dragapult ex" "Charizard|sv03.5"
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")

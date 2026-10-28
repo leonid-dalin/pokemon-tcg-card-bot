@@ -1,9 +1,9 @@
 export interface BucketOptions {
-  /** How many mentions one member may fire back to back. */
+  /** Token capacity of a full bucket. Defaults to 3. */
   capacity?: number;
-  /** Seconds to regain one mention. */
+  /** Seconds required to refill one token. Defaults to 5. */
   refillSeconds?: number;
-  /** Members tracked at once before full buckets are forgotten. */
+  /** Maximum tracked keys before the oldest buckets are removed. Defaults to 10000. */
   maxKeys?: number;
 }
 
@@ -12,11 +12,7 @@ interface Bucket {
   updated: number;
 }
 
-/**
- * Token bucket per member per channel. A fixed cooldown is the wrong shape for
- * a card bot: someone testing four cards in a row is normal, while one person
- * pasting twenty is not. A bucket allows the burst and still bounds the rate.
- */
+/** Token bucket with bounded storage for caller-supplied keys. */
 export class MentionBudget {
   private readonly capacity: number;
   private readonly refillMs: number;
@@ -29,15 +25,12 @@ export class MentionBudget {
     this.maxKeys = Math.max(1, options.maxKeys ?? 10_000);
   }
 
-  /** Number of members currently tracked. */
+  /** Number of keys currently tracked. */
   get size(): number {
     return this.buckets.size;
   }
 
-  /**
-   * A bucket that has refilled is the same as no bucket, so it can go. Without
-   * this every member who ever mentioned a card stays in memory.
-   */
+  // Remove refilled buckets before evicting the oldest active key.
   private prune(now: number): void {
     if (this.buckets.size < this.maxKeys) return;
     for (const [key, bucket] of this.buckets) {
@@ -52,7 +45,7 @@ export class MentionBudget {
     }
   }
 
-  /** Returns true when the mention may be answered, false with the wait in seconds. */
+  /** Consumes a token or returns a retry delay in seconds; `now` is in milliseconds. */
   take(key: string, now = Date.now()): { allowed: true } | { allowed: false; retryAfterSeconds: number } {
     if (!this.buckets.has(key)) this.prune(now);
     const bucket = this.buckets.get(key) ?? { tokens: this.capacity, updated: now };

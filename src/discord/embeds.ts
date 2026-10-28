@@ -1,7 +1,6 @@
 import { EmbedBuilder } from "discord.js";
 import type { EmbedView } from "../render.js";
 
-/** Convert the plain view model into a discord.js embed. */
 export function toEmbed(view: EmbedView): EmbedBuilder {
   const embed = new EmbedBuilder().setColor(view.color).setTitle(view.title);
   if (view.url) embed.setURL(view.url);

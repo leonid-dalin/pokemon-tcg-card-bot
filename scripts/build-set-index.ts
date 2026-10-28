@@ -1,14 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { TcgdexClient } from "../src/api/tcgdex.js";
 
-/**
- * Build the set index the resolver needs: id, name, PTCGL-style abbreviation and
- * release date for every set. TCGdex only publishes those on the per-set
- * endpoint, so this is the one place that pays for 220 requests. Run it when a
- * new set releases.
- *
- *   npm run index:sets
- */
+// Fetch set details and write src/data/set-index.json.
+// Failed detail requests retain the summary ID and name without optional metadata.
+// Usage: npm run index:sets
 const client = new TcgdexClient({ timeoutMs: 20_000, retries: 3 });
 const sets = await client.listSets();
 

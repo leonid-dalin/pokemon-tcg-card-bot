@@ -17,10 +17,7 @@ const deckOf = (rows: string[]) => parseDecklist(rows.join("\n"))!;
 
 const FILLER = ["4 Arven SVI 166", "4 Nest Ball SVI 181", "4 Ultra Ball SVI 196", "4 Switch SVI 194"];
 
-/**
- * Exact-path stub keyed on `path?name=` decoded, so two ids cannot blur into
- * each other and a `+` in the query is not mistaken for a literal.
- */
+/** Routes requests by pathname and the decoded name query value. */
 function stubExact(routes: Record<string, unknown>) {
   vi.stubGlobal("fetch", async (input: string | URL) => {
     const url = new URL(String(input));
@@ -33,7 +30,7 @@ function stubExact(routes: Record<string, unknown>) {
 
 describe("printed code resolves only a card with the line's name", () => {
   it("skips a candidate at that number carrying another card, then resolves by name", async () => {
-    // TWM 130 is Dragapult ex; here the number belongs to another card.
+    // The first lookup candidate has number 130 but a different name.
     stubExact({
       "/v2/en/cards/sv06-130": card("sv06-130", "Something Else"),
       "/v2/en/cards?name=Dragapult ex": [

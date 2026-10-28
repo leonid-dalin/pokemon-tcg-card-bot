@@ -4,16 +4,9 @@ import { REST, Routes } from "discord.js";
 import { loadConfig } from "../src/config.js";
 import { loadDotEnv } from "../src/env.js";
 
-/**
- * Set the bot's profile picture.
- *
- *   npm run avatar "assets/avatar.jpg"
- *
- * Discord takes the image as a data URL on PATCH /users/@me, so the file is
- * inlined and base64 encoded here. It must be under 8 MB and one of png, jpg,
- * jpeg, webp or gif; a square image is best because Discord masks avatars to a
- * circle.
- */
+// Upload a local image to the bot profile as a base64 data URL.
+// Check the extension and file size before making the request.
+// Usage: npm run avatar "assets/avatar.jpg"
 const MIME_BY_EXTENSION: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",

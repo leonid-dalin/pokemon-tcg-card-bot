@@ -21,16 +21,12 @@ export interface MessageContext {
   selfId: () => string | undefined;
 }
 
-/** The fields of a Discord message the handler reads. */
 export type IncomingMessage = Pick<
   Message,
   "author" | "webhookId" | "system" | "content" | "attachments" | "embeds" | "stickers" | "channelId" | "reply"
 >;
 
-/**
- * Build the MessageCreate handler. Each message gets at most one reply: a
- * decklist, an `@bot search` answer, or the cards its `[[...]]` mentions name.
- */
+/** Routes eligible messages to help, decklist, search or card replies. */
 export function createMessageHandler(context: MessageContext): (message: IncomingMessage) => Promise<void> {
   const { api, config, budget } = context;
   let warnedAboutContent = false;
@@ -40,10 +36,8 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     if (message.author.bot || message.webhookId) return;
     if (message.system) return;
 
-    // With the Message Content intent switched off Discord still delivers the
-    // event but strips the text, which looks like the bot ignoring everyone.
-    // Attachments, embeds and stickers are legitimately text-free, so they are
-    // not evidence of a missing intent.
+    // Warn once when plain text is missing without attachments, embeds or stickers.
+    // Discord may strip the text when the Message Content intent is disabled.
     if (!message.content) {
       const hasRichContent =
         message.attachments.size > 0 || message.embeds.length > 0 || message.stickers.size > 0;
@@ -56,22 +50,15 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       return;
     }
 
-    // Work out what the message asks for before spending anything on it.
     const deck = config.decklistEnabled ? parseDecklist(message.content) : undefined;
-    // Slash commands need the command picker, which is awkward on a phone. A
-    // mention plus the word search does the same job from the message box.
     const selfId = context.selfId();
-    // Help is checked before search, because a bare mention is a help request
-    // and the search reader answers undefined for it.
+    // A bare bot mention is help; parse it before checking for a search query.
     const wantsHelp = !deck && selfId ? parseHelpCommand(message.content, selfId) : undefined;
     const searchQuery = !deck && !wantsHelp && selfId ? parseSearchCommand(message.content, selfId) : undefined;
     const mentions = deck || wantsHelp || searchQuery !== undefined ? [] : extractMentions(message.content);
     if (!deck && !wantsHelp && searchQuery === undefined && mentions.length === 0) return;
 
-    // Every reply draws on the same budget, so a decklist or a search cannot be
-    // used to get round the limit on mentions. Keyed per member, not per
-    // channel: a channel-wide budget lets one person's request swallow
-    // everyone else's.
+    // Apply the same per-member, per-channel budget to every message reply.
     if (budget) {
       const verdict = budget.take(`${message.channelId}:${message.author.id}`);
       if (!verdict.allowed) {
@@ -124,7 +111,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       await message.reply({ ...mentionReply(found, misses, message.author.id) });
     } catch (error) {
       console.error("mention lookup failed", error);
-      // A dead API used to leave the channel with nothing at all.
+      // Send a visible error when mention lookup fails.
       await message.reply({ content: "Card lookup failed, try again in a moment." }).catch(() => {});
     }
   };

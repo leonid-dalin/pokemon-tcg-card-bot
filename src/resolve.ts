@@ -5,7 +5,7 @@ interface RankedPrinting {
   score: number;
 }
 
-/** Fold case, accents and spacing so "Pokémon" and "pokemon" match. */
+/** Normalises case, accents, apostrophes and whitespace for name comparison. */
 export function normaliseName(value: string): string {
   return value
     .normalize("NFKD")
@@ -16,12 +16,13 @@ export function normaliseName(value: string): string {
     .trim();
 }
 
-/** Card ids are `<setId>-<localId>`, so the set id is everything before the last dash. */
+/** Extracts the set prefix before the final hyphen, or an empty string if absent. */
 export function setIdOf(cardId: string): string {
   const at = cardId.lastIndexOf("-");
   return at > 0 ? cardId.slice(0, at) : "";
 }
 
+/** Matches an exact set ID or a prefix/suffix hint after normalisation. */
 export function setIdMatches(cardId: string, hint: string): boolean {
   const setId = normaliseName(setIdOf(cardId));
   const wanted = normaliseName(hint);
@@ -30,9 +31,8 @@ export function setIdMatches(cardId: string, hint: string): boolean {
 }
 
 /**
- * Score a printing against the query. Exact beats prefix beats substring, and
- * the length penalty prefers the shortest name that still matches, so
- * "Dragapult ex" does not lose to "Dragapult ex XY Promos".
+ * Scores normalised names by exact, prefix, substring, then multiword matching.
+ * A length penalty favours shorter partial matches. Zero means no match.
  */
 export function scoreCandidate(query: string, candidate: string): number {
   const q = normaliseName(query);
@@ -48,9 +48,8 @@ export function scoreCandidate(query: string, candidate: string): number {
 }
 
 /**
- * Rank printings for a query by name score alone. The sort is stable, so equal
- * scores keep the upstream order. That order is not by date, so callers that
- * pick one printing sort by release date afterwards.
+ * Filters by the optional partial set hint and ranks positive name matches.
+ * Equal scores retain input order; this function does not sort by release date.
  */
 export function rankPrintings(
   summaries: CardSummary[],
@@ -66,10 +65,7 @@ export function rankPrintings(
 }
 
 /**
- * Set ids begin with their series, and the search API returns printings in no
- * useful order, so a plain name like "charizard" otherwise resolves to a 2009
- * card. This ranks series oldest to newest; the longest prefix wins so "swshp"
- * is Sword and Shield rather than something else that starts with "s".
+ * Fallback series order for sets without an indexed release date.
  */
 const SERIES_ORDER = [
   "base",
@@ -90,6 +86,7 @@ const SERIES_ORDER = [
   "30th",
 ] as const;
 
+/** Returns the highest matching series index, or -1 for an unknown series. */
 export function seriesRank(cardId: string): number {
   const setId = normaliseName(setIdOf(cardId));
   let rank = -1;

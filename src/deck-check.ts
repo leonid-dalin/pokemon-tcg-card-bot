@@ -7,24 +7,18 @@ import { setRecency } from "./set-index.js";
 
 export interface ResolvedLine {
   line: DeckLine;
-  /** Absent when the line names no card either source knows. */
+  /** Omitted when the line does not resolve to a card. */
   card?: Card;
 }
 
-/**
- * Lines resolve at most four at a time, so one pasted list does not open
- * dozens of connections at once.
- */
+// Limit upstream lookups while resolving each deck.
 const RESOLVE_CONCURRENCY = 4;
 
 const entryByCode = new Map(
   SET_INDEX.filter((entry) => entry.code).map((entry) => [normaliseName(entry.code as string), entry]),
 );
 
-/**
- * Resolve each decklist line to a card. Lines resolve at most four at a time so
- * one pasted list does not open dozens of connections at once.
- */
+/** Resolves decklist lines with at most four concurrent line lookups. */
 export async function resolveDeckCards(client: TcgdexClient, deck: ParsedDeck): Promise<ResolvedLine[]> {
   const resolved: ResolvedLine[] = [];
   for (let start = 0; start < deck.lines.length; start += RESOLVE_CONCURRENCY) {
@@ -38,22 +32,20 @@ export async function resolveDeckCards(client: TcgdexClient, deck: ParsedDeck): 
   return resolved;
 }
 
-/** A set numbers basic Energy as `Psychic Energy`, while a decklist writes `Basic {P} Energy` or `Basic Psychic Energy`. */
+// Decklists and set records use different names for basic Energy.
 const POKEMON_TYPES = ["Grass", "Fire", "Water", "Lightning", "Psychic", "Fighting", "Darkness", "Metal", "Fairy", "Dragon", "Colorless"];
 const TYPE_LETTERS: Record<string, string> = { G: "Grass", R: "Fire", W: "Water", L: "Lightning", P: "Psychic", F: "Fighting", D: "Darkness", M: "Metal", Y: "Fairy", N: "Dragon", C: "Colorless" };
 
-/** Fold an energy name to the type it holds, so the three spellings compare equal. */
 function energyName(value: string): string {
   const folded = normaliseName(value);
   const bracketed = /basic\s*\{([a-z])\}/.exec(folded);
   if (bracketed) return normaliseName(TYPE_LETTERS[bracketed[1]!.toUpperCase()] ?? folded);
-  // `Basic Psychic Energy` and the set's own `Psychic Energy` name the same card.
+  // Ignore the optional Basic prefix and Energy suffix when comparing types.
   const named = /^(?:basic\s+)?([a-z]+)(?:\s+energy)?$/.exec(folded);
   if (named && POKEMON_TYPES.some((type) => normaliseName(type) === named[1])) return named[1]!;
   return folded;
 }
 
-/** True when a card answers to the line's name, including the energy spellings. */
 function sameName(cardName: string, lineName: string): boolean {
   if (normaliseName(cardName) === normaliseName(lineName)) return true;
   return energyName(cardName) === energyName(lineName) && energyName(cardName) !== normaliseName(cardName);
@@ -61,26 +53,19 @@ function sameName(cardName: string, lineName: string): boolean {
 
 async function resolveLine(client: TcgdexClient, line: DeckLine): Promise<Card | undefined> {
   if (line.setCode && line.number) {
-    // A PTCGL code is the printed code, and the set index maps it to the card
-    // id prefix. The set id is not always that prefix: SVI prints as sv01.
+    // Printed set codes can map to a different TCGdex card-id prefix.
     const prefix = entryByCode.get(normaliseName(line.setCode))?.id ?? line.setCode;
     const bare = line.number.replace(/^0+(?=\d)/, "");
     for (const candidate of [`${prefix}-${bare}`, `${prefix}-${bare.padStart(3, "0")}`]) {
       const card = await client.getCard(candidate).catch(() => undefined);
-      // A printing a set reuses for another card would otherwise be accepted on
-      // its number alone, so the name has to agree.
+      // Confirm that the supplied set and number resolve to the requested name.
       if (card && sameName(card.name, line.name)) return card;
     }
   }
   return resolveByName(client, line.name);
 }
 
-/**
- * A fallback by name. The printed code can name a printing TCGdex does not
- * serve, so the name decides. A tie breaks on the name score, then on whether
- * the printing has artwork, then on the newest set, the order a card lookup
- * uses, so the same name resolves to the same printing either way.
- */
+// Fall back to name matching when the printed set code or number is unavailable.
 async function resolveByName(client: TcgdexClient, name: string): Promise<Card | undefined> {
   const cards = await client.searchByName(name).catch(() => []);
   const ranked = rankPrintings(cards, name);
@@ -93,12 +78,11 @@ async function resolveByName(client: TcgdexClient, name: string): Promise<Card |
   });
   if (!best) return undefined;
   const card = await client.getCard(best.id).catch(() => undefined);
-  // A prefix or loose match that names another card cannot supply legality or
-  // price for the line, so it counts as unresolved.
+  // Reject approximate search results whose card name does not match the line.
   return card && sameName(card.name, name) ? card : undefined;
 }
 
-/** Basic Energy earns no prize and never rotates, so the deck check skips it. */
+/** Recognises Basic Energy by category and supported name forms. */
 export function isBasicEnergy(card: Card): boolean {
   if (card.category !== "Energy") return false;
   return /^basic\s/i.test(card.name) || /^basic \{/i.test(card.name) || /^(grass|fire|water|lightning|psychic|fighting|darkness|metal|fairy|dragon|colorless) energy$/i.test(card.name);

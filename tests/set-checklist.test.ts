@@ -4,7 +4,7 @@ import type { TcgdexClient } from "../src/api/tcgdex.js";
 import { PageStore } from "../src/discord/pages.js";
 import { handleSetCommand } from "../src/discord/commands.js";
 
-/** The set shape TCGdex returns for `/v2/en/sets/me04`: 122 card stubs. */
+/** Builds a set response with the requested number of card stubs. */
 function fakeSet(count: number): CardSetRef & { cards: { id: string; localId: string; name: string; image?: string }[] } {
   return {
     id: "me04",
