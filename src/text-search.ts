@@ -89,7 +89,7 @@ export function searchCardText(query: string, limit = Number.POSITIVE_INFINITY):
 export function searchCardGroups(query: string): TextGroup[] {
   const groups = new Map<string, { card: IndexedCard; printings: number }>();
   for (const { card } of findHits(query)) {
-    const key = `${normaliseName(card.name)}\u0000${card.text}`;
+    const key = normaliseName(card.name);
     const group = groups.get(key);
     if (!group) {
       groups.set(key, { card, printings: 1 });

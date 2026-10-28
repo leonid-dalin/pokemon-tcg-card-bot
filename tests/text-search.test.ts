@@ -10,10 +10,10 @@ describe("text index", () => {
 });
 
 describe("searchCardText", () => {
-  it("groups results by normalised name and exact text", () => {
+  it("groups all printings by normalised card name", () => {
     const groups = searchCardGroups("draw 2 cards");
     const hits = searchCardText("draw 2 cards");
-    const expected = new Set(hits.map((hit) => `${normaliseName(hit.name)}|${hit.text}`));
+    const expected = new Set(hits.map((hit) => normaliseName(hit.name)));
     expect(groups.length).toBe(expected.size);
   });
 
@@ -22,12 +22,17 @@ describe("searchCardText", () => {
     expect(group).toMatchObject({ printings: 3, representative: { id: "me02.5-209" } });
   });
 
-  it("returns each repeated card name once for a text query", () => {
+  it("returns one group per normalised card name", () => {
     const groups = searchCardGroups("discard pile into your hand");
-    const names = groups.map((group) => `${normaliseName(group.representative.name)}|${group.representative.text}`);
+    const names = groups.map((group) => normaliseName(group.representative.name));
     expect(new Set(names).size).toBe(names.length);
   });
 
+  it("uses the newest printing even when its text differs", () => {
+    const group = searchCardGroups("discard pile into your hand").find((entry) => entry.representative.name === "VS Seeker");
+    expect(group?.representative.id).toBe("xy6-110");
+    expect(group?.printings).toBe(4);
+  });
   it("selects the sentence with the most query words and marks matches", () => {
     expect(matchingSentence(
       "Search your deck for a Supporter card, reveal it, and put it into your hand. Then, shuffle your deck.",
