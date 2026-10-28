@@ -25,6 +25,8 @@ export interface LookupOptions {
   attribution?: string;
   energyEmoji?: Record<string, string>;
   alternateLimit?: number;
+  /** Per-server game preference; forcing a game with a hint or exact ID always wins. */
+  gamePreference?: { allowed: import("./settings-store.js").CardGameScope; default: import("./settings-store.js").CardGameDefault };
 }
 
 // Display order: name score, image availability, set recency, then input order.
@@ -198,13 +200,21 @@ export async function lookupCard(
     return lookupById(client, setHint.trim(), options);
   }
 
-  // A Pocket alias selects the package catalogue.
+  // A Pocket alias selects the package catalogue; forcing a game always wins.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
   if (pocketOnly) return lookupPocket(query, setHint, options);
+  const preference = options.gamePreference;
+  if (preference?.allowed === "pocket") return lookupPocket(query, setHint, options);
   const resolved = setHint ? resolveSetHint(setHint) : undefined;
 
   // Reject unknown set hints before the name search.
   if (setHint && !resolved) return undefined;
+  // A set hint pins a physical printing, so the preference's default game applies
+  // only to unhinted names.
+  if (preference?.allowed === "both" && preference.default === "pocket" && !setHint) {
+    const pocket = lookupPocket(query, undefined, options);
+    if (pocket) return pocket;
+  }
   const summaries = await searchWithAccents(client, query);
   const matched = rankPrintings(summaries, query, resolved);
 
@@ -212,8 +222,11 @@ export async function lookupCard(
   const ranked = resolved
     ? matched.filter((card) => normaliseName(setIdOf(card.id)) === normaliseName(resolved))
     : matched;
-  // Try the package when TCGdex has no matching candidates.
-  if (ranked.length === 0) return lookupPocket(query, setHint, options);
+  // Try the package when TCGdex has no matching candidates and the server allows it.
+  if (ranked.length === 0) {
+    if (preference?.allowed === "ptcg") return undefined;
+    return lookupPocket(query, setHint, options);
+  }
 
   const ordered = orderForDisplay(ranked, query);
   const [primary] = ordered;

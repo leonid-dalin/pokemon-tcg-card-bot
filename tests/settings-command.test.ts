@@ -163,4 +163,30 @@ describe("settings command", () => {
     expect(store.deleted).toBe(true);
     expect(replies[0]?.content).toContain("reset");
   });
+
+  it("shows the card game scope and preferred game", async () => {
+    const store = fakeStore({ cardGames: "both", defaultCardGame: "pocket" });
+    const { interaction, replies } = fakeInteraction(["view"]);
+    await run(store, interaction);
+    expect(replies[0]?.content).toContain("both games");
+    expect(replies[0]?.content).toContain("Pocket card wins");
+  });
+
+  it("saves the allowed games and default game", async () => {
+    const store = fakeStore();
+    let run2 = fakeInteraction(["games", "allowed"], { games: "pocket" });
+    await run(store, run2.interaction);
+    expect(store.updates.at(-1)).toEqual({ cardGames: "pocket" });
+
+    run2 = fakeInteraction(["games", "default"], { game: "ptcg" });
+    await run(store, run2.interaction);
+    expect(run2.replies[0]?.content).toContain("both games are allowed");
+    expect(store.updates).toHaveLength(1);
+
+    run2 = fakeInteraction(["games", "allowed"], { games: "both" });
+    await run(store, run2.interaction);
+    run2 = fakeInteraction(["games", "default"], { game: "ptcg" });
+    await run(store, run2.interaction);
+    expect(store.updates.at(-1)).toEqual({ defaultCardGame: "ptcg" });
+  });
 });

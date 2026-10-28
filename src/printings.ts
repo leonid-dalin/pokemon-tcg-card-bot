@@ -39,13 +39,14 @@ const pocketKey = (id: string): string => (isPocketCard({ id, name: "" } as neve
  * Package records take precedence over upstream aliases of the same Pocket ID.
  * Upstream failures still allow package results.
  */
-export async function printingsOf(client: TcgdexClient, name: string): Promise<Printing[]> {
+export async function printingsOf(client: TcgdexClient, name: string, allowed: "ptcg" | "pocket" | "both" = "both"): Promise<Printing[]> {
   const wanted = normaliseName(name);
   if (!wanted) return [];
 
   const rows: { printing: Printing; date?: string; fromPackage: boolean }[] = [];
   try {
     for (const card of await searchWithAccents(client, name)) {
+      if (allowed === "pocket") continue;
       if (normaliseName(card.name) !== wanted) continue;
       const date = releaseDateOf(card.id);
       rows.push({ printing: { id: card.id, name: card.name, setLabel: labelOf(card.id, date) }, date, fromPackage: false });
@@ -55,6 +56,7 @@ export async function printingsOf(client: TcgdexClient, name: string): Promise<P
   }
 
   for (const card of searchPocketByName(name)) {
+    if (allowed === "ptcg") continue;
     if (normaliseName(card.name) !== wanted) continue;
     const date = releaseDateOf(card.id);
     rows.push({ printing: { id: card.id, name: card.name, setLabel: labelOf(card.id, date) }, date, fromPackage: true });

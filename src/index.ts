@@ -39,7 +39,7 @@ const settings = new SettingsStore(
   { messageReplies: config.mentionEnabled, decklistReplies: config.decklistEnabled, cooldownSeconds: config.mentionCooldownSeconds },
 );
 const api = new TcgdexClient();
-const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore() };
+const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore(), settings };
 
 const client = new Client(clientOptions(config));
 const budget =

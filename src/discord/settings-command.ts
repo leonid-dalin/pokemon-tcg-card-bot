@@ -1,4 +1,5 @@
 import {
+  ChannelType,
   InteractionContextType,
   MessageFlags,
   PermissionFlagsBits,
@@ -47,15 +48,60 @@ export const settingsCommand = new SlashCommandBuilder()
         sub
           .setName("add")
           .setDescription("Allow automatic replies in a channel")
-          .addChannelOption((option) => option.setName("channel").setDescription("the channel to allow").setRequired(true)),
+          .addChannelOption((option) =>
+            option
+              .setName("channel")
+              .setDescription("the channel to allow")
+              .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+              .setRequired(true),
+          ),
       )
       .addSubcommand((sub) =>
         sub
           .setName("remove")
           .setDescription("Stop automatic replies in a channel")
-          .addChannelOption((option) => option.setName("channel").setDescription("the channel to stop").setRequired(true)),
+          .addChannelOption((option) =>
+            option
+              .setName("channel")
+              .setDescription("the channel to stop")
+              .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+              .setRequired(true),
+          ),
       )
       .addSubcommand((sub) => sub.setName("clear").setDescription("Clear the channel list; with only selected, replies stop everywhere")),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName("games")
+      .setDescription("Choose which card games lookups answer from")
+      .addSubcommand((sub) =>
+        sub
+          .setName("allowed")
+          .setDescription("Which games lookups may answer from")
+          .addStringOption((option) =>
+            option
+              .setName("games")
+              .setDescription("the physical game, Pocket, or both")
+              .addChoices(
+                { name: "physical game only", value: "ptcg" },
+                { name: "Pocket only", value: "pocket" },
+                { name: "both games", value: "both" },
+              )
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("default")
+          .setDescription("Which game wins when a name exists in both; needs both games allowed")
+          .addStringOption((option) =>
+            option
+              .setName("game")
+              .setDescription("the game preferred for ambiguous names")
+              .addChoices({ name: "physical game", value: "ptcg" }, { name: "Pocket", value: "pocket" })
+              .setRequired(true),
+          ),
+      ),
   )
   .addSubcommand((sub) =>
     sub
@@ -108,13 +154,21 @@ export async function handleSettingsCommand(
       settings.autoReplyChannelMode === "all"
         ? "every channel"
         : settings.selectedChannelIds.length
-          ? settings.selectedChannelIds.map((id) => `<#${id}>`).join(", ")
+          ? settings.selectedChannelIds.length > 10
+            ? `${settings.selectedChannelIds.slice(0, 10).map((id) => `<#${id}>`).join(", ")} and ${settings.selectedChannelIds.length - 10} more`
+            : settings.selectedChannelIds.map((id) => `<#${id}>`).join(", ")
           : "none selected, so automatic replies are off everywhere";
+    const games = settings.cardGames === "both" ? "both games" : settings.cardGames === "ptcg" ? "the physical game only" : "Pocket only";
+    const preferred =
+      settings.cardGames === "both"
+        ? ` When a name exists in both, ${settings.defaultCardGame === "ptcg" ? "the physical card" : "the Pocket card"} wins.`
+        : "";
     const lines = [
       `Message replies: ${settings.messageReplies ? "on" : "off"}`,
       `Decklist replies: ${settings.decklistReplies ? "on" : "off"}`,
       `Automatic-reply channels: ${channels}`,
       `Cooldown between replies per member: ${settings.cooldownSeconds === 0 ? "off" : `${settings.cooldownSeconds}s`}`,
+      `Card games: ${games}.${preferred} A hint like [[name|pocket]] still forces its game.`,
     ];
     if (!context.mentionEnabled) {
       lines.push("This deployment has mention replies switched off, so nothing here turns them back on.");
@@ -179,6 +233,35 @@ export async function handleSettingsCommand(
 
   if (sub === "channels:clear") {
     await apply({ selectedChannelIds: [] }, "Channel list cleared. With the selected mode on, automatic replies are off everywhere.");
+    return;
+  }
+
+  if (sub === "games:allowed") {
+    const games = interaction.options.getString("games", true) as "ptcg" | "pocket" | "both";
+    await apply(
+      { cardGames: games },
+      games === "both"
+        ? "Lookups answer from both games. Use the default-game setting to pick which wins on a shared name."
+        : games === "ptcg"
+          ? "Lookups answer from the physical game only. A hint like [[name|pocket]] still forces Pocket."
+          : "Lookups answer from Pocket only. A physical set hint still forces the physical game.",
+    );
+    return;
+  }
+
+  if (sub === "games:default") {
+    const game = interaction.options.getString("game", true) as "ptcg" | "pocket";
+    const current = context.settings.get(guildId);
+    if (current.cardGames !== "both") {
+      await reply("A default game only matters when both games are allowed. Set the allowed games to both first.");
+      return;
+    }
+    await apply(
+      { defaultCardGame: game },
+      game === "ptcg"
+        ? "Names that exist in both games now answer with the physical card."
+        : "Names that exist in both games now answer with the Pocket card.",
+    );
     return;
   }
 

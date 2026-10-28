@@ -30,6 +30,8 @@ export interface EffectiveGuildSettings {
   autoReplyChannelMode: "all" | "selected";
   selectedChannelIds: string[];
   cooldownSeconds: number;
+  cardGames: "ptcg" | "pocket" | "both";
+  defaultCardGame: "ptcg" | "pocket";
 }
 
 export type IncomingMessage = Pick<
@@ -112,6 +114,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       if (guild.autoReplyChannelMode === "selected" && !guild.selectedChannelIds.includes(replyChannelId)) return;
     }
     const decklistOn = guild ? guild.decklistReplies : config.decklistEnabled;
+    const gamePreference = guild ? { allowed: guild.cardGames, default: guild.defaultCardGame } : undefined;
 
     const deck = decklistOn ? parseDecklist(message.content) : undefined;
     const selfId = context.selfId();
@@ -193,6 +196,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         const lookup = await lookupCard(api, mention.name, mention.setHint, {
           attribution: config.attribution,
           energyEmoji: config.energyEmoji,
+          ...(gamePreference ? { gamePreference } : {}),
         });
         console.log(`mention lookup -> ${lookup ? lookup.card.id : "no match"}`);
         if (lookup) found.push(mention.imageOnly ? { ...lookup, imageOnly: true } : lookup);

@@ -99,7 +99,7 @@ describe("SettingsStore", () => {
   it("refuses a database marked current without its table", () => {
     const path = tempPath();
     const raw = new DatabaseSync(path);
-    raw.exec("PRAGMA user_version = 1");
+    raw.exec("PRAGMA user_version = 2");
     raw.close();
     expect(() => new SettingsStore(path, DEFAULTS)).toThrow("guild_settings table is missing");
   });
@@ -140,6 +140,49 @@ describe("SettingsStore", () => {
     const second = new SettingsStore(nested, DEFAULTS);
     expect(second.get("g1").cooldownSeconds).toBe(7);
     second.close();
+  });
+
+  it("preserves both writers' fields when two connections patch the same guild", () => {
+    const path = tempPath();
+    const writerA = new SettingsStore(path, DEFAULTS);
+    const writerB = new SettingsStore(path, DEFAULTS);
+    writerA.update("g1", { cooldownSeconds: 0 });
+    writerB.update("g1", { decklistReplies: true });
+
+    for (const store of [writerA, writerB]) {
+      expect(store.get("g1")).toMatchObject({ cooldownSeconds: 0, decklistReplies: true });
+      store.close();
+    }
+  });
+
+  it("defaults the card game scope to both with the physical game preferred", () => {
+    const store = new SettingsStore(undefined, DEFAULTS);
+    expect(store.get("g1")).toMatchObject({ cardGames: "both", defaultCardGame: "ptcg" });
+  });
+
+  it("saves the card game scope and default", () => {
+    const store = new SettingsStore(undefined, DEFAULTS);
+    store.update("g1", { cardGames: "pocket" });
+    store.update("g1", { cardGames: "both", defaultCardGame: "pocket" });
+    expect(store.get("g1")).toMatchObject({ cardGames: "both", defaultCardGame: "pocket" });
+    expect(() => store.update("g1", { cardGames: "neither" as never })).toThrow("ptcg, pocket or both");
+    expect(() => store.update("g1", { defaultCardGame: "both" as never })).toThrow("ptcg or pocket");
+  });
+
+  it("migrates a version 1 database and keeps its rows", () => {
+    const path = tempPath();
+    const v1 = new SettingsStore(path, DEFAULTS);
+    v1.update("g1", { decklistReplies: true, cooldownSeconds: 9 });
+    v1.close();
+    const raw = new DatabaseSync(path);
+    raw.exec("PRAGMA user_version = 1");
+    raw.exec("ALTER TABLE guild_settings DROP COLUMN card_games");
+    raw.exec("ALTER TABLE guild_settings DROP COLUMN default_card_game");
+    raw.close();
+
+    const migrated = new SettingsStore(path, DEFAULTS);
+    expect(migrated.get("g1")).toMatchObject({ decklistReplies: true, cooldownSeconds: 9, cardGames: "both", defaultCardGame: "ptcg" });
+    migrated.close();
   });
 
   it("merges against a row another writer commits while the lock is held", async () => {
