@@ -12,6 +12,7 @@ import { renderCardDetails, renderSet } from "../render.js";
 import { printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
 import { printingItems, printingsOf } from "../printings.js";
+import { setChecklistReply } from "../set-checklist.js";
 import { printingIdFrom, detailsIdFrom, MISS_MENU_ID } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
@@ -51,6 +52,12 @@ export const setCommand = new SlashCommandBuilder()
       .setDescription("Set id, for example sv08.5")
       .setRequired(true)
       .setAutocomplete(true),
+  )
+  .addBooleanOption((option) =>
+    option
+      .setName("checklist")
+      .setDescription("List every card in the set instead of the set summary")
+      .setRequired(false),
   );
 
 export const searchCommand = new SlashCommandBuilder()
@@ -214,10 +221,15 @@ export async function handleSetCommand(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   const id = interaction.options.getString("id", true).trim();
+  const checklist = interaction.options.getBoolean("checklist") ?? false;
 
   await interaction.deferReply();
   try {
     const set = await context.client.getSet(id);
+    if (checklist) {
+      await interaction.editReply(setChecklistReply(set, interaction.user.id, context.attribution, context.pages));
+      return;
+    }
     await interaction.editReply({ embeds: [toEmbed(renderSet(set, context.attribution))] });
   } catch {
     await interaction.editReply({ content: `No set matched \`${id}\`.` });
