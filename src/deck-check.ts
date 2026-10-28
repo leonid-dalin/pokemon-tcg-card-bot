@@ -92,7 +92,10 @@ async function resolveByName(client: TcgdexClient, name: string): Promise<Card |
     return setRecency(b.id) - setRecency(a.id);
   });
   if (!best) return undefined;
-  return client.getCard(best.id).catch(() => undefined);
+  const card = await client.getCard(best.id).catch(() => undefined);
+  // A prefix or loose match that names another card cannot supply legality or
+  // price for the line, so it counts as unresolved.
+  return card && sameName(card.name, name) ? card : undefined;
 }
 
 /** Basic Energy earns no prize and never rotates, so the deck check skips it. */

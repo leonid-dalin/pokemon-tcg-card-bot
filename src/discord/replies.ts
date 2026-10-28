@@ -13,7 +13,7 @@ export const MAX_EMBEDS_PER_MESSAGE = 5;
 export function cardReply(lookup: CardLookup, ownerId?: string) {
   const components = isImageOnly(lookup)
     ? []
-    : [...printingRows(lookup.alternates, ownerId), ...detailsRow(lookup.card.id)];
+    : [...printingRows(lookup.alternates, ownerId), ...detailsRow(lookup.card.id, "Details", lookup.card.name)];
   return {
     embeds: toEmbeds(lookupEmbeds(lookup)),
     ...(components.length > 0 ? { components } : {}),

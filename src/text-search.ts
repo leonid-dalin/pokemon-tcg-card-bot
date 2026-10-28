@@ -136,22 +136,27 @@ function isPhrase(query: string): boolean {
 function findHits(entries: TextHit[], query: string): { card: TextHit; nameHits: number; exact: boolean }[] {
   const raw = unquote(query);
   const tokens = queryTokens(raw);
-  if (tokens.length === 0) return [];
-  const phrase = isPhrase(query) ? queryWords(unquote(query)).join(" ") : undefined;
+  const normalisedQuery = normaliseName(raw);
+  const phrase = isPhrase(query) ? queryWords(raw).join(" ") : undefined;
   const hits: { card: TextHit; nameHits: number; exact: boolean }[] = [];
 
   for (const card of entries) {
     const nameWords = new Set(normaliseName(card.name).match(WORD) ?? []);
     let matchedAll: boolean;
-    if (phrase) {
+    if (tokens.length === 0) {
+      // A query the tokeniser empties, like `N`, can still name a card exactly.
+      matchedAll = phrase
+        ? (` ${phraseText(card)} `).includes(` ${phrase} `)
+        : normaliseName(card.name) === normalisedQuery;
+    } else if (phrase) {
       // Quoted: the words have to sit next to each other, as whole words.
-      matchedAll = (` ${phraseText(card)} `).includes(` ${phrase} `) || normaliseName(card.name) === normaliseName(raw);
+      matchedAll = (` ${phraseText(card)} `).includes(` ${phrase} `) || normaliseName(card.name) === normalisedQuery;
     } else {
       const words = wordsOf(card);
       matchedAll = tokens.every((token) => words.has(token));
     }
     const nameHits = tokens.filter((token) => nameWords.has(token)).length;
-    const nameMatches = !phrase && nameHits === tokens.length;
+    const nameMatches = !phrase && tokens.length > 0 && nameHits === tokens.length;
     if (!matchedAll && !nameMatches) continue;
     hits.push({ card, nameHits, exact: normaliseName(card.name) === normaliseName(raw) });
   }
@@ -326,7 +331,9 @@ export function matchingDetail(hit: TextHit, query: string, maxLength = 160): st
     ? best.sentence
     : spreadSentences(best.part, tokens) ?? best.sentence;
   const room = Math.max(40, maxLength - label.length - 2);
-  const shown = quoted ? phraseExcerpt(sentence, tokens, room) : highlight(sentence, tokens, room);
+  // A quoted phrase keeps its one-letter words in the window, so `attach a
+  // basic energy` centres on the whole phrase, not `attach basic energy`.
+  const shown = quoted ? phraseExcerpt(sentence, queryWords(unquote(query)), room) : highlight(sentence, tokens, room);
   return `${label}: ${shown}`;
 }
 
