@@ -2,8 +2,10 @@ import { SET_INDEX } from "./data/set-index.js";
 
 const byId = new Map(SET_INDEX.map((entry) => [entry.id, entry]));
 
-/** A Pocket set id, which the physical Limitless database does not hold. */
-const POCKET = /^(?:[ab]\d+[a-z]?|p-[ab])$/i;
+/** A Pocket set id, which the physical Limitless database does not hold. The
+ * package promos pa/pb print and link as P-A/P-B, so the URL uses that form. */
+const POCKET = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])$/i;
+const PROMO_URL = /^p([ab])$/i;
 
 function split(cardId: string): { prefix: string; number: string } | undefined {
   const at = cardId.lastIndexOf("-");
@@ -25,7 +27,9 @@ export function limitlessUrl(cardId: string): string | undefined {
   const parts = split(cardId);
   if (!parts) return undefined;
   if (POCKET.test(parts.prefix)) {
-    return `https://pocket.limitlesstcg.com/cards/${parts.prefix}/${bareNumber(parts.number)}`;
+    const promo = PROMO_URL.exec(parts.prefix);
+    const set = promo ? `P-${promo[1]!.toUpperCase()}` : parts.prefix;
+    return `https://pocket.limitlesstcg.com/cards/${set}/${bareNumber(parts.number)}`;
   }
   const entry = byId.get(parts.prefix);
   if (!entry?.code) return undefined;

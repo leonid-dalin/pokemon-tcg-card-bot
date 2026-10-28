@@ -275,8 +275,8 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
   await interaction.reply({ embeds: [toEmbed(helpView())] });
 }
 
-/** Pocket ids are `a1-001` or `p-a-001`; TCGdex ids never start with those sets. */
-const POCKET_ID = /^(?:[ab]\d+[a-z]?|p-[ab])-/i;
+/** Pocket ids are `a1-001`, the package promos `pa-014`, or `p-a-001`; TCGdex ids never start with those sets. */
+const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
 
 /** Both sources get named when the list mixes them, since each row came from one or the other. */
 function footerFor(printings: { id: string }[], attribution: string): string {
