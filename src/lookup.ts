@@ -95,8 +95,12 @@ export function printingsForButtons(card: Card, candidates: CardSummary[]): Card
   return alternates.filter((entry) => indexedText(entry.id) === primary);
 }
 
-/** A full card id, which pins one exact printing rather than a set. */
-export const CARD_ID = /^[a-z0-9.]{1,12}-\d{1,4}$/i;
+/** A full card id, which pins one exact printing rather than a name. Set ids
+ * may end in subset letters (swsh12.5gg) or carry none (swshp), and the local
+ * number may carry its own letters (GG65, SV004, SWSH020). A name with a
+ * hyphen, like Porygon-Z, carries no digit and must not match. */
+export const CARD_ID = /^(?=.{3,24}$)[a-z0-9.]+[a-z]{0,3}-[a-z0-9]{1,8}$/i;
+export const isCardId = (value: string): boolean => CARD_ID.test(value) && /\d/.test(value);
 
 /** Attribution for Pocket cards, which never come from TCGdex. */
 export const POCKET_ATTRIBUTION = "Pocket card data from pokemon-tcg-pocket-cards";
@@ -215,7 +219,7 @@ export async function lookupCard(
   // The embed prints card ids in the Other printings field, so a hint that looks
   // like one pins that exact printing. Without this the id falls through to set
   // matching, matches nothing, and returns a different printing.
-  if (setHint && CARD_ID.test(setHint.trim())) {
+  if (setHint && isCardId(setHint.trim())) {
     return lookupById(client, setHint.trim(), options);
   }
 

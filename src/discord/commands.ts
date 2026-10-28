@@ -7,7 +7,7 @@ import {
   type StringSelectMenuInteraction,
 } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
-import { CARD_ID, lookupById, lookupCard, POCKET_ATTRIBUTION } from "../lookup.js";
+import { isCardId, lookupById, lookupCard, POCKET_ATTRIBUTION } from "../lookup.js";
 import { renderCardDetails, renderSet } from "../render.js";
 import { printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
@@ -126,7 +126,7 @@ export async function handleCardCommand(
   await interaction.deferReply();
   // Autocomplete lists card ids, so a picked printing has to be pinned rather
   // than searched for by the id text as if it were a name.
-  const lookup = CARD_ID.test(query)
+  const lookup = isCardId(query)
     ? await lookupById(context.client, query, { attribution: context.attribution, energyEmoji: context.energyEmoji })
     : await lookupCard(context.client, query, setHint, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
@@ -295,7 +295,7 @@ export async function handlePrintingsCommand(
 
   // A picked autocomplete entry is a card id, so resolve it first and list that
   // card's name; a typed name goes straight to the listing.
-  const pinned = CARD_ID.test(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
+  const pinned = isCardId(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
   const printings = await printingsOf(context.client, pinned?.card.name ?? query);
   if (printings.length === 0) {
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
