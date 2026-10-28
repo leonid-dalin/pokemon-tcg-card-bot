@@ -27,7 +27,10 @@ function fakeApi(options: { failSearch?: boolean } = {}): TcgdexClient {
   } as unknown as TcgdexClient;
 }
 
-function fakeMessage(content: string, overrides: Partial<{ bot: boolean; webhookId: string | null; system: boolean; author: string }> = {}) {
+function fakeMessage(
+  content: string,
+  overrides: Partial<{ bot: boolean; webhookId: string | null; system: boolean; author: string; guildId: string; member: unknown }> = {},
+) {
   const replies: Record<string, unknown>[] = [];
   const message = {
     author: { bot: overrides.bot ?? false, id: overrides.author ?? "1", username: "tester" },
@@ -38,6 +41,8 @@ function fakeMessage(content: string, overrides: Partial<{ bot: boolean; webhook
     embeds: [],
     stickers: { size: 0 },
     channelId: "c",
+    guildId: overrides.guildId,
+    member: overrides.member,
     reply: async (payload: Record<string, unknown>) => {
       replies.push(payload);
       return {};
@@ -211,5 +216,71 @@ describe("message handler", () => {
     await handle(fakeMessage("").message);
     await handle(fakeMessage("").message);
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("records the invocation without any user identifier", async () => {
+    const recorded: Record<string, unknown>[] = [];
+    const { message } = fakeMessage("[[Dragapult ex]]", { guildId: "g1" });
+    await handler({ invocations: { record: (entry) => recorded.push(entry) } })(message);
+    expect(recorded).toHaveLength(1);
+    const entry = recorded[0] as Record<string, unknown>;
+    expect(entry).toMatchObject({ guildId: "g1", channelId: "c", trigger: "[[Dragapult ex]]", isAdmin: false });
+    expect(Object.keys(entry)).not.toContain("userId");
+    expect(Object.keys(entry)).not.toContain("username");
+    expect(JSON.stringify(entry)).not.toContain("tester");
+  });
+
+  it("records whether the invoker is a server administrator", async () => {
+    const recorded: Record<string, unknown>[] = [];
+    const member = { permissions: { has: (flag: string) => flag === "ManageGuild" } };
+    const admin = fakeMessage("[[Dragapult ex]]", { member });
+    await handler({ invocations: { record: (entry) => recorded.push(entry) } })(admin.message);
+    const ordinary = fakeMessage("[[Dragapult ex]]");
+    await handler({ invocations: { record: (entry) => recorded.push(entry) } })(ordinary.message);
+    expect(recorded.map((entry) => entry.isAdmin)).toEqual([true, false]);
+  });
+
+  it("keeps usernames and message text out of the runtime logs", async () => {
+    const logs: string[] = [];
+    for (const method of ["log", "warn", "error"] as const) {
+      vi.spyOn(console, method).mockImplementation((...args: unknown[]) => logs.push(args.join(" ")));
+    }
+    const handle = handler({ budget: new MentionBudget({ capacity: 1, refillSeconds: 60 }) });
+    const first = fakeMessage("secret phrase [[Dragapult ex]]");
+    const second = fakeMessage("secret phrase [[Dragapult ex]]");
+    await handle(first.message);
+    await handle(second.message);
+    const failing = fakeMessage("[[Dragapult ex]]");
+    await handler({ api: fakeApi({ failSearch: true }) })(failing.message);
+    const printed = logs.join("\n");
+    expect(printed).not.toContain("tester");
+    expect(printed).not.toContain("secret phrase");
+    expect(printed).toContain("skipped a reply");
+    expect(printed).toMatch(/mention lookup failed \(\w+\)/);
+  });
+
+  it("redacts user-mention tokens from the recorded invocation", async () => {
+    const recorded: Record<string, unknown>[] = [];
+    const { message } = fakeMessage(`<@123> look at [[Dragapult ex]]`, { guildId: "g1" });
+    await handler({ invocations: { record: (entry) => recorded.push(entry) } })(message);
+    const entry = JSON.stringify(recorded[0]);
+    expect(entry).not.toContain("123");
+    expect(entry).toContain("<@user>");
+  });
+
+  it("records nothing when the reply fails to send", async () => {
+    const recorded: Record<string, unknown>[] = [];
+    const replies: Record<string, unknown>[] = [];
+    const message = {
+      ...fakeMessage("[[Dragapult ex]]").message,
+      reply: async (payload: Record<string, unknown>) => {
+        replies.push(payload);
+        throw new Error("discord rejected it");
+      },
+    } as unknown as IncomingMessage;
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await handler({ invocations: { record: (entry) => recorded.push(entry) } })(message);
+    expect(replies).toHaveLength(1);
+    expect(recorded).toEqual([]);
   });
 });

@@ -4,6 +4,7 @@ import type { Config } from "../config.js";
 import type { MentionBudget } from "../cooldown.js";
 import { parseDecklist } from "../decklist.js";
 import { resolveDeckCards } from "../deck-check.js";
+import { errorCategory } from "../diagnostics.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
 import { extractMentions, parseHelpCommand, parseSearchCommand } from "../mentions.js";
 import { renderDecklist } from "../render.js";
@@ -17,14 +18,49 @@ export interface MessageContext {
   config: Pick<Config, "mentionEnabled" | "decklistEnabled" | "attribution" | "energyEmoji">;
   pages: import("./pages.js").PageStore;
   budget?: MentionBudget | undefined;
+  invocations?: { record: (entry: import("../invocation-log.js").InvocationEntry) => void } | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
 }
 
 export type IncomingMessage = Pick<
   Message,
-  "author" | "webhookId" | "system" | "content" | "attachments" | "embeds" | "stickers" | "channelId" | "reply"
+  | "author"
+  | "webhookId"
+  | "system"
+  | "content"
+  | "attachments"
+  | "embeds"
+  | "stickers"
+  | "channelId"
+  | "guildId"
+  | "member"
+  | "reply"
 >;
+
+interface ReplyPayload {
+  content?: string;
+  embeds?: { description?: string; title?: string }[];
+}
+
+function embedText(embed: {
+  title?: string;
+  description?: string;
+  fields?: { name?: string; value?: string }[];
+  data?: { title?: string; description?: string; fields?: { name?: string; value?: string }[] };
+}): string {
+  const plain = embed.data ?? {};
+  const title = embed.title ?? plain.title;
+  const description = embed.description ?? plain.description;
+  const fields = embed.fields ?? plain.fields ?? [];
+  const parts = [title, description, ...fields.map((field) => [field.name, field.value].filter(Boolean).join(": "))];
+  return parts.filter(Boolean).join("\n");
+}
+
+function replyText(payload: ReplyPayload): string {
+  const parts = [payload.content ?? "", ...(payload.embeds ?? []).map(embedText)];
+  return parts.filter(Boolean).join("\n\n");
+}
 
 /** Routes eligible messages to help, decklist, search or card replies. */
 export function createMessageHandler(context: MessageContext): (message: IncomingMessage) => Promise<void> {
@@ -58,39 +94,52 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     const mentions = deck || wantsHelp || searchQuery !== undefined ? [] : extractMentions(message.content);
     if (!deck && !wantsHelp && searchQuery === undefined && mentions.length === 0) return;
 
+    const isAdmin = Boolean(message.member?.permissions?.has?.("ManageGuild"));
+    const redactUserMentions = (text: string) => text.replace(/<@[!&]?\d+>/g, "<@user>");
+    const logReply = async (payload: ReplyPayload) => {
+      const entry = {
+        ...(message.guildId ? { guildId: message.guildId } : {}),
+        channelId: message.channelId,
+        isAdmin,
+        trigger: redactUserMentions(message.content),
+        reply: redactUserMentions(replyText(payload)),
+      };
+      await message.reply(payload as never).then(() => {
+        context.invocations?.record(entry);
+      }).catch(() => {});
+    };
+
     // Apply the same per-member, per-channel budget to every message reply.
     if (budget) {
       const verdict = budget.take(`${message.channelId}:${message.author.id}`);
       if (!verdict.allowed) {
-        console.log(`skipped a reply to ${message.author.username}: ${verdict.retryAfterSeconds}s until the next one`);
+        console.log(`skipped a reply: ${verdict.retryAfterSeconds}s until the next one`);
         return;
       }
     }
 
     if (wantsHelp) {
-      await message.reply({ embeds: toEmbeds([helpView()]) }).catch(() => {});
+      await logReply({ embeds: toEmbeds([helpView()]) as never });
       return;
     }
 
     if (deck) {
       const resolved = config.decklistEnabled ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
-      await message.reply({ embeds: toEmbeds([renderDecklist(deck, resolved)]) }).catch(() => {});
+      await logReply({ embeds: toEmbeds([renderDecklist(deck, resolved)]) as never });
       return;
     }
 
     if (searchQuery !== undefined) {
       if (searchQuery.length === 0) {
-        await message
-          .reply({ content: "Add what to look for after search, for example: search stadium." })
-          .catch(() => {});
+        await logReply({ content: "Add what to look for after search, for example: search stadium." });
         return;
       }
       try {
         const reply = searchReply(searchQuery, searchCardGroups(searchQuery), config.attribution, message.author.id, context.pages);
-        await message.reply({ ...reply }).catch(() => {});
+        await logReply(reply as ReplyPayload);
       } catch (error) {
-        console.error("mention search failed", error);
-        await message.reply({ content: "Card search failed, try again in a moment." }).catch(() => {});
+        console.error(`mention search failed (${errorCategory(error)})`);
+        await logReply({ content: "Card search failed, try again in a moment." });
       }
       return;
     }
@@ -103,16 +152,15 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
           attribution: config.attribution,
           energyEmoji: config.energyEmoji,
         });
-        console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
+        console.log(`mention lookup -> ${lookup ? lookup.card.id : "no match"}`);
         if (lookup) found.push(mention.imageOnly ? { ...lookup, imageOnly: true } : lookup);
         else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5) });
         if (found.length >= MAX_EMBEDS_PER_MESSAGE) break;
       }
-      await message.reply({ ...mentionReply(found, misses, message.author.id) });
+      await logReply(mentionReply(found, misses, message.author.id) as ReplyPayload);
     } catch (error) {
-      console.error("mention lookup failed", error);
-      // Send a visible error when mention lookup fails.
-      await message.reply({ content: "Card lookup failed, try again in a moment." }).catch(() => {});
+      console.error(`mention lookup failed (${errorCategory(error)})`);
+      await logReply({ content: "Card lookup failed, try again in a moment." });
     }
   };
 }

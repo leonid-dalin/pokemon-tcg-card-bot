@@ -14,6 +14,7 @@ describe("loadConfig", () => {
       mentionCooldownSeconds: 0,
       attribution: "Card data from TCGdex",
       energyEmoji: {},
+      invocationLogRetentionDays: 60,
     });
   });
 
@@ -35,6 +36,11 @@ describe("loadConfig", () => {
       attribution: "Data from somewhere",
       energyEmoji: { Fighting: "<:fighting:123>" },
     });
+  });
+
+  it("caps the invocation retention at 60 days", () => {
+    expect(loadConfig({ ...required, INVOCATION_LOG_RETENTION_DAYS: "90" }).invocationLogRetentionDays).toBe(60);
+    expect(loadConfig({ ...required, INVOCATION_LOG_RETENTION_DAYS: "30" }).invocationLogRetentionDays).toBe(30);
   });
 
   it("documents every setting it reads in .env.example", () => {

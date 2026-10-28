@@ -11,6 +11,8 @@ export interface Config {
   mentionCooldownSeconds: number;
   attribution: string;
   energyEmoji: Record<string, string>;
+  invocationLogDir?: string;
+  invocationLogRetentionDays: number;
 }
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -56,5 +58,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     mentionCooldownSeconds: parsePositiveInt(env.MENTION_COOLDOWN_SECONDS, 0),
     attribution: env.ATTRIBUTION?.trim() || DEFAULT_ATTRIBUTION,
     energyEmoji: parseEnergyEmoji(env.ENERGY_EMOJI),
+    ...(env.INVOCATION_LOG_DIR?.trim() ? { invocationLogDir: env.INVOCATION_LOG_DIR.trim() } : {}),
+    invocationLogRetentionDays: Math.min(parsePositiveInt(env.INVOCATION_LOG_RETENTION_DAYS, 60), 60),
   };
 }

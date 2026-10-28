@@ -4,8 +4,9 @@ Crustlebot reads as little as possible and stores almost nothing. This policy ex
 
 ## What the bot stores
 
-- **Nothing on disk.** The bot keeps no database and writes no user data to storage. Everything it remembers lives in memory: recent search and printing lists (so page and filter buttons work), the Discord id of whoever asked for a reply (so only they can press its buttons), and short-lived interaction state. All of it expires within minutes
-- **No message history.** The bot reads only the messages that trigger it: `[[card]]` mentions, a search command, or a pasted deck list in servers where deck checking is switched on. It does not log, forward or retain message content
+- **Invocation log on the host machine, when the host turns it on.** The host can enable a local log of what the bot was asked and how it answered. When enabled, it keeps the triggering message and the bot's own reply in a file on the machine that hosts the bot, and records whether the invoker is a server administrator or not, the channel id and, where Discord reports it, the server id. It never records a Discord user id, username or account name. Entries are deleted automatically after at most 60 days. When the host has not enabled it, the bot keeps no invocation data on disk at all
+- **Nothing else on disk.** Beyond that log the bot keeps no database and writes no user data to storage. Everything else it remembers lives in memory: recent search and printing lists (so page and filter buttons work), the Discord id of whoever asked for a reply (so only they can press its buttons), and short-lived interaction state. All of it expires within minutes
+- **Where the log lives.** The host controls this file, it is not copied anywhere, and it is not part of any published repository or backup the maintainers ship. The bot is hosted from a machine in the European Union
 - **Configuration lives with you.** Servers choose whether deck checking is on. That choice sits in the server's own environment, not in any profile we keep
 
 ## What leaves Discord
@@ -14,7 +15,11 @@ When the bot answers, it asks public card databases for card facts: TCGdex for p
 
 ## Who can see what
 
-The person running the bot (the server host) controls its configuration and can see its console output, which may contain errors mentioning ids. Discord itself handles all message transport under Discord's own privacy policy
+The person running the bot (the server host) controls its configuration, the invocation log and the console output. Runtime console output contains no message content, usernames or user ids; it reports the operation and a short error category. Discord itself handles all message transport under Discord's own privacy policy
+
+## Fair use
+
+The bot is a free service. Do not use it to attempt anything unlawful, to probe or attack the service (including injection attempts), or to send profanity or hate speech through it. The host can revoke access from any server or account at any time, and accepts no liability for damage caused by misuse of the service
 
 ## Contact
 

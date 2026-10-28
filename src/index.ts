@@ -19,6 +19,8 @@ import {
 import { clientOptions } from "./discord/client-options.js";
 import { PageStore } from "./discord/pages.js";
 import { createMessageHandler } from "./discord/messages.js";
+import { errorCategory } from "./diagnostics.js";
+import { InvocationLog } from "./invocation-log.js";
 import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
@@ -28,6 +30,7 @@ loadDotEnv();
 if (!acquireSingleInstanceLock()) process.exit(1);
 
 const config = loadConfig(process.env);
+const invocations = new InvocationLog(config.invocationLogDir, config.invocationLogRetentionDays);
 const api = new TcgdexClient();
 const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore() };
 
@@ -38,6 +41,8 @@ const budget =
     : undefined;
 
 client.once(Events.ClientReady, (ready) => {
+  invocations.prune();
+  setInterval(() => invocations.prune(), 3_600_000).unref();
   console.log(`logged in as ${ready.user.tag}; mention replies ${config.mentionEnabled ? "on" : "off"}`);
 });
 
@@ -78,16 +83,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleHelpCommand(interaction);
     }
   } catch (error) {
-    console.error("interaction failed", error);
+    console.error(`interaction failed (${errorCategory(error)})`);
     await reportInteractionFailure(interaction).catch(() => {});
   }
 });
 
 client.on(
   Events.MessageCreate,
-  createMessageHandler({ api, config, budget, pages: context.pages, selfId: () => client.user?.id }),
+  createMessageHandler({ api, config, budget, invocations, pages: context.pages, selfId: () => client.user?.id }),
 );
 
-process.on("unhandledRejection", (error) => console.error("unhandled rejection", error));
+process.on("unhandledRejection", (error) => console.error(`unhandled rejection (${errorCategory(error)})`));
 
 await client.login(config.token);
