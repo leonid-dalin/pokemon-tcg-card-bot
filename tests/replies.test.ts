@@ -18,6 +18,6 @@ describe("mentionReply", () => {
       { raw: "Foo", closest: [] },
       { raw: "Bar ex", closest: [{ id: "sv01-001", name: "Bar" }] },
     ]);
-    expect(reply).toEqual({ content: "No card matched `Foo`.\nNo card matched `Bar ex`. Closest: `Bar` (sv01-001)." });
+    expect(reply).toEqual({ content: "No card matched `Foo`.\nNo card matched `Bar ex`. Closest: `Bar` (SVI 1)." });
   });
 });

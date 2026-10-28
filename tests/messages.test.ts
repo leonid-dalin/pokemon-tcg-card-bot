@@ -91,7 +91,7 @@ describe("message handler", () => {
     const { message, replies } = fakeMessage("[[Dragapult zzz]]");
     await handler()(message);
     expect(replies[0]?.content).toBe(
-      "No card matched `Dragapult zzz`. Closest: `Dragapult ex` (sv08.5-073), `Dragapult ex` (sv06-130).",
+      "No card matched `Dragapult zzz`. Closest: `Dragapult ex` (PRE 73), `Dragapult ex` (TWM 130).",
     );
   });
 

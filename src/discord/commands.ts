@@ -8,6 +8,7 @@ import {
 import type { TcgdexClient } from "../api/tcgdex.js";
 import { lookupById, lookupCard } from "../lookup.js";
 import { renderSet } from "../render.js";
+import { printedNumber } from "../printed.js";
 import { searchCardText } from "../text-search.js";
 import { printingIdFrom } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
@@ -83,7 +84,7 @@ export async function handleAutocomplete(
   const summaries = await context.client.searchByName(query);
   const ranked = rankPrintings(summaries, query).slice(0, 25);
   await interaction.respond(
-    ranked.map((card) => ({ name: `${card.name} · ${card.id}`.slice(0, 100), value: card.id })),
+    ranked.map((card) => ({ name: `${card.name} · ${printedNumber(card.id)}`.slice(0, 100), value: card.id })),
   );
 }
 

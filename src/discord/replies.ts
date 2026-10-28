@@ -1,5 +1,6 @@
 import type { EmbedBuilder } from "discord.js";
 import type { CardSummary } from "../api/types.js";
+import { printedNumber } from "../printed.js";
 import { lookupEmbeds, type CardLookup } from "../lookup.js";
 import { renderSearchResults } from "../render.js";
 import type { TextHit } from "../text-search.js";
@@ -40,7 +41,7 @@ export function mentionReply(found: CardLookup[], misses: MentionMiss[]) {
     .map(({ raw, closest }) => {
       const base = `No card matched \`${raw}\`.`;
       if (closest.length === 0) return base;
-      return `${base} Closest: ${closest.map((card) => `\`${card.name}\` (${card.id})`).join(", ")}.`;
+      return `${base} Closest: ${closest.map((card) => `\`${card.name}\` (${printedNumber(card.id)})`).join(", ")}.`;
     })
     .join("\n");
   return {

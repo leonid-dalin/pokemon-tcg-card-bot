@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import type { CardSummary } from "../api/types.js";
+import { printedNumber } from "../printed.js";
 
 export const PRINTING_PREFIX = "printing:";
 const MAX_BUTTONS = 5;
@@ -21,7 +22,7 @@ export function printingRows(alternates: CardSummary[]): ActionRowBuilder<Button
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(`${PRINTING_PREFIX}${card.id}`)
-        .setLabel(card.id)
+        .setLabel(printedNumber(card.id))
         .setStyle(ButtonStyle.Secondary),
     );
   }

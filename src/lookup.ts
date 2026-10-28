@@ -1,6 +1,7 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { priceField, renderCard, type EmbedView } from "./render.js";
+import { printedNumber } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
@@ -194,7 +195,7 @@ export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
   const seen = new Set<string>();
   const ids = lookup.alternates
     .filter((card) => (seen.has(card.id) ? false : (seen.add(card.id), true)))
-    .map((card) => `\`${card.id}\``)
+    .map((card) => `\`${printedNumber(card.id)}\``)
     .join(", ");
   const value = `${ids}
 Narrow it with \`[[${lookup.card.name}|setId]]\`.`;

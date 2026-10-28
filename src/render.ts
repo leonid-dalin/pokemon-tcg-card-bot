@@ -1,5 +1,6 @@
 import type { Ability, Attack, Card, CardSetRef, Pricing, SetSummary } from "./api/types.js";
 import type { ParsedDeck } from "./decklist.js";
+import { printedNumber } from "./printed.js";
 
 export interface EmbedField {
   name: string;
@@ -231,7 +232,7 @@ export function renderSearchResults(
 ): EmbedView {
   const lines = cards
     .slice(0, 15)
-    .map((card) => `\`${card.id}\` ${card.name}`)
+    .map((card) => `\`${printedNumber(card.id)}\` ${card.name}`)
     .join("\n");
   return {
     title: `Cards mentioning "${truncate(query, 80)}"`,

@@ -16,7 +16,8 @@ describe("printingRows", () => {
       `${PRINTING_PREFIX}sv06-130`,
       `${PRINTING_PREFIX}me02.5-160`,
     ]);
-    expect(json.components[0]?.label).toBe("sv06-130");
+    expect(json.components[0]?.label).toBe("TWM 130");
+    expect(json.components[0]?.custom_id).toContain("sv06-130");
   });
 
   it("never repeats a custom id when a printing is listed twice", () => {
