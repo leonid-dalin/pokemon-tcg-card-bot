@@ -1,6 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from "discord.js";
 import type { CardSummary } from "../api/types.js";
 import { printedNumber } from "../printed.js";
+import { cardmarketUrl, limitlessUrl } from "../links.js";
 
 export const PRINTING_PREFIX = "printing:";
 export const DETAILS_PREFIX = "details:";
@@ -32,10 +33,24 @@ export function printingRows(alternates: CardSummary[], ownerId?: string): Actio
   return [row];
 }
 
-export function detailsRow(cardId: string, label = "Details"): ActionRowBuilder<ButtonBuilder>[] {
+export function detailsRow(cardId: string, label = "Details", name?: string): ActionRowBuilder<ButtonBuilder>[] {
+  // The listing links ride in the Details row: a link button needs no owner
+  // check, because it only opens a page.
+  const links: ButtonBuilder[] = [];
+  const limitless = limitlessUrl(cardId);
+  if (limitless) {
+    links.push(new ButtonBuilder().setLabel("Limitless").setURL(limitless).setStyle(ButtonStyle.Link));
+  }
+  if (name) {
+    const cardmarket = cardmarketUrl(cardId, name);
+    if (cardmarket) {
+      links.push(new ButtonBuilder().setLabel("Cardmarket").setURL(cardmarket).setStyle(ButtonStyle.Link));
+    }
+  }
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId(`${DETAILS_PREFIX}${cardId}`).setLabel(label).setStyle(ButtonStyle.Secondary),
+      ...links,
     ),
   ];
 }
