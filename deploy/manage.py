@@ -186,9 +186,9 @@ def recover():
         raise SystemExit(1)
     progress("Recovering an interrupted update")
     if phase == "ready":
-        # The new release reached readiness; only the success record was missing.
-        if not (ROOT / "rollback.json").exists():
-            atomic_json(ROOT / "rollback.json", {"backup": state["backup"], "from": release.name})
+        # The new release reached readiness; always refresh the success record so a
+        # stale checkpoint from an older update can never be rolled back into.
+        atomic_json(ROOT / "rollback.json", {"backup": state["backup"], "from": release.name})
         STATE.unlink()
         if not active():
             systemctl("start", SERVICE)
@@ -206,9 +206,8 @@ def recover():
         else:
             progress("Rollback prerequisites are missing; keeping the switched release")
     STATE.unlink()
-    if was_running or active():
-        systemctl("start", SERVICE)
-
+    # The service must not stay down because recovery happened while it was failed.
+    systemctl("start", SERVICE)
 
 def activate(release):
     previous = current()
@@ -443,10 +442,10 @@ def main():
             print(json.dumps({"revision": release.name if release else None,
                               "pid": pid, "discordReady": pid > 0 and ready(STATUS, pid)}))
         else:
+            recover()
             if args.command == "update" and not active():
                 print("Bot is stopped; update skipped")
                 return
-            recover()
             sha = published_head()
             if sha is None:
                 print("No tested bundle published for master yet; keeping the installed release")

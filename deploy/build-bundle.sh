@@ -25,7 +25,7 @@ tar -xJf "$stage/$runtime_tar" -C "$stage" \
   "node-v$node_version-linux-arm64/bin/node" "node-v$node_version-linux-arm64/LICENSE"
 mv "$stage/node-v$node_version-linux-arm64/bin/node" "$stage/bin/node"
 mv "$stage/node-v$node_version-linux-arm64/LICENSE" "$stage/bin/LICENSE"
-rm -rf "$stage/node-v$node_version-linux-arm64" "${stage:?}/$runtime_tar" "$stage/SHASUMS256.txt"
+rm -rf "${stage:?}/node-v$node_version-linux-arm64" "${stage:?}/$runtime_tar" "${stage:?}/SHASUMS256.txt"
 cp -r dist "$stage/"
 cp src/data/text-index.json "$stage/src/data/"
 cp package.json package-lock.json LICENSE NOTICE "$stage/"

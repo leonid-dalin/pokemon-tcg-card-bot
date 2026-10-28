@@ -143,12 +143,30 @@ class DeploymentTests(unittest.TestCase):
         m.begin_activation(release, previous, backup)
         m.atomic_json(m.STATE, {"phase": "ready", "release": release.name,
                                 "previous": previous.name, "backup": backup.name})
+        (self.root / "rollback.json").write_text(json.dumps({"backup": "stale", "from": OLD}))
         with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
             m.recover()
         self.assertFalse(m.STATE.exists())
         info = json.loads((self.root / "rollback.json").read_text())
         self.assertEqual(info["from"], NEW)
+        self.assertEqual(info["backup"], backup.name)
         control.assert_not_called()
+
+    def test_recovery_starts_a_failed_service_after_restoring(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(release)
+        backup = self.root / "backups" / "switched"
+        m.snapshot(backup)
+        m.begin_activation(release, previous, backup)
+        m.atomic_json(m.STATE, {"phase": "switched", "release": release.name,
+                                "previous": previous.name, "backup": backup.name})
+        (backup / "previous").write_text(previous.name)
+        with patch.object(m, "active", return_value=False), patch.object(m, "systemctl") as control, \
+                patch.object(m.os, "chown"):
+            m.recover()
+        self.assertEqual(m.current(), previous)
+        self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+        self.assertFalse(m.STATE.exists())
 
     def test_rollback_with_missing_checkpoint_keeps_current_release(self):
         previous, release = self.release(OLD), self.release(NEW)
