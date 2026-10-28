@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } from "discord.js";
+import { filterGroups, filterOptions, groupCounts, type Filter } from "../search-filter.js";
 
 export interface ListItem {
   cardId: string;
@@ -147,20 +148,22 @@ export const FILTER_LABELS: Record<string, string> = {
   Energy: "Energy",
 };
 
+/** A list item seen through the shared filter helpers, which read only the category. */
+function asGroup(item: ListItem): { representative: { category: string | undefined } } {
+  return { representative: { category: item.category } };
+}
+
 function filteredItems(page: ListPage, filter?: string): ListItem[] {
-  if (!filter || filter === "all") return page.items;
-  return page.items.filter((item) => item.category === filter);
+  const groups = page.items.map(asGroup);
+  const kept = new Set(filterGroups(groups, (filter ?? "all") as Filter));
+  return page.items.filter((_, index) => kept.has(groups[index]!));
 }
 
 /** A filter choice per category that would show at least one card. */
 function filterChoices(items: ListItem[]): { label: string; value: string }[] {
-  const counts = new Map<string, number>();
-  for (const item of items) if (item.category) counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
-  const choices = [{ label: `${FILTER_LABELS.all} (${items.length})`, value: "all" }];
-  for (const [category, count] of counts) {
-    if (count > 0) choices.push({ label: `${FILTER_LABELS[category] ?? category} (${count})`, value: category });
-  }
-  return choices;
+  const groups = items.map(asGroup);
+  const counts = groupCounts(groups);
+  return filterOptions(groups).map((filter) => ({ label: `${FILTER_LABELS[filter] ?? filter} (${counts[filter]})`, value: filter }));
 }
 
 /** The page token carried by a filter menu, which is the whole id after `filter:`. */
