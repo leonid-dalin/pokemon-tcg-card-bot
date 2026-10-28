@@ -8,23 +8,19 @@ const QUERY = "opponent's deck and discard";
 const groupsFor = (query: string) => searchCardGroups(query);
 
 describe("quoted search", () => {
-  it("searches the words when the query is wrapped in double quotes", () => {
-    expect(groupsFor(`"${QUERY}"`).length).toBe(groupsFor(QUERY).length);
+  it("narrows to the phrase when the query is wrapped in double quotes", () => {
+    expect(groupsFor(`"${QUERY}"`).length).toBeLessThan(groupsFor(QUERY).length);
+    expect(groupsFor(`"${QUERY}"`).length).toBeGreaterThan(0);
   });
 
-  it("searches the words when the query is wrapped in single quotes", () => {
-    expect(groupsFor(`'${QUERY}'`).length).toBe(groupsFor(QUERY).length);
+  it("reads single and curly quotes the same way", () => {
+    const phrase = groupsFor(`"${QUERY}"`).length;
+    expect(groupsFor(`'${QUERY}'`).length).toBe(phrase);
+    expect(groupsFor(`\u201c${QUERY}\u201d`).length).toBe(phrase);
+    expect(groupsFor(`\u2018${QUERY}\u2019`).length).toBe(phrase);
   });
 
-  it("searches the words when the query is wrapped in curly double quotes", () => {
-    expect(groupsFor(`\u201c${QUERY}\u201d`).length).toBe(groupsFor(QUERY).length);
-  });
-
-  it("searches the words when the query is wrapped in curly single quotes", () => {
-    expect(groupsFor(`\u2018${QUERY}\u2019`).length).toBe(groupsFor(QUERY).length);
-  });
-
-  it("finds Miss Fortune Sisters once the quotes come off", () => {
+  it("finds Miss Fortune Sisters, which prints the phrase", () => {
     const found = groupsFor(`"${QUERY}"`).find((group) => group.representative.name === "Miss Fortune Sisters");
     expect(found?.representative.id).toBe("swsh11-164");
   });
@@ -43,9 +39,9 @@ describe("quoted search", () => {
 describe("empty result message", () => {
   const reply = (query: string) => searchReply(query, [], "Card data from TCGdex", "1", new PageStore());
 
-  it("names the quotes when the query was quoted", () => {
+  it("names the phrase when the query was quoted", () => {
     expect(reply(`"zzz"`)).toEqual({
-      content: "No card wording mentions `zzz`. The words were searched; the quote marks are matched literally, so a card would have to print them.",
+      content: "No card wording mentions `zzz`. A quoted search needs those words printed in that order.",
     });
   });
 

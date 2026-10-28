@@ -37,10 +37,8 @@ export function searchReply(
   if (groups.length === 0) {
     const words = unquote(query);
     const quoted = words !== query.trim();
-    const base = `No card wording mentions \`${quoted ? words : query}\`.`;
-    // A query that is still quoted at this point could only match a card that
-    // prints the marks, so say what was searched instead of blaming the cards.
-    return { content: quoted ? `${base} The words were searched; the quote marks are matched literally, so a card would have to print them.` : base };
+    const base = `No card wording mentions \`${words}\`.`;
+    return { content: quoted ? `${base} A quoted search needs those words printed in that order.` : base };
   }
   const shown = groups.slice(0, MAX_ITEMS);
   const page: ListPage = {

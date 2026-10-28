@@ -109,19 +109,41 @@ function wordsOf(card: TextHit): Set<string> {
   return words;
 }
 
+/**
+ * The folded text as a single string, with every word run spelled the same way.
+ * A phrase search needs the words adjacent, which a Set of words cannot say.
+ */
+function phraseText(card: TextHit): string {
+  return normalisedText(card).match(WORD)?.join(" ") ?? "";
+}
+
+/** A query wrapped in one pair of quotes asks for those words in that order. */
+function isPhrase(query: string): boolean {
+  const trimmed = query.trim();
+  return WRAPPING_QUOTES.some(([open, close]) => trimmed.length >= 2 && trimmed.startsWith(open) && trimmed.endsWith(close));
+}
+
 function findHits(entries: TextHit[], query: string): { card: TextHit; nameHits: number; exact: boolean }[] {
-  const tokens = queryTokens(unquote(query));
+  const raw = unquote(query);
+  const tokens = queryTokens(raw);
   if (tokens.length === 0) return [];
+  const phrase = isPhrase(query) ? tokens.join(" ") : undefined;
   const hits: { card: TextHit; nameHits: number; exact: boolean }[] = [];
 
   for (const card of entries) {
-    const words = wordsOf(card);
-    const matchedAll = tokens.every((token) => words.has(token));
     const nameWords = new Set(normaliseName(card.name).match(WORD) ?? []);
+    let matchedAll: boolean;
+    if (phrase) {
+      // Quoted: the words have to sit next to each other, in order.
+      matchedAll = phraseText(card).includes(phrase) || normaliseName(card.name) === normaliseName(raw);
+    } else {
+      const words = wordsOf(card);
+      matchedAll = tokens.every((token) => words.has(token));
+    }
     const nameHits = tokens.filter((token) => nameWords.has(token)).length;
-    const nameMatches = nameHits === tokens.length;
+    const nameMatches = !phrase && nameHits === tokens.length;
     if (!matchedAll && !nameMatches) continue;
-    hits.push({ card, nameHits, exact: normaliseName(card.name) === normaliseName(unquote(query)) });
+    hits.push({ card, nameHits, exact: normaliseName(card.name) === normaliseName(raw) });
   }
 
   hits.sort((a, b) => {
@@ -176,11 +198,17 @@ interface RankedSentence {
   index: number;
 }
 
+/** Whole-word membership, so `and` does not score a sentence containing `hand`. */
+function wordCount(sentence: string, tokens: string[]): number {
+  const words = new Set(normaliseName(sentence).match(WORD) ?? []);
+  return tokens.filter((token) => words.has(token)).length;
+}
+
 function rankSentences(text: string, tokens: string[]): RankedSentence[] {
   const ranked = splitSentences(text).map((sentence, index) => ({
     sentence,
     index,
-    matches: tokens.filter((token) => normaliseName(sentence).includes(token)).length,
+    matches: wordCount(sentence, tokens),
   }));
   ranked.sort((a, b) => b.matches - a.matches || a.index - b.index);
   return ranked;
@@ -200,12 +228,13 @@ function highlight(sentence: string, tokens: string[], maxLength: number): strin
     const boundary = prefix.lastIndexOf(" ");
     excerpt = prefix.slice(0, boundary > 0 ? boundary : prefix.length);
   }
-  // One pass, longest term first, so a shorter term cannot match inside the
-  // bold marks an earlier term already wrote.
+  // Whole words only, longest first, in one pass: a bare `and` must not bold
+  // the `and` inside `hand`, and a later term must not match inside the bold
+  // marks an earlier one wrote.
   const alternation = [...new Set(tokens)]
     .filter((token) => token.length > 0)
     .sort((a, b) => b.length - a.length)
-    .map(escapeRegExp)
+    .map((token) => `(?<![a-z0-9])${escapeRegExp(token)}(?![a-z0-9])`)
     .join("|");
   if (alternation) {
     excerpt = excerpt.replace(new RegExp(alternation, "gi"), (match) => `**${match}**`);
@@ -235,7 +264,7 @@ function partText(part: TextPart): string {
  * label of the part it came from. An index without parts has no labels.
  */
 export function matchingDetail(hit: TextHit, query: string, maxLength = 160): string {
-  const tokens = queryTokens(query);
+  const tokens = queryTokens(unquote(query));
   let best: { part: TextPart; sentence: string; matches: number } | undefined;
   for (const part of hit.parts ?? []) {
     for (const ranked of rankSentences(partText(part), tokens)) {
@@ -246,6 +275,34 @@ export function matchingDetail(hit: TextHit, query: string, maxLength = 160): st
   }
   if (!best || best.matches === 0) return matchingSentence(hit.text, query, maxLength);
   const label = partLabel(best.part);
-  const sentence = highlight(best.sentence, tokens, Math.max(40, maxLength - label.length - 2));
-  return `${label}: ${sentence}`;
+  // A single sentence that holds every query word says the whole reason for the
+  // row. When the words are spread over several, joining them beats showing one
+  // sentence that is missing the rest.
+  const quoted = isPhrase(query);
+  const sentence = best.matches === tokens.length
+    ? best.sentence
+    : spreadSentences(best.part, tokens) ?? best.sentence;
+  const room = Math.max(40, maxLength - label.length - 2);
+  const shown = quoted ? phraseExcerpt(sentence, tokens, room) : highlight(sentence, tokens, room);
+  return `${label}: ${shown}`;
+}
+
+/** The sentences that between them hold every query word, in reading order. */
+function spreadSentences(part: TextPart, tokens: string[]): string | undefined {
+  const sentences = splitSentences(partText(part));
+  const chosen = sentences.filter((sentence) => wordCount(sentence, tokens) > 0);
+  if (chosen.length < 2) return undefined;
+  const words = new Set(chosen.flatMap((sentence) => normaliseName(sentence).match(WORD) ?? []));
+  if (!tokens.every((token) => words.has(token))) return undefined;
+  return chosen.join(" … ");
+}
+
+/** Show the phrase itself in context, so a quoted search shows what it matched. */
+function phraseExcerpt(text: string, tokens: string[], maxLength: number): string {
+  const phrase = tokens.join(" ");
+  const at = normaliseName(text).indexOf(phrase);
+  if (at < 0) return highlight(text, tokens, maxLength);
+  const before = Math.max(0, at - Math.floor((maxLength - phrase.length) / 2));
+  const slice = text.slice(before, before + Math.max(phrase.length, maxLength));
+  return highlight(slice, tokens, maxLength);
 }
