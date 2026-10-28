@@ -142,6 +142,46 @@ export async function lookupById(
 }
 
 /**
+ * TCGdex matches name searches literally, so `PokeStop` finds nothing while
+ * `PokéStop` finds the card. These are the accented spellings to try when the
+ * literal search came back empty. Each word is anchored, so `Slowpoke` is left
+ * alone; every accented card name the index holds is covered here.
+ */
+const ACCENTS: { from: RegExp; to: string }[] = [
+  { from: /\bpokemon\b/gi, to: "Pokémon" },
+  { from: /\bpoke(?=[A-Z0-9]|\s|$)/gi, to: "Poké" },
+  { from: /\bflabebe\b/gi, to: "Flabébé" },
+  { from: /\bcafe\b/gi, to: "Café" },
+];
+
+const HAS_ACCENT = /[éèêëáàâäíìîïóòôöúùûüñç]/i;
+
+export function accentVariants(query: string): string[] {
+  if (HAS_ACCENT.test(query)) return [];
+  const variants = new Set<string>();
+  for (const { from, to } of ACCENTS) {
+    const variant = query.replace(from, to);
+    if (variant !== query) variants.add(variant);
+  }
+  return [...variants];
+}
+
+/**
+ * Search the literal spelling first, and try the accented ones only when it
+ * finds nothing. A name that searches fine, `Slowpoke` being the common case,
+ * therefore never pays for a second request.
+ */
+async function searchWithAccents(client: TcgdexClient, query: string): Promise<CardSummary[]> {
+  const literal = await client.searchByName(query);
+  if (literal.length > 0) return literal;
+  for (const variant of accentVariants(query)) {
+    const hits = await client.searchByName(variant).catch(() => []);
+    if (hits.length > 0) return hits;
+  }
+  return literal;
+}
+
+/**
  * Resolve a name to a printing and render it. Returns undefined when nothing
  * matches, so callers can stay silent instead of posting an error for a typo.
  */
@@ -168,7 +208,7 @@ export async function lookupCard(
   // A hint that names no set is a mistake, and falling back to the bare name
   // would answer with a printing the asker did not ask for.
   if (setHint && !resolved) return undefined;
-  const summaries = await client.searchByName(query);
+  const summaries = await searchWithAccents(client, query);
   const matched = rankPrintings(summaries, query, resolved);
 
   // A hint that resolved to a real set pins that set exactly. Prefix matching
