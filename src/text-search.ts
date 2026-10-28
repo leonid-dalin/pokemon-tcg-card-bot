@@ -148,6 +148,8 @@ function findHits(entries: TextHit[], query: string): { card: TextHit; nameHits:
 
   hits.sort((a, b) => {
     if (a.exact !== b.exact) return a.exact ? -1 : 1;
+    const recency = setRecency(b.card.id) - setRecency(a.card.id);
+    if (recency !== 0) return recency;
     if (a.nameHits !== b.nameHits) return b.nameHits - a.nameHits;
     if (a.card.text.length !== b.card.text.length) return a.card.text.length - b.card.text.length;
     return a.card.name.localeCompare(b.card.name);
@@ -223,10 +225,20 @@ function highlight(sentence: string, tokens: string[], maxLength: number): strin
   const outputLimit = Math.max(0, maxLength - 1 - highlightBudget);
   const truncated = sentence.length > outputLimit;
   let excerpt = sentence;
+  let cutAtStart = false;
   if (truncated) {
-    const prefix = excerpt.slice(0, outputLimit);
-    const boundary = prefix.lastIndexOf(" ");
-    excerpt = prefix.slice(0, boundary > 0 ? boundary : prefix.length);
+    // Centre the window on the first query word, so a sentence whose match sits
+    // at the end still shows the reason the card matched.
+    const first = firstMatchAt(sentence, tokens);
+    const start = Math.max(0, Math.min(sentence.length - outputLimit, first - Math.floor(outputLimit / 3)));
+    let slice = sentence.slice(start, start + outputLimit);
+    if (start > 0) {
+      const space = slice.indexOf(" ");
+      slice = slice.slice(space > 0 ? space + 1 : 0);
+      cutAtStart = true;
+    }
+    const spaceEnd = slice.lastIndexOf(" ");
+    excerpt = spaceEnd > 0 ? slice.slice(0, spaceEnd) : slice;
   }
   // Whole words only, longest first, in one pass: a bare `and` must not bold
   // the `and` inside `hand`, and a later term must not match inside the bold
@@ -239,7 +251,28 @@ function highlight(sentence: string, tokens: string[], maxLength: number): strin
   if (alternation) {
     excerpt = excerpt.replace(new RegExp(alternation, "gi"), (match) => `**${match}**`);
   }
-  return truncated ? `${excerpt}…` : excerpt;
+  // Ellipses say which side was lost, so a cut sentence is not read as the whole one.
+  if (!truncated) return excerpt;
+  return `${cutAtStart ? "…" : ""}${excerpt}…`;
+}
+
+/**
+ * Where the query words sit together earliest in the sentence, as a character
+ * offset. Anchoring on one token is not enough: `of` appears everywhere, so a
+ * window centred on the first `of` never reaches `bottom of their deck`.
+ */
+function firstMatchAt(sentence: string, tokens: string[]): number {
+  const folded = normaliseName(sentence);
+  const phrase = tokens.join(" ");
+  const together = folded.indexOf(phrase);
+  if (together >= 0) return together;
+  // Fall back to the earliest word that is not a common stop word, then to any word.
+  const common = new Set(["of", "the", "a", "an", "and", "to", "in", "on"]);
+  const meaningful = tokens.filter((token) => !common.has(token));
+  const candidates = (meaningful.length > 0 ? meaningful : tokens)
+    .map((token) => folded.indexOf(token))
+    .filter((at) => at >= 0);
+  return candidates.length > 0 ? Math.min(...candidates) : 0;
 }
 
 export function matchingSentence(text: string, query: string, maxLength = 160): string {
