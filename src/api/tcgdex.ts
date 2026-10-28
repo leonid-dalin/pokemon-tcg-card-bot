@@ -120,16 +120,6 @@ export class TcgdexClient {
     return cards.slice(0, limit);
   }
 
-  /**
-   * Text search over ability and attack wording. TCGdex indexes it as `effect`,
-   * which is how "search your deck for a Supporter" becomes findable.
-   */
-  async searchByEffect(text: string, limit = 25, lang = "en"): Promise<CardSummary[]> {
-    const query = new URLSearchParams({ effect: text });
-    const cards = await this.getJson<CardSummary[]>(`/${lang}/cards?${query.toString()}`, this.cardTtlMs);
-    return cards.slice(0, limit);
-  }
-
   /** Every card id and name in the set, without text. Used to build the text index. */
   async listCards(lang = "en"): Promise<CardSummary[]> {
     return this.getJson<CardSummary[]>(`/${lang}/cards`, this.setTtlMs);
@@ -149,9 +139,5 @@ export class TcgdexClient {
 
   async listSets(lang = "en"): Promise<SetSummary[]> {
     return this.getJson<SetSummary[]>(`/${lang}/sets`, this.setTtlMs);
-  }
-
-  clearCache(): void {
-    this.cache.clear();
   }
 }

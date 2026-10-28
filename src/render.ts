@@ -137,8 +137,6 @@ function legalityLine(card: Card): string | undefined {
 }
 
 export interface RenderOptions {
-  /** Public page for the card, if you host one. Defaults to the card image. */
-  cardUrl?: (card: Card) => string | undefined;
   /** Attribution appended to every embed footer. */
   attribution?: string;
 }
@@ -209,11 +207,11 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
     .join(" · ");
 
   const image = cardImage(card);
-  const url = options.cardUrl?.(card) ?? image;
 
   return {
     title: truncate(title, 250),
-    ...(url ? { url } : {}),
+    // The title links to the full-size scan.
+    ...(image ? { url: image } : {}),
     color: cardColour(card),
     fields,
     ...(image ? { imageUrl: image } : { description: "No scan is available for this printing." }),

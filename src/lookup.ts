@@ -13,7 +13,6 @@ export interface CardLookup {
 
 export interface LookupOptions {
   attribution?: string;
-  cardUrl?: (card: Card) => string | undefined;
   /** How many other printings to list when a name matches several. */
   alternateLimit?: number;
 }
@@ -88,7 +87,6 @@ function lookupPocket(query: string, setHint: string | undefined, options: Looku
     card,
     view: renderCard(card, {
       attribution: POCKET_ATTRIBUTION,
-      ...(options.cardUrl ? { cardUrl: options.cardUrl } : {}),
     }),
     alternates: pool.filter((entry) => entry.id !== primary.id).slice(0, options.alternateLimit ?? 10),
   };
@@ -131,7 +129,6 @@ export async function lookupById(
     card: pinned,
     view: renderCard(pinned, {
       ...(attribution ? { attribution } : {}),
-      ...(options.cardUrl ? { cardUrl: options.cardUrl } : {}),
     }),
     alternates: sameName,
   };
@@ -192,7 +189,6 @@ export async function lookupCard(
     card,
     view: renderCard(card, {
       ...(options.attribution ? { attribution: options.attribution } : {}),
-      ...(options.cardUrl ? { cardUrl: options.cardUrl } : {}),
     }),
     alternates,
   };

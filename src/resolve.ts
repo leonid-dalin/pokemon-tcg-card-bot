@@ -1,13 +1,8 @@
 import type { CardSummary } from "./api/types.js";
 
-export interface RankedPrinting {
+interface RankedPrinting {
   card: CardSummary;
   score: number;
-}
-
-export interface Resolution {
-  primary: CardSummary;
-  alternates: CardSummary[];
 }
 
 /** Fold case, accents and spacing so "Pokémon" and "pokemon" match. */
@@ -53,8 +48,9 @@ export function scoreCandidate(query: string, candidate: string): number {
 }
 
 /**
- * Rank printings for a query. Upstream order is preserved inside equal scores
- * because it is newest first, which is the printing people usually mean.
+ * Rank printings for a query by name score alone. The sort is stable, so equal
+ * scores keep the upstream order. That order is not by date, so callers that
+ * pick one printing sort by release date afterwards.
  */
 export function rankPrintings(
   summaries: CardSummary[],
@@ -68,7 +64,6 @@ export function rankPrintings(
   ranked.sort((a, b) => b.score - a.score);
   return ranked.map((entry) => entry.card);
 }
-
 
 /**
  * Set ids begin with their series, and the search API returns printings in no
@@ -102,15 +97,4 @@ export function seriesRank(cardId: string): number {
     if (setId.startsWith(series)) rank = Math.max(rank, index);
   }
   return rank;
-}
-
-export function resolvePrinting(
-  summaries: CardSummary[],
-  query: string,
-  setHint?: string,
-): Resolution | undefined {
-  const ranked = rankPrintings(summaries, query, setHint);
-  const [primary, ...rest] = ranked;
-  if (!primary) return undefined;
-  return { primary, alternates: rest };
 }

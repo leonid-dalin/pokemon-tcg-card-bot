@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normaliseName, rankPrintings, resolvePrinting, scoreCandidate, seriesRank, setIdMatches, setIdOf } from "../src/resolve.js";
+import { normaliseName, rankPrintings, scoreCandidate, seriesRank, setIdMatches, setIdOf } from "../src/resolve.js";
 
 const printing = (id: string, name: string) => ({ id, name });
 
@@ -73,21 +73,6 @@ describe("rankPrintings", () => {
 
   it("returns nothing when the set hint excludes every match", () => {
     expect(rankPrintings(cards, "Dragapult", "swsh3")).toEqual([]);
-  });
-});
-
-describe("resolvePrinting", () => {
-  it("separates the primary printing from the alternates", () => {
-    const resolved = resolvePrinting(
-      [printing("sv06-130", "Dragapult ex"), printing("sv08.5-073", "Dragapult ex")],
-      "Dragapult ex",
-    );
-    expect(resolved?.primary.id).toBe("sv06-130");
-    expect(resolved?.alternates.map((card) => card.id)).toEqual(["sv08.5-073"]);
-  });
-
-  it("returns undefined when nothing matches", () => {
-    expect(resolvePrinting([printing("sv06-130", "Dragapult")], "Snorlax")).toBeUndefined();
   });
 });
 
