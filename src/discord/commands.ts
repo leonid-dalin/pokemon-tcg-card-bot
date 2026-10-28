@@ -115,7 +115,7 @@ export async function handleSearchCommand(
     await interaction.editReply({ content: `No card wording mentions \`${text}\`.` });
     return;
   }
-  await interaction.editReply({ embeds: [toEmbed(renderSearchResults(text, cards))] });
+  await interaction.editReply({ embeds: [toEmbed(renderSearchResults(text, cards, context.attribution))] });
 }
 
 export async function handleSetCommand(
@@ -127,7 +127,7 @@ export async function handleSetCommand(
   await interaction.deferReply();
   try {
     const set = await context.client.getSet(id);
-    await interaction.editReply({ embeds: [toEmbed(renderSet(set))] });
+    await interaction.editReply({ embeds: [toEmbed(renderSet(set, context.attribution))] });
   } catch {
     await interaction.editReply({ content: `No set matched \`${id}\`.` });
   }

@@ -1,3 +1,5 @@
+import { DEFAULT_ATTRIBUTION } from "./render.js";
+
 export interface Config {
   token: string;
   clientId: string;
@@ -33,6 +35,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     mentionEnabled: parseBoolean(env.MENTION_ENABLED, true),
     decklistEnabled: parseBoolean(env.DECKLIST_ENABLED, false),
     mentionCooldownSeconds: parsePositiveInt(env.MENTION_COOLDOWN_SECONDS, 0),
-    attribution: env.ATTRIBUTION?.trim() || "Card data from TCGdex",
+    attribution: env.ATTRIBUTION?.trim() || DEFAULT_ATTRIBUTION,
   };
 }

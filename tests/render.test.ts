@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Card } from "../src/api/types.js";
-import { cardColour, priceField, renderCard, renderSet } from "../src/render.js";
+import { DEFAULT_ATTRIBUTION, cardColour, priceField, renderCard, renderSearchResults, renderSet } from "../src/render.js";
 
 const fixture = (name: string): Card =>
   JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8")) as Card;
@@ -143,5 +143,20 @@ describe("field composition", () => {
     for (const name of fieldNames(dragapult)) {
       expect(name.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("footer credit", () => {
+  const set = { id: "sv08.5", name: "Prismatic Evolutions" };
+  const hits = [{ id: "sv02-185", name: "Iono" }];
+
+  it("uses the configured attribution on set and search embeds", () => {
+    expect(renderSet(set, "Data from somewhere").footer).toBe("Data from somewhere");
+    expect(renderSearchResults("iono", hits, "Data from somewhere").footer).toBe("Data from somewhere");
+  });
+
+  it("falls back to the TCGdex credit", () => {
+    expect(renderSet(set).footer).toBe(DEFAULT_ATTRIBUTION);
+    expect(renderSearchResults("iono", hits).footer).toBe(DEFAULT_ATTRIBUTION);
   });
 });

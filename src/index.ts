@@ -128,7 +128,7 @@ client.on(Events.MessageCreate, async (message) => {
         .reply({
           ...(cards.length === 0
             ? { content: `No card wording mentions \`${searchQuery}\`.` }
-            : { embeds: toEmbeds([renderSearchResults(searchQuery, cards)]) }),
+            : { embeds: toEmbeds([renderSearchResults(searchQuery, cards, config.attribution)]) }),
           allowedMentions: { repliedUser: false },
         })
         .catch(() => {});
