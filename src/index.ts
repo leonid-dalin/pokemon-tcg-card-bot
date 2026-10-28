@@ -74,7 +74,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(
   Events.MessageCreate,
-  createMessageHandler({ api, config, budget, selfId: () => client.user?.id }),
+  createMessageHandler({ api, config, budget, pages: context.pages, selfId: () => client.user?.id }),
 );
 
 process.on("unhandledRejection", (error) => console.error("unhandled rejection", error));
