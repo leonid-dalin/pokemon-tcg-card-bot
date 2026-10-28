@@ -271,7 +271,9 @@ describe("lookupById", () => {
 
 describe("price fallback", () => {
   it("never asks the ja catalogue for an English card id", async () => {
-    const priceless = { ...dragapult, variants_detailed: [] };
+    // Strip both price shapes: the real response carries card-level pricing,
+    // which the fallback must accept before any locale is tried.
+    const priceless = { ...dragapult, variants_detailed: [], pricing: null };
     const { calls } = stubFetch({
       "/cards?name=": { body: summaries },
       "/cards/sv08.5-073": { body: priceless },

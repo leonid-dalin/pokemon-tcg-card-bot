@@ -156,7 +156,9 @@ export async function handlePrintingButton(
     await interaction.followUp({ content: `No card matched \`${parsed.cardId}\`.`, flags: MessageFlags.Ephemeral });
     return;
   }
-  await interaction.editReply(cardReply(lookup, parsed.ownerId));
+  // The replacement drops any miss menu the original reply carried, so the
+  // prompt that pointed at it has to go too; an omitted field would keep it.
+  await interaction.editReply({ ...cardReply(lookup, parsed.ownerId), content: null });
 }
 
 export async function handleDetailsButton(
