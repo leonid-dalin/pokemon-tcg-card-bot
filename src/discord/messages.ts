@@ -6,13 +6,14 @@ import { parseDecklist } from "../decklist.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
 import { extractMentions, parseSearchCommand } from "../mentions.js";
 import { renderDecklist } from "../render.js";
-import { searchCardText } from "../text-search.js";
+import { searchCardGroups } from "../text-search.js";
 import { toEmbeds } from "./embeds.js";
 import { MAX_EMBEDS_PER_MESSAGE, mentionReply, searchReply, type MentionMiss } from "./replies.js";
 
 export interface MessageContext {
   api: TcgdexClient;
   config: Pick<Config, "mentionEnabled" | "decklistEnabled" | "attribution" | "energyEmoji">;
+  pages: import("./pages.js").PageStore;
   budget?: MentionBudget | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
@@ -87,7 +88,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         return;
       }
       try {
-        const reply = searchReply(searchQuery, searchCardText(searchQuery), config.attribution);
+        const reply = searchReply(searchQuery, searchCardGroups(searchQuery), config.attribution, message.author.id, context.pages);
         await message.reply({ ...reply }).catch(() => {});
       } catch (error) {
         console.error("mention search failed", error);

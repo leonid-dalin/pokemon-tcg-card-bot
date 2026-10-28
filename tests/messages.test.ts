@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TcgdexClient } from "../src/api/tcgdex.js";
 import type { Card, CardSummary } from "../src/api/types.js";
 import { MentionBudget } from "../src/cooldown.js";
+import { PageStore } from "../src/discord/pages.js";
 import { createMessageHandler, type IncomingMessage, type MessageContext } from "../src/discord/messages.js";
 
 const dragapult = JSON.parse(
@@ -49,6 +50,7 @@ function handler(overrides: Partial<MessageContext> = {}, config: Partial<Messag
   return createMessageHandler({
     api: fakeApi(),
     config: { mentionEnabled: true, decklistEnabled: false, attribution: "Card data from TCGdex", energyEmoji: {}, ...config },
+    pages: new PageStore(),
     selfId: () => BOT_ID,
     ...overrides,
   });
@@ -107,6 +109,7 @@ describe("message handler", () => {
     await handler()(message);
     expect(replies).toHaveLength(1);
     expect(replies[0]?.embeds).toHaveLength(1);
+    expect(replies[0]?.components).toHaveLength(2);
   });
 
   it("asks for search words when none were given", async () => {

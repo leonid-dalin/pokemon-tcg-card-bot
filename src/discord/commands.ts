@@ -10,11 +10,11 @@ import type { TcgdexClient } from "../api/tcgdex.js";
 import { lookupById, lookupCard } from "../lookup.js";
 import { renderCardDetails, renderSet } from "../render.js";
 import { printedNumber } from "../printed.js";
-import { searchCardText } from "../text-search.js";
+import { searchCardGroups } from "../text-search.js";
 import { printingIdFrom, detailsIdFrom } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
-import { PageStore, listReply, pageIndexFrom, pageTokenFrom } from "./pages.js";
+import { listReply, pageIndexFrom, pageTokenFrom, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
 
 export interface CommandContext {
@@ -189,10 +189,9 @@ export async function handleSearchCommand(
   context: CommandContext,
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
-  const text = interaction.options.getString("text", true).trim();
-
+  const query = interaction.options.getString("text", true).trim();
   await interaction.deferReply();
-  await interaction.editReply(searchReply(text, searchCardText(text), context.attribution));
+  await interaction.editReply(searchReply(query, searchCardGroups(query), context.attribution, interaction.user.id, context.pages));
 }
 
 export async function handleSetCommand(

@@ -1,10 +1,9 @@
-import type { EmbedBuilder } from "discord.js";
 import type { CardSummary } from "../api/types.js";
 import { printedNumber } from "../printed.js";
 import { lookupEmbeds, type CardLookup } from "../lookup.js";
-import { renderSearchResults } from "../render.js";
-import type { TextHit } from "../text-search.js";
+import { matchingSentence, type TextGroup } from "../text-search.js";
 import { toEmbeds } from "./embeds.js";
+import { listReply, type ListPage, type PageStore } from "./pages.js";
 import { detailsRow, detailsRows, printingRows } from "./printing-buttons.js";
 
 /** Most embeds Discord accepts in one message is ten; five keeps a reply readable. */
@@ -21,11 +20,25 @@ export function cardReply(lookup: CardLookup, ownerId?: string) {
 /** A text search answer, shared by `/search` and `@bot search`. */
 export function searchReply(
   query: string,
-  hits: TextHit[],
+  groups: TextGroup[],
   attribution: string,
-): { content: string } | { embeds: EmbedBuilder[] } {
-  if (hits.length === 0) return { content: `No card wording mentions \`${query}\`.` };
-  return { embeds: toEmbeds([renderSearchResults(query, hits, attribution)]) };
+  ownerId: string,
+  pages: PageStore,
+) {
+  if (groups.length === 0) return { content: `No card wording mentions \`${query}\`.` };
+  const page: ListPage = {
+    title: `${groups.length} cards mention \"${query}\"`,
+    items: groups.map(({ representative, printings }) => ({
+      cardId: representative.id,
+      heading: `**${representative.name}** · ${printedNumber(representative.id)}${printings > 1 ? ` · ${printings} printings` : ""}`,
+      detail: matchingSentence(representative.text, query),
+    })),
+    perPage: 5,
+    ownerId,
+    footer: attribution,
+  };
+  const token = pages.put(page);
+  return listReply(page, token, 0);
 }
 
 export interface MentionMiss {

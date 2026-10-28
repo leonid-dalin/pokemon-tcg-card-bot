@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { searchCardText, textIndexSize } from "../src/text-search.js";
+import { normaliseName } from "../src/resolve.js";
+import { searchCardGroups, searchCardText, matchingSentence, textIndexSize } from "../src/text-search.js";
 
 describe("text index", () => {
   it("covers most of the catalogue", () => {
@@ -8,6 +10,41 @@ describe("text index", () => {
 });
 
 describe("searchCardText", () => {
+  it("groups results by normalised name and exact text", () => {
+    const groups = searchCardGroups("draw 2 cards");
+    const hits = searchCardText("draw 2 cards");
+    const expected = new Set(hits.map((hit) => `${normaliseName(hit.name)}|${hit.text}`));
+    expect(groups.length).toBe(expected.size);
+  });
+
+  it("groups the three identical Team Rocket's Transceiver printings", () => {
+    const group = searchCardGroups("search your deck for a supporter").find((entry) => entry.representative.name === "Team Rocket's Transceiver");
+    expect(group).toMatchObject({ printings: 3, representative: { id: "me02.5-209" } });
+  });
+
+  it("returns each repeated card name once for a text query", () => {
+    const groups = searchCardGroups("discard pile into your hand");
+    const names = groups.map((group) => `${normaliseName(group.representative.name)}|${group.representative.text}`);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("selects the sentence with the most query words and marks matches", () => {
+    expect(matchingSentence(
+      "Search your deck for a Supporter card, reveal it, and put it into your hand. Then, shuffle your deck.",
+      "supporter",
+    )).toBe("Search your deck for a **Supporter** card, reveal it, and put it into your hand.");
+  });
+
+  it("cuts a long matching sentence at a word boundary", () => {
+    const result = matchingSentence(`Search your deck for a Supporter ${"card ".repeat(50)}`, "supporter");
+    expect(result.length).toBeLessThanOrEqual(160);
+    expect(result.endsWith("…")).toBe(true);
+  });
+
+  it("keeps exact-name ranking first", () => {
+    expect(searchCardGroups("Iono")[0]?.representative.name).toBe("Iono");
+  });
+
   it("finds a Pokemon attack by its wording, which the API cannot do", () => {
     const hits = searchCardText("Put a Trainer card from your discard pile into your hand");
     expect(hits.some((hit) => hit.id === "sv08-087")).toBe(true);
@@ -49,5 +86,9 @@ describe("searchCardText", () => {
   it("ranks an exact name first", () => {
     const hits = searchCardText("Iono");
     expect(hits[0]?.name).toBe("Iono");
+  });
+
+  it("retains the legacy top hit for Iono", () => {
+    expect(searchCardGroups("Iono")[0]?.representative.name).toBe("Iono");
   });
 });

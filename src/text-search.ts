@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { normaliseName } from "./resolve.js";
+import { setRecency } from "./set-index.js";
 
 export interface TextHit {
   id: string;
@@ -8,6 +9,10 @@ export interface TextHit {
   text: string;
 }
 
+export interface TextGroup {
+  representative: TextHit;
+  printings: number;
+}
 interface IndexedCard {
   id: string;
   name: string;
@@ -48,39 +53,24 @@ export function textIndexSize(): number {
   return load().cards.length;
 }
 
-/**
- * Every query word must appear somewhere in the card's ability or attack text.
- * Results are ranked by how many of those words also appear in the card name,
- * because a name hit is usually what the asker meant, then by the shorter text,
- * which tends to be the more specific card.
- */
-export function searchCardText(query: string, limit = 15): TextHit[] {
-  const tokens = normaliseName(query)
-    .split(" ")
-    .filter((token) => token.length > 1);
-  if (tokens.length === 0) return [];
+function queryTokens(query: string): string[] {
+  return normaliseName(query).split(" ").filter((token) => token.length > 1);
+}
 
+function findHits(query: string): { card: IndexedCard; nameHits: number; exact: boolean }[] {
+  const tokens = queryTokens(query);
+  if (tokens.length === 0) return [];
   const { cards, normalised } = load();
   const hits: { card: IndexedCard; nameHits: number; exact: boolean }[] = [];
 
   for (const [index, card] of cards.entries()) {
     const haystack = normalised[index] ?? "";
-    let matchedAll = true;
-    for (const token of tokens) {
-      if (!haystack.includes(token)) {
-        matchedAll = false;
-        break;
-      }
-    }
+    const matchedAll = tokens.every((token) => haystack.includes(token));
     const name = normaliseName(card.name);
     const nameHits = tokens.filter((token) => name.includes(token)).length;
     const nameMatches = nameHits === tokens.length;
-
-    // A card's own text rarely repeats its name, so a name match counts on its
-    // own. Otherwise searching "Iono" misses the Supporter called Iono.
     if (!matchedAll && !nameMatches) continue;
-    const exact = name === normaliseName(query);
-    hits.push({ card, nameHits, exact });
+    hits.push({ card, nameHits, exact: name === normaliseName(query) });
   }
 
   hits.sort((a, b) => {
@@ -89,6 +79,62 @@ export function searchCardText(query: string, limit = 15): TextHit[] {
     if (a.card.text.length !== b.card.text.length) return a.card.text.length - b.card.text.length;
     return a.card.name.localeCompare(b.card.name);
   });
+  return hits;
+}
 
-  return hits.slice(0, limit).map((hit) => ({ id: hit.card.id, name: hit.card.name, text: hit.card.text }));
+export function searchCardText(query: string, limit = Number.POSITIVE_INFINITY): TextHit[] {
+  return findHits(query).slice(0, limit).map(({ card }) => ({ id: card.id, name: card.name, text: card.text }));
+}
+
+export function searchCardGroups(query: string): TextGroup[] {
+  const groups = new Map<string, { card: IndexedCard; printings: number }>();
+  for (const { card } of findHits(query)) {
+    const key = `${normaliseName(card.name)}\u0000${card.text}`;
+    const group = groups.get(key);
+    if (!group) {
+      groups.set(key, { card, printings: 1 });
+      continue;
+    }
+    group.printings += 1;
+    if (setRecency(card.id) > setRecency(group.card.id)) group.card = card;
+  }
+  return [...groups.values()].map(({ card, printings }) => ({
+    representative: { id: card.id, name: card.name, text: card.text },
+    printings,
+  }));
+}
+
+function splitSentences(text: string): string[] {
+  return text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function matchingSentence(text: string, query: string, maxLength = 160): string {
+  const tokens = queryTokens(query);
+  const ranked = splitSentences(text).map((sentence, index) => ({
+    sentence,
+    index,
+    matches: tokens.filter((token) => normaliseName(sentence).includes(token)).length,
+  }));
+  ranked.sort((a, b) => b.matches - a.matches || a.index - b.index);
+  const selected = ranked[0]?.sentence ?? text;
+  const highlightBudget = tokens.reduce((total, token) => {
+    const count = normaliseName(selected).split(token).length - 1;
+    return total + count * 4;
+  }, 0);
+  const outputLimit = Math.max(0, maxLength - 1 - highlightBudget);
+  const truncated = selected.length > outputLimit;
+  let excerpt = selected;
+  if (truncated) {
+    const prefix = excerpt.slice(0, outputLimit);
+    const boundary = prefix.lastIndexOf(" ");
+    excerpt = prefix.slice(0, boundary > 0 ? boundary : prefix.length);
+  }
+  for (const token of [...new Set(tokens)].sort((a, b) => b.length - a.length)) {
+    excerpt = excerpt.replace(new RegExp(escapeRegExp(token), "gi"), (match) => `**${match}**`);
+  }
+  return truncated ? `${excerpt}…` : excerpt;
 }

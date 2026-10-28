@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PageStore } from "../src/discord/pages.js";
 import { mentionReply, searchReply } from "../src/discord/replies.js";
 
 describe("searchReply", () => {
@@ -6,9 +7,15 @@ describe("searchReply", () => {
     expect(searchReply("zzz", [], "Card data from TCGdex")).toEqual({ content: "No card wording mentions `zzz`." });
   });
 
-  it("lists the hits in one embed", () => {
-    const reply = searchReply("iono", [{ id: "sv02-185", name: "Iono", text: "" }], "Card data from TCGdex");
+  it("pages grouped hits with five items", () => {
+    const groups = Array.from({ length: 11 }, (_, index) => ({
+      representative: { id: `sv01-${String(index + 1).padStart(3, "0")}`, name: `Card ${index + 1}`, text: "draw 2 cards" },
+      printings: 1,
+    }));
+    const reply = searchReply("draw 2 cards", groups, "Card data from TCGdex", "owner", new PageStore());
     expect("embeds" in reply && reply.embeds).toHaveLength(1);
+    expect("components" in reply && reply.components).toHaveLength(2);
+    expect("embeds" in reply && reply.embeds[0]?.data.title).toBe('11 cards mention "draw 2 cards"');
   });
 });
 
