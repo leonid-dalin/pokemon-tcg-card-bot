@@ -9,6 +9,11 @@ export function isPocketCard(card: Card): boolean {
   return POCKET_SET.test(setIdOf(card.id));
 }
 
+/** Classifies a resolved set id as a Pocket set. */
+export function isPocketSet(setId: string): boolean {
+  return POCKET_SET.test(setId);
+}
+
 /** Uses explicit Pocket points or infers the knockout reward from the card name. */
 export function prizeCount(card: Card): number {
   if (isPocketCard(card) && card.points !== undefined) return card.points;

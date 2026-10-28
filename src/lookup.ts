@@ -5,7 +5,7 @@ import { printedNumber } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
-import { isPocketCard } from "./prizes.js";
+import { isPocketCard, isPocketSet } from "./prizes.js";
 import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
 
@@ -204,14 +204,14 @@ export async function lookupCard(
   // A Pocket alias selects the package catalogue; forcing a game always wins.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
   if (pocketOnly) return lookupPocket(query, setHint, options);
-  // A physical set hint forces the physical game, so it outranks the server preference.
-  const forcedPhysical = Boolean(setHint);
+  const resolved = setHint ? resolveSetHint(setHint) : undefined;
+  if (setHint && !resolved) return undefined;
+  // A Pocket set hint does not force the physical game: the server preference applies
+  // and the package fallback stays available for it.
+  const forcedPhysical = Boolean(setHint) && !(resolved !== undefined && isPocketSet(resolved));
   const preference = options.gamePreference;
   if (!forcedPhysical && preference?.allowed === "pocket") return lookupPocket(query, setHint, options);
-  const resolved = setHint ? resolveSetHint(setHint) : undefined;
 
-  // Reject unknown set hints before the name search.
-  if (setHint && !resolved) return undefined;
   // The preference's default game applies only to unhinted names, and only when the
   // package has the exact requested name; partial package matches must not win.
   if (preference?.allowed === "both" && preference.default === "pocket" && !setHint) {
@@ -232,7 +232,12 @@ export async function lookupCard(
     return lookupPocket(query, setHint, options);
   }
 
-  const ordered = orderForDisplay(ranked, query);
+  // For a shared name, the preferred game wins before artwork or recency comparisons.
+  const physicalRanked = ranked.filter((card) => !isPocketCard(card as Card));
+  const ordered = orderForDisplay(
+    preference?.allowed === "both" && preference.default === "ptcg" && physicalRanked.length ? physicalRanked : ranked,
+    query,
+  );
   const [primary] = ordered;
   if (!primary) return undefined;
 

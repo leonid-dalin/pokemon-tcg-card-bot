@@ -42,6 +42,39 @@ describe("per-server card game preference in lookupCard", () => {
     expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
   });
 
+  it("routes a Pocket set hint to a Pocket card on a physical-only server", async () => {
+    const client = clientReturning([{ id: "A1-036", name: "Charizard ex", localId: "036" }]);
+    const lookup = await lookupCard(client, "Charizard ex", "A1", { gamePreference: POCKET_ONLY });
+    expect(lookup?.card.id.toLowerCase()).toBe("a1-036");
+  });
+
+  it("keeps a Pocket set hint eligible for package fallback when upstream is empty", async () => {
+    const client = clientReturning([]);
+    const lookup = await lookupCard(client, "Charizard ex", "Genetic Apex");
+    expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
+    expect((client as unknown as { calls: () => number }).calls()).toBe(1);
+  });
+
+  it("prefers the physical record of a shared name even when its image is missing", async () => {
+    const client = clientReturning([
+      { id: "A1-036", name: "Charizard ex", localId: "036", image: "https://example.com/pocket.webp" },
+      { id: "sv03-125", name: "Charizard ex", localId: "125" },
+    ]);
+    const lookup = await lookupCard(client, "Charizard ex", undefined, {
+      gamePreference: { allowed: "both", default: "ptcg" },
+    });
+    expect(lookup?.card.id).toBe("sv03-125");
+  });
+
+  it("prefers the Pocket record of a shared name when Pocket is the default", async () => {
+    const client = clientReturning([
+      { id: "A1-036", name: "Charizard ex", localId: "036", image: "https://example.com/pocket.webp" },
+      { id: "sv03-125", name: "Charizard ex", localId: "125" },
+    ]);
+    const lookup = await lookupCard(client, "Charizard ex", undefined, { gamePreference: BOTH_PREFER_POCKET });
+    expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
+  });
+
   it("drops TCGdex Pocket records from a physical-only lookup", async () => {
     const client = clientReturning([{ id: "A2b-010", name: "Pikachu", localId: "010" }]);
     const lookup = await lookupCard(client, "Pikachu", undefined, { gamePreference: PTCG_ONLY });
