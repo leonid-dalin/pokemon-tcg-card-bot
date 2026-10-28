@@ -1,7 +1,7 @@
 import type { CardSummary } from "../api/types.js";
 import { printedNumber } from "../printed.js";
 import { lookupEmbeds, type CardLookup } from "../lookup.js";
-import { matchingSentence, type TextGroup } from "../text-search.js";
+import { matchingDetail, type TextGroup } from "../text-search.js";
 import { toEmbeds } from "./embeds.js";
 import { listReply, type ListPage, type PageStore } from "./pages.js";
 import { detailsRow, detailsRows, printingRows } from "./printing-buttons.js";
@@ -31,7 +31,7 @@ export function searchReply(
     items: groups.map(({ representative, printings }) => ({
       cardId: representative.id,
       heading: `**${representative.name}** · ${printedNumber(representative.id)}${printings > 1 ? ` · ${printings} printings` : ""}`,
-      detail: matchingSentence(representative.text, query),
+      detail: matchingDetail(representative, query),
     })),
     perPage: 5,
     ownerId,

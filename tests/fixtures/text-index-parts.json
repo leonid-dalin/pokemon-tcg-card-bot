@@ -1,0 +1,30 @@
+[
+  {
+    "id": "me04-048",
+    "name": "Mega Gallade ex",
+    "text": "Battle Bond. Once during your turn, you may attach a Fighting Energy card from your hand to this Pokémon. Gale Slash. If this Pokémon has no damage counters on it, this attack does 150 more damage.",
+    "parts": [
+      {
+        "kind": "ability",
+        "name": "Battle Bond",
+        "text": "Once during your turn, you may attach a Fighting Energy card from your hand to this Pokémon."
+      },
+      {
+        "kind": "attack",
+        "name": "Gale Slash",
+        "text": "If this Pokémon has no damage counters on it, this attack does 150 more damage."
+      }
+    ]
+  },
+  {
+    "id": "sv02-185",
+    "name": "Iono",
+    "text": "Choose 1 of your opponent's Active Pokémon and put it and any attached cards back into their owner's hand.",
+    "parts": [
+      {
+        "kind": "effect",
+        "text": "Choose 1 of your opponent's Active Pokémon and put it and any attached cards back into their owner's hand."
+      }
+    ]
+  }
+]
