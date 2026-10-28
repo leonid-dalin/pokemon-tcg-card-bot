@@ -245,6 +245,8 @@ export function searchPocketByName(name: string): CardSummary[] {
 }
 
 export function getPocketCard(id: string): Card | undefined {
-  return loadIndex().cards.get(id);
+  // Package keys are lowercase, so an id from a source that cases differently
+  // (TCGdex Pocket sets, a user link) still resolves.
+  return loadIndex().cards.get(id) ?? loadIndex().cards.get(id.toLowerCase());
 }
 
