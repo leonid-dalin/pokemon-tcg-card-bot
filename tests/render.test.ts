@@ -1,13 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Card } from "../src/api/types.js";
-import { DEFAULT_ATTRIBUTION, cardColour, priceField, renderCard, renderSearchResults, renderSet } from "../src/render.js";
+import { isImageOnly, lookupEmbeds } from "../src/lookup.js";
+import { DEFAULT_ATTRIBUTION, cardColour, priceField, renderCard, renderCardDetails, renderCardImage, renderSearchResults, renderSet } from "../src/render.js";
 
 const fixture = (name: string): Card =>
   JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8")) as Card;
 
 const dragapult = fixture("dragapult-ex-sv08.5-073.json");
 const charizard = fixture("charizard-ex-sv03-125.json");
+const megaGallade = fixture("mega-gallade-ex-me04-048.json");
 
 const fieldNames = (card: Card) => renderCard(card).fields.map((field) => field.name);
 
@@ -23,14 +25,64 @@ const iono: Card = {
 };
 
 describe("renderCard", () => {
+  it("puts game information on the Mega Gallade ex front", () => {
+    const view = renderCard(megaGallade);
+    expect(view.description).toMatch(/^350 HP · Fighting · Stage 2 · from Kirlia/);
+    expect(view.fields.map((field) => field.name)).toEqual(["Gale Slash  50+", "Marvelous Edge  240", "Weakness", "Retreat"]);
+    expect(view.fields.find((field) => field.name === "Weakness")?.value).toBe("Psychic ×2");
+    expect(view.fields.some((field) => ["Rarity", "Legal", "Prices", "Illustrator"].includes(field.name))).toBe(false);
+    expect(view.footer).toMatch(/^CRI 48 · Reg J/);
+    expect(JSON.stringify(view)).not.toContain("—");
+  });
+
+  it("starts attack values with compact energy tokens", () => {
+    const attacks = renderCard(megaGallade).fields;
+    expect(attacks.find((field) => field.name === "Gale Slash  50+")?.value).toMatch(/^\[F\]/);
+    expect(attacks.find((field) => field.name === "Marvelous Edge  240")?.value).toMatch(/^\[F\]\[F\]\[C\]/);
+  });
+  it("uses configured energy emoji in attack values", () => {
+    const attacks = renderCard(megaGallade, { energyEmoji: { Fighting: "<:f:1>" } }).fields;
+    expect(attacks.find((field) => field.name === "Gale Slash  50+")?.value).toMatch(/^<:f:1>/);
+    expect(attacks.find((field) => field.name === "Marvelous Edge  240")?.value).toMatch(/^<:f:1><:f:1>\[C\]/);
+  });
+  it("renders card details separately", () => {
+    const view = renderCardDetails(megaGallade, [], { attribution: "Card data from TCGdex" });
+    expect(view.fields.map((field) => field.name)).toEqual(["Set", "Rarity", "Illustrator", "Legal", "Prices"]);
+    expect(view.fields.find((field) => field.name === "Set")?.value).toContain("Chaos Rising");
+    expect(view.fields.find((field) => field.name === "Set")?.value).toContain("CRI 48");
+  });
+
+  it("renders an image-only card with the scan and nothing else", () => {
+    const view = renderCardImage(dragapult);
+    expect(view.fields).toEqual([]);
+    expect(view.imageUrl).toBe("https://assets.tcgdex.net/en/sv/sv08.5/073/high.webp");
+    expect(view.title).toBe("Dragapult ex · PRE 73");
+    expect(view.footer).toBe("Card data from TCGdex");
+    expect(view.url).toBe(view.imageUrl);
+  });
+
+  it("keeps the attribution on an image-only card", () => {
+    const view = renderCardImage(dragapult, { attribution: "Card data from elsewhere" });
+    expect(view.footer).toBe("Card data from elsewhere");
+  });
+
+  it("falls back to the full card when the printing has no scan", () => {
+    const noScan: Card = { ...dragapult, image: undefined };
+    const lookup = { card: noScan, alternates: [], imageOnly: true as const };
+    expect(isImageOnly(lookup)).toBe(false);
+    const view = lookupEmbeds(lookup)[0];
+    expect(view.fields.length).toBeGreaterThan(0);
+    expect(view.imageUrl).toBeUndefined();
+  });
+
   it("shows the wording and the kind of a Trainer card", () => {
     const view = renderCard(iono);
-    expect(view.fields.find((field) => field.name === "Effect")?.value).toBe(iono.effect);
+    expect(view.description).toBe(iono.effect);
     expect(view.fields.find((field) => field.name === "Card")?.value).toBe("Trainer · Supporter");
   });
 
-  it("titles the card with its set number", () => {
-    expect(renderCard(dragapult).title).toBe("Dragapult ex · #073/131");
+  it("titles the card with its name", () => {
+    expect(renderCard(dragapult).title).toBe("Dragapult ex");
   });
 
   it("points the image at the high resolution art", () => {
@@ -44,41 +96,36 @@ describe("renderCard", () => {
     expect(cardColour(charizard)).toBe(0x37474f);
   });
 
-  it("carries the set, card profile and rarity", () => {
-    const view = renderCard(dragapult);
+  it("carries the set, card profile and rarity in Details", () => {
+    const view = renderCardDetails(dragapult, [], {});
     const set = view.fields.find((field) => field.name === "Set");
-    const card = view.fields.find((field) => field.name === "Card");
     const rarity = view.fields.find((field) => field.name === "Rarity");
     expect(set?.value).toContain("Prismatic Evolutions");
-    expect(set?.value).toContain("Reg H");
-    expect(card?.value).toContain("Dragon");
-    expect(card?.value).toContain("320 HP");
+    expect(set?.value).toContain("PRE 73");
     expect(rarity?.value).toBe("Double rare");
   });
 
-  it("renders each attack with its damage and effect", () => {
-    const attacks = renderCard(dragapult).fields.filter((field) => field.name === "Attack");
-    expect(attacks).toHaveLength(2);
-    expect(attacks[0]?.value).toContain("Jet Headbutt");
-    expect(attacks[0]?.value).toContain("70");
-    expect(attacks[1]?.value).toContain("Phantom Dive");
-    expect(attacks[1]?.value).toContain("Put 6 damage counters");
+  it("renders each attack with its name, damage and effect", () => {
+    const attacks = renderCard(dragapult).fields;
+    expect(attacks.some((field) => field.name === "Jet Headbutt  70")).toBe(true);
+    expect(attacks.some((field) => field.name === "Phantom Dive  200")).toBe(true);
+    expect(attacks.find((field) => field.name === "Phantom Dive  200")?.value).toContain("Put 6 damage counters");
   });
 
-  it("lists every format the card is legal in", () => {
-    const legal = (card: Card) => renderCard(card).fields.find((field) => field.name === "Legal")?.value;
+  it("lists every format the card is legal in on Details", () => {
+    const legal = (card: Card) => renderCardDetails(card, [], {}).fields.find((field) => field.name === "Legal")?.value;
     expect(legal(dragapult)).toBe("Standard · Expanded");
     expect(legal(charizard)).toBe("Expanded");
   });
 
-  it("summarises weakness and retreat", () => {
-    const combat = renderCard(charizard).fields.find((field) => field.name === "Combat")?.value;
-    expect(combat).toContain("Weakness Grass ×2");
-    expect(combat).toContain("Retreat 2");
+  it("summarises weakness and retreat as separate fields", () => {
+    const fields = renderCard(charizard).fields;
+    expect(fields.find((field) => field.name === "Weakness")?.value).toBe("Grass ×2");
+    expect(fields.find((field) => field.name === "Retreat")?.value).toBe("2");
   });
 
-  it("prices the card in the currency the source reports", () => {
-    const prices = renderCard(dragapult).fields.find((field) => field.name === "Prices")?.value;
+  it("prices the card in the currency the source reports on Details", () => {
+    const prices = renderCardDetails(dragapult, [], {}).fields.find((field) => field.name === "Prices")?.value;
     expect(prices).toContain("Cardmarket 1.49 EUR");
     expect(prices).toContain("low 0.39 EUR");
     expect(prices).toMatch(/Updated \d{4}-\d{2}-\d{2}/);

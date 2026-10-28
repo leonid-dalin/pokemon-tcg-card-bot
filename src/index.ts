@@ -5,12 +5,19 @@ import { loadDotEnv } from "./env.js";
 import {
   handleAutocomplete,
   handleCardCommand,
+  handleDetailsButton,
+  handleFilterMenu,
+  handleHelpCommand,
+  handleOpenCardMenu,
+  handlePageButton,
   handlePrintingButton,
+  handlePrintingsCommand,
   handleSearchCommand,
   handleSetCommand,
   type CommandContext,
 } from "./discord/commands.js";
 import { clientOptions } from "./discord/client-options.js";
+import { PageStore } from "./discord/pages.js";
 import { createMessageHandler } from "./discord/messages.js";
 import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
@@ -22,7 +29,7 @@ if (!acquireSingleInstanceLock()) process.exit(1);
 
 const config = loadConfig(process.env);
 const api = new TcgdexClient();
-const context: CommandContext = { client: api, attribution: config.attribution };
+const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore() };
 
 const client = new Client(clientOptions(config));
 const budget =
@@ -41,7 +48,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isButton()) {
-      await handlePrintingButton(context, interaction);
+      if (interaction.customId.startsWith("details:")) {
+        await handleDetailsButton(context, interaction);
+      } else if (interaction.customId.startsWith("page:")) {
+        await handlePageButton(context, interaction);
+      } else {
+        await handlePrintingButton(context, interaction);
+      }
+      return;
+    }
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("open:")) {
+      await handleOpenCardMenu(context, interaction);
+      return;
+    }
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("filter:")) {
+      await handleFilterMenu(context, interaction);
       return;
     }
     if (!interaction.isChatInputCommand()) return;
@@ -51,6 +72,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleSetCommand(context, interaction);
     } else if (interaction.commandName === "search") {
       await handleSearchCommand(context, interaction);
+    } else if (interaction.commandName === "printings") {
+      await handlePrintingsCommand(context, interaction);
+    } else if (interaction.commandName === "help") {
+      await handleHelpCommand(interaction);
     }
   } catch (error) {
     console.error("interaction failed", error);
@@ -60,7 +85,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(
   Events.MessageCreate,
-  createMessageHandler({ api, config, budget, selfId: () => client.user?.id }),
+  createMessageHandler({ api, config, budget, pages: context.pages, selfId: () => client.user?.id }),
 );
 
 process.on("unhandledRejection", (error) => console.error("unhandled rejection", error));

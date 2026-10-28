@@ -1,5 +1,14 @@
-import type { Ability, Attack, Card, CardSetRef, Pricing, SetSummary } from "./api/types.js";
+import type { Attack, Card, CardSetRef, Pricing, SetSummary } from "./api/types.js";
 import type { ParsedDeck } from "./decklist.js";
+import type { ResolvedLine } from "./deck-check.js";
+import { isBasicEnergy } from "./deck-check.js";
+import { energyCost } from "./energy.js";
+import { isPocketCard, prizeCount } from "./prizes.js";
+import { printedNumber } from "./printed.js";
+import { normaliseName } from "./resolve.js";
+import { SET_INDEX } from "./data/set-index.js";
+
+const setById = new Map(SET_INDEX.map((entry) => [normaliseName(entry.id), entry]));
 
 export interface EmbedField {
   name: string;
@@ -37,7 +46,6 @@ const DEFAULT_COLOUR = 0x5865f2;
 /** Footer credit when nothing more specific is configured. */
 export const DEFAULT_ATTRIBUTION = "Card data from TCGdex";
 const FIELD_VALUE_LIMIT = 1024;
-const MAX_ATTACK_FIELDS = 4;
 
 export function cardImage(card: Card, size: "high" | "low" = "high"): string | undefined {
   if (!card.image) return undefined;
@@ -56,14 +64,18 @@ function truncate(value: string, limit = 400): string {
   return value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
 }
 
-function attackLabel(attack: Attack): string {
-  const cost = attack.cost?.length ? `${attack.cost.join("+")} · ` : "";
-  const damage = attack.damage !== undefined && attack.damage !== null ? ` — ${attack.damage}` : "";
-  return truncate(`${cost}${attack.name}${damage}`, 250);
+export function formatStage(stage: string | undefined): string | undefined {
+  if (!stage) return undefined;
+  return stage.replace(/^Stage(\d+)$/, "Stage $1");
 }
 
-function abilityLabel(ability: Ability): string {
-  return truncate(`${ability.type}: ${ability.name}`, 250);
+function attackName(attack: Attack): string {
+  return truncate(`${attack.name}${attack.damage !== undefined && attack.damage !== null ? `  ${attack.damage}` : ""}`, 250);
+}
+
+function attackValue(attack: Attack, emoji: Record<string, string>): string {
+  const cost = energyCost(attack.cost, emoji);
+  return truncate([cost, attack.effect].filter(Boolean).join("\n"));
 }
 
 function formatDate(iso?: string): string | undefined {
@@ -83,18 +95,39 @@ interface PriceSummary {
   tcgplayer?: Pricing;
 }
 
+/** The TCGplayer card-level block may carry flat averages or nested per-variant
+ * market prices; either way the reply needs one flat figure. */
+function flattenTcgplayer(raw: NonNullable<Card["pricing"]>["tcgplayer"]): Pricing | undefined {
+  if (!raw) return undefined;
+  if (typeof raw.avg === "number" || typeof raw.trend === "number") return raw as Pricing;
+  const variants = Object.entries(raw as Record<string, { marketPrice?: number | null } | undefined>);
+  if (variants.length === 0) return undefined;
+  const normal = variants.find(([name]) => name === "normal") ?? variants.find(([, price]) => price?.marketPrice != null);
+  const market = normal?.[1]?.marketPrice;
+  return typeof market === "number" && !Number.isNaN(market) ? { unit: "USD", avg: market } : undefined;
+}
+
 function pickPricing(card: Card): PriceSummary {
+  const perSource: PriceSummary = {};
   for (const variant of card.variants_detailed ?? []) {
     const pricing = variant.pricing;
     if (!pricing) continue;
-    if (pricing.cardmarket || pricing.tcgplayer) {
-      return {
-        ...(pricing.cardmarket ? { cardmarket: pricing.cardmarket } : {}),
-        ...(pricing.tcgplayer ? { tcgplayer: pricing.tcgplayer } : {}),
-      };
-    }
+    // Per-source accumulation: a variant that prices only TCGplayer must not
+    // hide the Cardmarket figure another variant or the card itself carries.
+    if (pricing.cardmarket && !perSource.cardmarket) perSource.cardmarket = pricing.cardmarket;
+    if (pricing.tcgplayer && !perSource.tcgplayer) perSource.tcgplayer = pricing.tcgplayer;
   }
-  return {};
+  const cardPricing = card.pricing;
+  if (!perSource.cardmarket && cardPricing?.cardmarket) perSource.cardmarket = cardPricing.cardmarket;
+  if (!perSource.tcgplayer) perSource.tcgplayer = flattenTcgplayer(cardPricing?.tcgplayer);
+  return perSource;
+}
+
+/** The Cardmarket average for a card, which the price field and the deck price share. */
+export function cardmarketAverage(card: Card): number | undefined {
+  const { cardmarket } = pickPricing(card);
+  const avg = cardmarket?.avg;
+  return typeof avg === "number" && !Number.isNaN(avg) ? avg : undefined;
 }
 
 export function priceField(card: Card): EmbedField | undefined {
@@ -140,86 +173,119 @@ function legalityLine(card: Card): string | undefined {
 }
 
 export interface RenderOptions {
-  /** Attribution appended to every embed footer. */
   attribution?: string;
+  energyEmoji?: Record<string, string>;
 }
 
-/**
- * Turn a card into the embed the bot posts. The field set mirrors what people
- * expect from a card lookup bot: art first, then set and number, rules text,
- * legality and both price sources.
- */
-export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
-  const set = card.set;
-  const total = set?.cardCount?.official ?? set?.cardCount?.total;
-  const number = card.localId ? `#${card.localId}${total ? `/${total}` : ""}` : undefined;
-  const title = [card.name, number].filter(Boolean).join(" · ");
-
-  const fields: EmbedField[] = [];
-
-  const setLine = [set?.name, set?.serie?.name, card.regulationMark ? `Reg ${card.regulationMark}` : undefined]
-    .filter(Boolean)
-    .join(" · ");
-  if (setLine) fields.push({ name: "Set", value: truncate(setLine), inline: true });
-
-  const profile = [
-    card.category,
-    card.trainerType,
-    card.stage,
-    card.types?.length ? card.types.join("/") : undefined,
+function cardProfile(card: Card): string | undefined {
+  const count = prizeCount(card);
+  const reward = count > 1 ? `${count} ${isPocketCard(card) ? "Points" : "Prizes"}` : undefined;
+  if (card.category === "Trainer" || card.category === "Energy") return [card.category, card.trainerType].filter(Boolean).join(" · ");
+  return [
     card.hp ? `${card.hp} HP` : undefined,
+    card.types?.length ? card.types.join("/") : undefined,
+    formatStage(card.stage),
+    card.evolveFrom ? `from ${card.evolveFrom}` : undefined,
+    reward,
   ]
     .filter(Boolean)
     .join(" · ");
-  if (profile) fields.push({ name: "Card", value: truncate(profile), inline: true });
+}
 
-  if (card.rarity) fields.push({ name: "Rarity", value: truncate(card.rarity), inline: true });
+function cardDescription(card: Card): string | undefined {
+  if (card.category === "Trainer" || card.category === "Energy") return card.effect;
+  return cardProfile(card);
+}
 
-  if (card.effect) fields.push({ name: "Effect", value: truncate(card.effect, FIELD_VALUE_LIMIT) });
-
-  for (const ability of (card.abilities ?? []).slice(0, 2)) {
-    fields.push({ name: "Ability", value: truncate(`${abilityLabel(ability)}\n${ability.effect ?? ""}`) });
-  }
-
-  for (const attack of (card.attacks ?? []).slice(0, MAX_ATTACK_FIELDS)) {
-    const body = attack.effect ? `${attackLabel(attack)}\n${attack.effect}` : attackLabel(attack);
-    fields.push({ name: "Attack", value: truncate(body) });
-  }
-
-  const combat: string[] = [];
-  if (card.weaknesses?.length) {
-    combat.push(`Weakness ${card.weaknesses.map((w) => `${w.type} ${w.value}`).join(", ")}`);
-  }
-  if (card.resistances?.length) {
-    combat.push(`Resistance ${card.resistances.map((r) => `${r.type} ${r.value}`).join(", ")}`);
-  }
-  if (card.retreat !== undefined) combat.push(`Retreat ${card.retreat}`);
-  if (combat.length) fields.push({ name: "Combat", value: truncate(combat.join(" · ")) });
-
-  const legality = legalityLine(card);
-  if (legality) fields.push({ name: "Legal", value: truncate(legality), inline: true });
-
-  const price = priceField(card);
-  if (price) fields.push(price);
-
-  if (card.illustrator) fields.push({ name: "Illustrator", value: truncate(card.illustrator), inline: true });
-
-  const updated = formatDate(card.updated);
-  const footer = [options.attribution ?? DEFAULT_ATTRIBUTION, updated ? `data ${updated}` : undefined]
+function sharedCardView(card: Card, options: RenderOptions, fields: EmbedField[], description?: string): EmbedView {
+  const image = cardImage(card);
+  const footer = [printedNumber(card.id), card.regulationMark ? `Reg ${card.regulationMark}` : undefined, options.attribution ?? DEFAULT_ATTRIBUTION]
     .filter(Boolean)
     .join(" · ");
-
-  const image = cardImage(card);
-
   return {
-    title: truncate(title, 250),
-    // The title links to the full-size scan.
+    title: truncate(card.name, 250),
+    ...(image ? { url: image } : {}),
+    color: cardColour(card),
+    ...(description ? { description: truncate(description, FIELD_VALUE_LIMIT) } : image ? {} : { description: "No scan is available for this printing." }),
+    fields,
+    ...(image ? { imageUrl: image } : {}),
+    ...(card.set?.symbol ? { thumbnailUrl: `${card.set.symbol}.webp` } : {}),
+    footer,
+  };
+}
+
+export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
+  const fields: EmbedField[] = [];
+
+  const profile = cardProfile(card);
+  if (profile && (card.category === "Trainer" || card.category === "Energy")) {
+    fields.push({ name: "Card", value: truncate(profile), inline: true });
+  }
+
+  for (const ability of card.abilities ?? []) {
+    fields.push({ name: `Ability: ${ability.name}`, value: truncate(ability.effect ?? "", FIELD_VALUE_LIMIT) });
+  }
+  for (const attack of card.attacks ?? []) {
+    fields.push({ name: attackName(attack), value: attackValue(attack, options.energyEmoji ?? {}), inline: false });
+  }
+  for (const weakness of card.weaknesses ?? []) {
+    fields.push({ name: "Weakness", value: `${weakness.type} ${weakness.value}`, inline: true });
+  }
+  for (const resistance of card.resistances ?? []) {
+    fields.push({ name: "Resistance", value: `${resistance.type} ${resistance.value}`, inline: true });
+  }
+  if (card.retreat !== undefined) fields.push({ name: "Retreat", value: String(card.retreat), inline: true });
+
+  return sharedCardView(card, options, fields, cardDescription(card));
+}
+
+/** The scan alone, for a mention that asks for the picture and nothing else. */
+export function renderCardImage(card: Card, options: RenderOptions = {}): EmbedView {
+  const image = cardImage(card);
+  return {
+    title: truncate(`${card.name} · ${printedNumber(card.id)}`, 250),
+    ...(image ? { url: image } : {}),
+    color: cardColour(card),
+    fields: [],
+    ...(image ? { imageUrl: image } : { description: "No scan is available for this printing." }),
+    footer: options.attribution ?? DEFAULT_ATTRIBUTION,
+  };
+}
+
+export function renderCardDetails(
+  card: Card,
+  alternates: { id: string; name: string }[],
+  options: RenderOptions = {},
+): EmbedView {
+  const fields: EmbedField[] = [];
+  const set = card.set;
+  // The card response embeds only a set summary, so the release date falls back
+  // to the committed set index. A source-provided date stays first choice.
+  const indexedSet = setById.get(normaliseName(set?.id ?? ""));
+  const setValue = [
+    set?.name,
+    printedNumber(card.id),
+    formatDate(set?.releaseDate ?? indexedSet?.releaseDate),
+    set?.serie?.name,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  if (setValue) fields.push({ name: "Set", value: truncate(setValue), inline: true });
+  if (card.rarity) fields.push({ name: "Rarity", value: truncate(card.rarity), inline: true });
+  if (card.illustrator) fields.push({ name: "Illustrator", value: truncate(card.illustrator), inline: true });
+  const legal = legalityLine(card);
+  if (legal) fields.push({ name: "Legal", value: truncate(legal), inline: true });
+  const prices = priceField(card);
+  if (prices) fields.push(prices);
+  const unique = [...new Map(alternates.filter((entry) => entry.id !== card.id).map((entry) => [entry.id, entry])).values()];
+  if (unique.length) fields.push({ name: "Other printings", value: unique.map((entry) => printedNumber(entry.id)).join(", ") });
+  const image = cardImage(card);
+  return {
+    title: truncate(card.name, 250),
     ...(image ? { url: image } : {}),
     color: cardColour(card),
     fields,
-    ...(image ? { imageUrl: image } : { description: "No scan is available for this printing." }),
-    ...(set?.symbol ? { thumbnailUrl: `${set.symbol}.webp` } : {}),
-    footer,
+    footer: options.attribution ?? DEFAULT_ATTRIBUTION,
   };
 }
 
@@ -231,7 +297,7 @@ export function renderSearchResults(
 ): EmbedView {
   const lines = cards
     .slice(0, 15)
-    .map((card) => `\`${card.id}\` ${card.name}`)
+    .map((card) => `\`${printedNumber(card.id)}\` ${card.name}`)
     .join("\n");
   return {
     title: `Cards mentioning "${truncate(query, 80)}"`,
@@ -244,7 +310,7 @@ and ${cards.length - 15} more` : ""}`, 4000),
 }
 
 /** A pasted decklist, formatted, with the count checked against 60. */
-export function renderDecklist(deck: ParsedDeck): EmbedView {
+export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[]): EmbedView {
   const body = deck.lines
     .map((line) => {
       const printing = line.setCode ? ` (${line.setCode}${line.number ? ` ${line.number}` : ""})` : "";
@@ -257,6 +323,18 @@ export function renderDecklist(deck: ParsedDeck): EmbedView {
     fields.push({ name: "Count", value: `Decklists are 60 cards, this one lists ${deck.total}`, inline: true });
   }
 
+  if (resolved) {
+    const illegal = resolved.filter((entry) => entry.card && !isBasicEnergy(entry.card) && entry.card.legal?.standard === false);
+    if (illegal.length > 0) {
+      const lines = illegal
+        .map(({ line }) => `${line.count} ${line.name}${line.setCode ? ` (${line.setCode}${line.number ? ` ${line.number}` : ""})` : ""}`)
+        .join("\n");
+      fields.push({ name: "Not Standard legal", value: truncate(lines, FIELD_VALUE_LIMIT) });
+    }
+    const price = deckPrice(resolved);
+    if (price) fields.push({ name: "Deck price", value: price, inline: false });
+  }
+
   return {
     title: "Decklist",
     color: DEFAULT_COLOUR,
@@ -264,6 +342,30 @@ export function renderDecklist(deck: ParsedDeck): EmbedView {
     fields,
     footer: "Parsed from the pasted list",
   };
+}
+
+/**
+ * The deck's cost from the Cardmarket average of each priced line. Lines whose
+ * printing carries no price are left out of the sum and named in the count, so
+ * a reader can see how much of the deck the figure covers.
+ */
+export function deckPrice(resolved: ResolvedLine[]): string | undefined {
+  let total = 0;
+  let priced = 0;
+  // A line counts towards the coverage even when it resolved to no card, so a
+  // deck half-unresolved does not claim full coverage.
+  let eligible = 0;
+  for (const { line, card } of resolved) {
+    if (card && isBasicEnergy(card)) continue;
+    eligible += line.count;
+    if (!card) continue;
+    const average = cardmarketAverage(card);
+    if (average === undefined) continue;
+    total += average * line.count;
+    priced += line.count;
+  }
+  if (priced === 0) return undefined;
+  return `≈ ${total.toFixed(2)} EUR (Cardmarket average, ${priced} of ${eligible} cards priced)`;
 }
 
 export function renderSet(set: SetSummary | CardSetRef, attribution = DEFAULT_ATTRIBUTION): EmbedView {

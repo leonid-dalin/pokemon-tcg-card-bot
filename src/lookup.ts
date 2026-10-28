@@ -1,20 +1,29 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
-import { priceField, renderCard, type EmbedView } from "./render.js";
+import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
+import { printedNumber } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
+import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
+import { SET_INDEX } from "./data/set-index.js";
 
 export interface CardLookup {
   card: Card;
+  /** Every other printing of the name, which the Other printings field lists. */
   alternates: CardSummary[];
+  /** The printings whose wording matches the card, which get buttons. */
+  matchingPrintings?: CardSummary[];
   /** Footer credit naming the source that served the card. */
   attribution?: string;
+  energyEmoji?: Record<string, string>;
+  /** The mention asked for the scan alone. */
+  imageOnly?: true;
 }
 
 export interface LookupOptions {
   attribution?: string;
-  /** How many other printings to list when a name matches several. */
+  energyEmoji?: Record<string, string>;
   alternateLimit?: number;
 }
 
@@ -62,17 +71,45 @@ function toLookup(
   card: Card,
   candidates: CardSummary[],
   attribution: string | undefined,
+  energyEmoji?: Record<string, string>,
   limit = 10,
 ): CardLookup {
   const name = normaliseName(card.name);
   const alternates = candidates
     .filter((entry) => entry.id !== card.id && normaliseName(entry.name) === name)
     .slice(0, limit);
-  return { card, alternates, ...(attribution ? { attribution } : {}) };
+  return { card, alternates, matchingPrintings: printingsForButtons(card, alternates), ...(attribution ? { attribution } : {}), ...(energyEmoji ? { energyEmoji } : {}) };
 }
 
-/** A full card id, which pins one exact printing rather than a set. */
-export const CARD_ID = /^[a-z0-9.]{1,12}-\d{1,4}$/i;
+/**
+ * The printings a reply may offer as buttons: those that word the card the
+ * same way. Pokémon reprints often change abilities and attacks between sets,
+ * so a button to a different wording is a different card wearing the name;
+ * those stay in the Other printings field instead. A card the index does not
+ * know, and Trainer or Energy wording, never changes, so every printing keeps
+ * its button there.
+ */
+export function printingsForButtons(card: Card, candidates: CardSummary[]): CardSummary[] {
+  const alternates = candidates.filter((entry) => entry.id !== card.id);
+  const primary = indexedText(card.id);
+  if (primary === undefined) return alternates;
+  return alternates.filter((entry) => indexedText(entry.id) === primary);
+}
+
+/** A full card id, which pins one exact printing rather than a name. The set
+ * part may itself carry hyphens (30th-c), and the local number may be letters
+ * or punctuation (GG65, A, !, %3F), so the split happens at the final hyphen
+ * and the set side has to be a known set id. A name with a hyphen, like
+ * Porygon-Z or Ho-Oh, is not a set and must not match. */
+const SET_IDS = new Set(SET_INDEX.map((entry) => normaliseName(entry.id)));
+const LOCAL_ID = /^[a-z0-9.!%]{1,8}$/i;
+export const CARD_ID = /^[a-z0-9.]+(?:-[a-z0-9.]+)*-[a-z0-9.!%]{1,8}$/i;
+export const isCardId = (value: string): boolean => {
+  const at = value.lastIndexOf("-");
+  if (at <= 0 || at === value.length - 1) return false;
+  if (!LOCAL_ID.test(value.slice(at + 1))) return false;
+  return SET_IDS.has(normaliseName(value.slice(0, at)));
+};
 
 /** Attribution for Pocket cards, which never come from TCGdex. */
 export const POCKET_ATTRIBUTION = "Pocket card data from pokemon-tcg-pocket-cards";
@@ -101,7 +138,7 @@ function lookupPocket(query: string, setHint: string | undefined, options: Looku
   if (!primary) return undefined;
   const card = getPocketCard(primary.id);
   if (!card) return undefined;
-  return toLookup(card, pool, POCKET_ATTRIBUTION, options.alternateLimit);
+  return toLookup(card, pool, POCKET_ATTRIBUTION, options.energyEmoji, options.alternateLimit);
 }
 
 /**
@@ -133,7 +170,47 @@ export async function lookupById(
   const candidates = pocketCard
     ? searchPocketByName(pinned.name)
     : await client.searchByName(pinned.name).catch(() => []);
-  return toLookup(pinned, candidates, pocketCard ? POCKET_ATTRIBUTION : options.attribution, options.alternateLimit);
+  return toLookup(pinned, candidates, pocketCard ? POCKET_ATTRIBUTION : options.attribution, options.energyEmoji, options.alternateLimit);
+}
+
+/**
+ * TCGdex matches name searches literally, so `PokeStop` finds nothing while
+ * `PokéStop` finds the card. These are the accented spellings to try when the
+ * literal search came back empty. Each word is anchored, so `Slowpoke` is left
+ * alone; every accented card name the index holds is covered here.
+ */
+const ACCENTS: { from: RegExp; to: string }[] = [
+  { from: /\bpokemon\b/gi, to: "Pokémon" },
+  { from: /\bpoke(?=[A-Z0-9]|\s|$)/gi, to: "Poké" },
+  { from: /\bflabebe\b/gi, to: "Flabébé" },
+  { from: /\bcafe\b/gi, to: "Café" },
+];
+
+const HAS_ACCENT = /[éèêëáàâäíìîïóòôöúùûüñç]/i;
+
+export function accentVariants(query: string): string[] {
+  if (HAS_ACCENT.test(query)) return [];
+  const variants = new Set<string>();
+  for (const { from, to } of ACCENTS) {
+    const variant = query.replace(from, to);
+    if (variant !== query) variants.add(variant);
+  }
+  return [...variants];
+}
+
+/**
+ * Search the literal spelling first, and try the accented ones only when it
+ * finds nothing. A name that searches fine, `Slowpoke` being the common case,
+ * therefore never pays for a second request.
+ */
+export async function searchWithAccents(client: TcgdexClient, query: string): Promise<CardSummary[]> {
+  const literal = await client.searchByName(query);
+  if (literal.length > 0) return literal;
+  for (const variant of accentVariants(query)) {
+    const hits = await client.searchByName(variant).catch(() => []);
+    if (hits.length > 0) return hits;
+  }
+  return literal;
 }
 
 /**
@@ -151,7 +228,7 @@ export async function lookupCard(
   // The embed prints card ids in the Other printings field, so a hint that looks
   // like one pins that exact printing. Without this the id falls through to set
   // matching, matches nothing, and returns a different printing.
-  if (setHint && CARD_ID.test(setHint.trim())) {
+  if (setHint && isCardId(setHint.trim())) {
     return lookupById(client, setHint.trim(), options);
   }
 
@@ -163,7 +240,7 @@ export async function lookupCard(
   // A hint that names no set is a mistake, and falling back to the bare name
   // would answer with a printing the asker did not ask for.
   if (setHint && !resolved) return undefined;
-  const summaries = await client.searchByName(query);
+  const summaries = await searchWithAccents(client, query);
   const matched = rankPrintings(summaries, query, resolved);
 
   // A hint that resolved to a real set pins that set exactly. Prefix matching
@@ -180,7 +257,15 @@ export async function lookupCard(
   if (!primary) return undefined;
 
   const card = await withEnglishPricing(client, await client.getCard(primary.id));
-  return toLookup(card, ordered, options.attribution, options.alternateLimit);
+  return toLookup(card, ordered, options.attribution, options.energyEmoji, options.alternateLimit);
+}
+
+/**
+ * Whether this answer is the scan alone. A card with no scan has nothing to
+ * show but its front, so it keeps the normal answer.
+ */
+export function isImageOnly(lookup: CardLookup): boolean {
+  return lookup.imageOnly === true && cardImage(lookup.card) !== undefined;
 }
 
 /**
@@ -188,17 +273,22 @@ export async function lookupCard(
  * second embed, because two embeds read as two answers to one question.
  */
 export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
-  const view = renderCard(lookup.card, lookup.attribution ? { attribution: lookup.attribution } : {});
+  const options = {
+    ...(lookup.attribution ? { attribution: lookup.attribution } : {}),
+    ...(lookup.energyEmoji ? { energyEmoji: lookup.energyEmoji } : {}),
+  };
+  if (isImageOnly(lookup)) {
+    return [renderCardImage(lookup.card, options)];
+  }
+  const view = renderCard(lookup.card, options);
   if (lookup.alternates.length === 0) return [view];
 
   const seen = new Set<string>();
   const ids = lookup.alternates
     .filter((card) => (seen.has(card.id) ? false : (seen.add(card.id), true)))
-    .map((card) => `\`${card.id}\``)
+    .map((card) => `\`${printedNumber(card.id)}\``)
     .join(", ");
-  const value = `${ids}
-Narrow it with \`[[${lookup.card.name}|setId]]\`.`;
-  return [{ ...view, fields: [...view.fields, { name: "Other printings", value }] }];
+  return [{ ...view, fields: [...view.fields, { name: "Other printings", value: ids }] }];
 }
 
 export function isMissing(error: unknown): boolean {

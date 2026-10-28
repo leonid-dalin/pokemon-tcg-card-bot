@@ -5,11 +5,15 @@ export interface Config {
   clientId: string;
   guildId?: string;
   mentionEnabled: boolean;
-  /** Decklist parsing stays off until it can say something the list itself does not. */
+  /**
+   * Decklist parsing stays off by default: a pasted list costs one card lookup
+   * per line, which is a lot of requests for a reply nobody asked for.
+   */
   decklistEnabled: boolean;
   /** 0 disables the throttle entirely. */
   mentionCooldownSeconds: number;
   attribution: string;
+  energyEmoji: Record<string, string>;
 }
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -20,6 +24,24 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parseEnergyEmoji(value: string | undefined): Record<string, string> {
+  if (!value?.trim()) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("ENERGY_EMOJI must be a JSON object of energy type to emoji");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("ENERGY_EMOJI must be a JSON object of energy type to emoji");
+  }
+  const entries = Object.entries(parsed);
+  if (entries.some(([, emoji]) => typeof emoji !== "string")) {
+    throw new Error("ENERGY_EMOJI must be a JSON object of energy type to emoji");
+  }
+  return Object.fromEntries(entries) as Record<string, string>;
 }
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
@@ -36,5 +58,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     decklistEnabled: parseBoolean(env.DECKLIST_ENABLED, false),
     mentionCooldownSeconds: parsePositiveInt(env.MENTION_COOLDOWN_SECONDS, 0),
     attribution: env.ATTRIBUTION?.trim() || DEFAULT_ATTRIBUTION,
+    energyEmoji: parseEnergyEmoji(env.ENERGY_EMOJI),
   };
 }

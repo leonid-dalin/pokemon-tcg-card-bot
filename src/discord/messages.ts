@@ -3,16 +3,19 @@ import type { TcgdexClient } from "../api/tcgdex.js";
 import type { Config } from "../config.js";
 import type { MentionBudget } from "../cooldown.js";
 import { parseDecklist } from "../decklist.js";
+import { resolveDeckCards } from "../deck-check.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
-import { extractMentions, parseSearchCommand } from "../mentions.js";
+import { extractMentions, parseHelpCommand, parseSearchCommand } from "../mentions.js";
 import { renderDecklist } from "../render.js";
-import { searchCardText } from "../text-search.js";
+import { searchCardGroups } from "../text-search.js";
+import { helpView } from "../help.js";
 import { toEmbeds } from "./embeds.js";
 import { MAX_EMBEDS_PER_MESSAGE, mentionReply, searchReply, type MentionMiss } from "./replies.js";
 
 export interface MessageContext {
   api: TcgdexClient;
-  config: Pick<Config, "mentionEnabled" | "decklistEnabled" | "attribution">;
+  config: Pick<Config, "mentionEnabled" | "decklistEnabled" | "attribution" | "energyEmoji">;
+  pages: import("./pages.js").PageStore;
   budget?: MentionBudget | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
@@ -58,9 +61,12 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     // Slash commands need the command picker, which is awkward on a phone. A
     // mention plus the word search does the same job from the message box.
     const selfId = context.selfId();
-    const searchQuery = !deck && selfId ? parseSearchCommand(message.content, selfId) : undefined;
-    const mentions = deck || searchQuery !== undefined ? [] : extractMentions(message.content);
-    if (!deck && searchQuery === undefined && mentions.length === 0) return;
+    // Help is checked before search, because a bare mention is a help request
+    // and the search reader answers undefined for it.
+    const wantsHelp = !deck && selfId ? parseHelpCommand(message.content, selfId) : undefined;
+    const searchQuery = !deck && !wantsHelp && selfId ? parseSearchCommand(message.content, selfId) : undefined;
+    const mentions = deck || wantsHelp || searchQuery !== undefined ? [] : extractMentions(message.content);
+    if (!deck && !wantsHelp && searchQuery === undefined && mentions.length === 0) return;
 
     // Every reply draws on the same budget, so a decklist or a search cannot be
     // used to get round the limit on mentions. Keyed per member, not per
@@ -74,8 +80,14 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       }
     }
 
+    if (wantsHelp) {
+      await message.reply({ embeds: toEmbeds([helpView()]) }).catch(() => {});
+      return;
+    }
+
     if (deck) {
-      await message.reply({ embeds: toEmbeds([renderDecklist(deck)]) }).catch(() => {});
+      const resolved = config.decklistEnabled ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
+      await message.reply({ embeds: toEmbeds([renderDecklist(deck, resolved)]) }).catch(() => {});
       return;
     }
 
@@ -87,7 +99,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         return;
       }
       try {
-        const reply = searchReply(searchQuery, searchCardText(searchQuery), config.attribution);
+        const reply = searchReply(searchQuery, searchCardGroups(searchQuery), config.attribution, message.author.id, context.pages);
         await message.reply({ ...reply }).catch(() => {});
       } catch (error) {
         console.error("mention search failed", error);
@@ -100,13 +112,16 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       const found: CardLookup[] = [];
       const misses: MentionMiss[] = [];
       for (const mention of mentions) {
-        const lookup = await lookupCard(api, mention.name, mention.setHint, { attribution: config.attribution });
+        const lookup = await lookupCard(api, mention.name, mention.setHint, {
+          attribution: config.attribution,
+          energyEmoji: config.energyEmoji,
+        });
         console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
-        if (lookup) found.push(lookup);
-        else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name) });
+        if (lookup) found.push(mention.imageOnly ? { ...lookup, imageOnly: true } : lookup);
+        else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5) });
         if (found.length >= MAX_EMBEDS_PER_MESSAGE) break;
       }
-      await message.reply({ ...mentionReply(found, misses) });
+      await message.reply({ ...mentionReply(found, misses, message.author.id) });
     } catch (error) {
       console.error("mention lookup failed", error);
       // A dead API used to leave the channel with nothing at all.

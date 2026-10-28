@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TcgdexClient } from "../src/api/tcgdex.js";
 import type { Card, CardSummary } from "../src/api/types.js";
 import { MentionBudget } from "../src/cooldown.js";
+import { PageStore } from "../src/discord/pages.js";
 import { createMessageHandler, type IncomingMessage, type MessageContext } from "../src/discord/messages.js";
 
 const dragapult = JSON.parse(
@@ -48,7 +49,8 @@ function fakeMessage(content: string, overrides: Partial<{ bot: boolean; webhook
 function handler(overrides: Partial<MessageContext> = {}, config: Partial<MessageContext["config"]> = {}) {
   return createMessageHandler({
     api: fakeApi(),
-    config: { mentionEnabled: true, decklistEnabled: false, attribution: "Card data from TCGdex", ...config },
+    config: { mentionEnabled: true, decklistEnabled: false, attribution: "Card data from TCGdex", energyEmoji: {}, ...config },
+    pages: new PageStore(),
     selfId: () => BOT_ID,
     ...overrides,
   });
@@ -81,18 +83,62 @@ describe("message handler", () => {
     expect(replies).toHaveLength(1);
     const reply = replies[0] as { embeds: unknown[]; components: unknown[] };
     expect(reply.embeds).toHaveLength(1);
-    expect(reply.components).toHaveLength(1);
+    expect(reply.components).toHaveLength(2);
     // A reply's own allowedMentions would replace the client default that
     // stops the bot pinging anyone.
     expect(replies.every((payload) => !("allowedMentions" in payload))).toBe(true);
   });
 
-  it("answers a miss with the closest names", async () => {
+  it("answers a bare mention with the help card", async () => {
+    const { message, replies } = fakeMessage(`<@${BOT_ID}>`);
+    await handler()(message);
+    expect(replies).toHaveLength(1);
+    const embed = (replies[0]?.embeds as { data: { title?: string; fields?: unknown[] } }[])[0]?.data;
+    expect(embed?.title).toBe("Pokémon TCG card bot");
+    expect(embed?.fields?.length).toBe(3);
+  });
+
+  it("answers the word help after a mention", async () => {
+    const { message, replies } = fakeMessage(`<@${BOT_ID}> help`);
+    await handler()(message);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]?.content).toBeUndefined();
+  });
+
+  it("lets a mention search win over help", async () => {
+    const { message, replies } = fakeMessage(`<@${BOT_ID}> search draw 2 cards`);
+    await handler()(message);
+    expect(replies[0]?.embeds).toHaveLength(1);
+    const title = (replies[0]?.embeds as { data: { title?: string } }[])[0]?.data.title;
+    expect(title).toMatch(/^\d+ cards mention "draw 2 cards"$/);
+  });
+
+  it("stays quiet when a mention asks something it cannot answer", async () => {
+    const { message, replies } = fakeMessage(`<@${BOT_ID}> which deck is best`);
+    await handler()(message);
+    expect(replies).toEqual([]);
+  });
+
+  it("answers a miss with the closest names in a menu", async () => {
     const { message, replies } = fakeMessage("[[Dragapult zzz]]");
     await handler()(message);
-    expect(replies[0]?.content).toBe(
-      "No card matched `Dragapult zzz`. Closest: `Dragapult ex` (sv08.5-073), `Dragapult ex` (sv06-130).",
-    );
+    expect(replies[0]?.content).toBe("No card matched `Dragapult zzz`. Pick the closest below.");
+    const components = (replies[0] as { components: { toJSON: () => unknown }[] }).components;
+    expect(components).toHaveLength(1);
+    const menu = components[0]!.toJSON() as { components: { options: { label: string; value: string }[] }[] };
+    expect(menu.components[0]?.options.map((option) => option.value)).toEqual(["sv08.5-073", "sv06-130"]);
+    expect(menu.components[0]?.options[0]?.label).toBe("Dragapult ex · PRE 73");
+  });
+
+  it("answers an image-only mention with the scan alone", async () => {
+    const { message, replies } = fakeMessage("[[!Dragapult ex]]");
+    await handler()(message);
+    expect(replies).toHaveLength(1);
+    const reply = replies[0] as { embeds: { data: { fields?: unknown[]; image?: { url: string } }[] }[]; components?: unknown[] };
+    expect(reply.embeds).toHaveLength(1);
+    expect(reply.embeds[0]?.data.fields).toBeUndefined();
+    expect(reply.embeds[0]?.data.image?.url).toBe("https://assets.tcgdex.net/en/sv/sv08.5/073/high.webp");
+    expect(reply.components).toBeUndefined();
   });
 
   it("reports a failed lookup instead of staying silent", async () => {
@@ -107,6 +153,8 @@ describe("message handler", () => {
     await handler()(message);
     expect(replies).toHaveLength(1);
     expect(replies[0]?.embeds).toHaveLength(1);
+    // Pages, the category filter and the open-a-card menu.
+    expect(replies[0]?.components).toHaveLength(3);
   });
 
   it("asks for search words when none were given", async () => {

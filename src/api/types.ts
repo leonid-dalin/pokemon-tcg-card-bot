@@ -43,7 +43,19 @@ export interface VariantDetail {
   } | null;
 }
 
+/** Card-level pricing, which some records carry without variant detail. The
+ * TCGplayer half may nest per-variant market prices instead of flat averages. */
+export interface TcgplayerVariantPrice {
+  marketPrice?: number | null;
+}
+
+export interface CardPricing {
+  cardmarket?: Pricing | null;
+  tcgplayer?: Pricing | ({ [variant: string]: TcgplayerVariantPrice | undefined } & Partial<Pricing>) | null;
+}
+
 export interface Card {
+  pricing?: CardPricing | null;
   id: string;
   localId?: string;
   name: string;
@@ -53,6 +65,7 @@ export interface Card {
   hp?: number;
   types?: string[];
   stage?: string;
+  evolveFrom?: string;
   suffix?: string;
   regulationMark?: string;
   illustrator?: string;
@@ -70,6 +83,7 @@ export interface Card {
   variants_detailed?: VariantDetail[];
   variants?: Record<string, boolean>;
   updated?: string;
+  points?: number;
 }
 
 export interface CardSummary {

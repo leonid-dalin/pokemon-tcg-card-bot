@@ -1,0 +1,859 @@
+{
+  "head": "c10c0614861591ac8383d74b33a96cefc6ec544c",
+  "date": "2026-10-28",
+  "description": "Public API response snapshots and derived printing summaries. Full card objects are unedited; mixedPrintings is output from production printingsOf, not a raw API response.",
+  "sources": [
+    "https://api.tcgdex.net/v2/en/cards/swsh12.5gg-GG65",
+    "https://api.tcgdex.net/v2/en/cards/sv01-194",
+    "https://api.tcgdex.net/v2/en/cards/dp7-85",
+    "https://api.tcgdex.net/v2/en/cards/xy1-118",
+    "https://api.tcgdex.net/v2/en/cards/swsh12.5-017",
+    "https://api.tcgdex.net/v2/en/cards/sm1-63",
+    "https://api.tcgdex.net/v2/en/sets/sv08.5"
+  ],
+  "autocompleteCard": {
+    "category": "Trainer",
+    "id": "swsh12.5gg-GG65",
+    "illustrator": "GIDORA",
+    "localId": "GG65",
+    "name": "Raihan",
+    "rarity": "Ultra Rare",
+    "set": {
+      "cardCount": {
+        "official": 70,
+        "total": 70
+      },
+      "id": "swsh12.5gg",
+      "name": "Crown Zenith Galarian Gallery"
+    },
+    "variants": {
+      "firstEdition": false,
+      "holo": true,
+      "normal": false,
+      "reverse": false,
+      "wPromo": false
+    },
+    "variants_detailed": [
+      {
+        "type": "holo",
+        "size": "standard",
+        "thirdParty": {
+          "cardmarket": 691945,
+          "tcgplayer": 478095
+        },
+        "variantId": "jr7oetx1mqug9",
+        "pricing": {
+          "cardmarket": {
+            "updated": "2026-10-27T17:48:09.413Z",
+            "unit": "EUR",
+            "idProduct": 691945,
+            "avg": 5.12,
+            "low": 2.19,
+            "trend": 4.79,
+            "avg1": 3,
+            "avg7": 4.82,
+            "avg30": 4.96,
+            "avg-holo": null,
+            "low-holo": null,
+            "trend-holo": 0,
+            "avg1-holo": null,
+            "avg7-holo": null,
+            "avg30-holo": null
+          },
+          "tcgplayer": null
+        }
+      }
+    ],
+    "effect": "You can play this card only if any of your Pokémon were Knocked Out during your opponent's last turn.\nAttach a basic Energy card from your discard pile to 1 of your Pokémon. If you do, search your deck for a card and put it into your hand. Then, shuffle your deck.",
+    "trainerType": "Supporter",
+    "regulationMark": "E",
+    "legal": {
+      "standard": false,
+      "expanded": true
+    },
+    "updated": "2026-08-14T21:14:35+03:00",
+    "pricing": {
+      "cardmarket": {
+        "updated": "2026-10-27T17:48:09.413Z",
+        "unit": "EUR",
+        "idProduct": 691945,
+        "avg": 5.12,
+        "low": 2.19,
+        "trend": 4.79,
+        "avg1": 3,
+        "avg7": 4.82,
+        "avg30": 4.96,
+        "avg-holo": null,
+        "low-holo": null,
+        "trend-holo": 0,
+        "avg1-holo": null,
+        "avg7-holo": null,
+        "avg30-holo": null
+      },
+      "tcgplayer": null
+    }
+  },
+  "switchCard": {
+    "category": "Trainer",
+    "id": "sv01-194",
+    "illustrator": "Studio Bora Inc.",
+    "image": "https://assets.tcgdex.net/en/sv/sv01/194",
+    "localId": "194",
+    "name": "Switch",
+    "rarity": "Common",
+    "set": {
+      "cardCount": {
+        "official": 198,
+        "total": 258
+      },
+      "id": "sv01",
+      "logo": "https://assets.tcgdex.net/en/sv/sv01/logo",
+      "name": "Scarlet & Violet",
+      "symbol": "https://assets.tcgdex.net/univ/sv/sv01/symbol"
+    },
+    "variants": {
+      "firstEdition": false,
+      "holo": false,
+      "normal": true,
+      "reverse": true,
+      "wPromo": false
+    },
+    "variants_detailed": [
+      {
+        "type": "normal",
+        "size": "standard",
+        "variantId": "endfynwn4n10gzq"
+      },
+      {
+        "type": "reverse",
+        "size": "standard",
+        "variantId": "cm4kqul3x1bwlz1f"
+      }
+    ],
+    "effect": "Switch your Active Pokémon with 1 of your Benched Pokémon.",
+    "trainerType": "Item",
+    "regulationMark": "G",
+    "legal": {
+      "standard": false,
+      "expanded": true
+    },
+    "updated": "2026-08-20T03:44:01+03:00",
+    "thirdParty": {
+      "cardmarket": 702490,
+      "tcgplayer": 488102
+    },
+    "pricing": {
+      "cardmarket": {
+        "updated": "2026-10-27T22:08:34.018Z",
+        "unit": "EUR",
+        "idProduct": 702490,
+        "avg": 0.07,
+        "low": 0.02,
+        "trend": 0.08,
+        "avg1": 0.05,
+        "avg7": 0.07,
+        "avg30": 0.08,
+        "avg-holo": 0.12,
+        "low-holo": 0.02,
+        "trend-holo": 0.12,
+        "avg1-holo": 0.16,
+        "avg7-holo": 0.13,
+        "avg30-holo": 0.13
+      },
+      "tcgplayer": null
+    }
+  },
+  "greatBallCards": [
+    {
+      "category": "Trainer",
+      "id": "dp7-85",
+      "illustrator": "Kent Kanetsuna",
+      "image": "https://assets.tcgdex.net/en/dp/dp7/85",
+      "localId": "85",
+      "name": "Great Ball",
+      "rarity": "Uncommon",
+      "set": {
+        "cardCount": {
+          "official": 100,
+          "total": 106
+        },
+        "id": "dp7",
+        "logo": "https://assets.tcgdex.net/en/dp/dp7/logo",
+        "name": "Stormfront",
+        "symbol": "https://assets.tcgdex.net/univ/dp/dp7/symbol"
+      },
+      "variants": {
+        "firstEdition": false,
+        "holo": false,
+        "normal": true,
+        "reverse": true,
+        "wPromo": false
+      },
+      "variants_detailed": [
+        {
+          "type": "normal",
+          "size": "standard",
+          "variantId": "endfynwn4n10gzq"
+        },
+        {
+          "type": "reverse",
+          "size": "standard",
+          "variantId": "cm4kqul3x1bwlz1f"
+        }
+      ],
+      "effect": "Search your deck for a Basic Pokémon and put it onto your Bench. Shuffle your deck afterward.",
+      "trainerType": "Item",
+      "legal": {
+        "standard": false,
+        "expanded": false
+      },
+      "updated": "2026-05-18T15:44:04+03:00",
+      "thirdParty": {
+        "cardmarket": 278383,
+        "tcgplayer": 85898
+      },
+      "pricing": {
+        "cardmarket": {
+          "updated": "2026-10-27T17:48:09.414Z",
+          "unit": "EUR",
+          "idProduct": 278383,
+          "avg": 0.14,
+          "low": 0.02,
+          "trend": 0.19,
+          "avg1": 0.09,
+          "avg7": 0.14,
+          "avg30": 0.12,
+          "avg-holo": 2,
+          "low-holo": 0.25,
+          "trend-holo": 1.68,
+          "avg1-holo": 2,
+          "avg7-holo": 2.06,
+          "avg30-holo": 1.21
+        },
+        "tcgplayer": null
+      }
+    },
+    {
+      "category": "Trainer",
+      "id": "xy1-118",
+      "illustrator": "Toyste Beach",
+      "image": "https://assets.tcgdex.net/en/xy/xy1/118",
+      "localId": "118",
+      "name": "Great Ball",
+      "rarity": "Uncommon",
+      "set": {
+        "cardCount": {
+          "official": 146,
+          "total": 146
+        },
+        "id": "xy1",
+        "logo": "https://assets.tcgdex.net/en/xy/xy1/logo",
+        "name": "XY",
+        "symbol": "https://assets.tcgdex.net/univ/xy/xy1/symbol"
+      },
+      "variants": {
+        "firstEdition": false,
+        "holo": false,
+        "normal": true,
+        "reverse": false,
+        "wPromo": false
+      },
+      "variants_detailed": [
+        {
+          "type": "normal",
+          "size": "standard",
+          "variantId": "generated"
+        }
+      ],
+      "effect": "Look at the top 7 cards of your deck. You may reveal a Pokémon you find there and put it into your hand. Shuffle the other cards back into your deck.",
+      "trainerType": "Item",
+      "legal": {
+        "standard": false,
+        "expanded": true
+      },
+      "updated": "2026-08-16T00:53:34+03:00",
+      "thirdParty": {
+        "cardmarket": 281455,
+        "tcgplayer": 85901
+      },
+      "pricing": {
+        "cardmarket": {
+          "updated": "2026-10-27T22:08:34.018Z",
+          "unit": "EUR",
+          "idProduct": 281455,
+          "avg": 0.1,
+          "low": 0.02,
+          "trend": 0.1,
+          "avg1": 0.03,
+          "avg7": 0.1,
+          "avg30": 0.12,
+          "avg-holo": 0.93,
+          "low-holo": 0.25,
+          "trend-holo": 0.79,
+          "avg1-holo": 1,
+          "avg7-holo": 0.8,
+          "avg30-holo": 0.75
+        },
+        "tcgplayer": null
+      }
+    }
+  ],
+  "ordinaryCards": [
+    {
+      "category": "Pokemon",
+      "id": "swsh12.5-017",
+      "illustrator": "Nurikabe",
+      "image": "https://assets.tcgdex.net/en/swsh/swsh12.5/017",
+      "localId": "017",
+      "name": "Calyrex",
+      "rarity": "Holo Rare",
+      "set": {
+        "cardCount": {
+          "official": 159,
+          "total": 160
+        },
+        "id": "swsh12.5",
+        "logo": "https://assets.tcgdex.net/en/swsh/swsh12.5/logo",
+        "name": "Crown Zenith",
+        "symbol": "https://assets.tcgdex.net/univ/swsh/swsh12.5/symbol"
+      },
+      "variants": {
+        "firstEdition": false,
+        "holo": true,
+        "normal": false,
+        "reverse": true,
+        "wPromo": false
+      },
+      "variants_detailed": [
+        {
+          "type": "holo",
+          "size": "standard",
+          "thirdParty": {
+            "cardmarket": 691734,
+            "tcgplayer": 478089
+          },
+          "variantId": "jr7oetx1mqug9",
+          "pricing": {
+            "cardmarket": {
+              "updated": "2026-10-27T17:48:09.418Z",
+              "unit": "EUR",
+              "idProduct": 691734,
+              "avg": 0.67,
+              "low": 0.02,
+              "trend": 0.63,
+              "avg1": 1.03,
+              "avg7": 0.67,
+              "avg30": 0.66,
+              "avg-holo": 1.16,
+              "low-holo": 0.1,
+              "trend-holo": 1.09,
+              "avg1-holo": 1.1,
+              "avg7-holo": 0.99,
+              "avg30-holo": 0.97
+            },
+            "tcgplayer": null
+          }
+        },
+        {
+          "type": "reverse",
+          "size": "standard",
+          "thirdParty": {
+            "cardmarket": 691734,
+            "tcgplayer": 478089
+          },
+          "variantId": "cm4kqul3x1bwlz1f",
+          "pricing": {
+            "cardmarket": {
+              "updated": "2026-10-27T17:48:09.418Z",
+              "unit": "EUR",
+              "idProduct": 691734,
+              "avg": 0.67,
+              "low": 0.02,
+              "trend": 0.63,
+              "avg1": 1.03,
+              "avg7": 0.67,
+              "avg30": 0.66,
+              "avg-holo": 1.16,
+              "low-holo": 0.1,
+              "trend-holo": 1.09,
+              "avg1-holo": 1.1,
+              "avg7-holo": 0.99,
+              "avg30-holo": 0.97
+            },
+            "tcgplayer": null
+          }
+        }
+      ],
+      "dexId": [
+        898
+      ],
+      "hp": 110,
+      "types": [
+        "Grass"
+      ],
+      "description": "Calyrex is a merciful Pokémon, capable of providing healing and blessings. It reigned over the Galar region in times of yore.",
+      "stage": "Basic",
+      "attacks": [
+        {
+          "cost": [
+            "Colorless",
+            "Colorless"
+          ],
+          "name": "King's Instructions",
+          "effect": "You may search your deck for up to 2 cards and put them into your hand. Then, shuffle your deck.",
+          "damage": 30
+        },
+        {
+          "cost": [
+            "Grass",
+            "Colorless",
+            "Colorless"
+          ],
+          "name": "Bloomshine",
+          "effect": "Heal 20 damage from each of your Pokémon.",
+          "damage": 90
+        }
+      ],
+      "weaknesses": [
+        {
+          "type": "Fire",
+          "value": "×2"
+        }
+      ],
+      "retreat": 2,
+      "regulationMark": "F",
+      "legal": {
+        "standard": false,
+        "expanded": true
+      },
+      "updated": "2026-08-20T19:19:54+03:00",
+      "pricing": {
+        "cardmarket": {
+          "updated": "2026-10-27T17:48:09.418Z",
+          "unit": "EUR",
+          "idProduct": 691734,
+          "avg": 0.67,
+          "low": 0.02,
+          "trend": 0.63,
+          "avg1": 1.03,
+          "avg7": 0.67,
+          "avg30": 0.66,
+          "avg-holo": 1.16,
+          "low-holo": 0.1,
+          "trend-holo": 1.09,
+          "avg1-holo": 1.1,
+          "avg7-holo": 0.99,
+          "avg30-holo": 0.97
+        },
+        "tcgplayer": null
+      }
+    },
+    {
+      "category": "Pokemon",
+      "id": "sm1-63",
+      "illustrator": "Mitsuhiro Arita",
+      "image": "https://assets.tcgdex.net/en/sm/sm1/63",
+      "localId": "63",
+      "name": "Toxapex",
+      "rarity": "Rare",
+      "set": {
+        "cardCount": {
+          "official": 149,
+          "total": 172
+        },
+        "id": "sm1",
+        "logo": "https://assets.tcgdex.net/en/sm/sm1/logo",
+        "name": "Sun & Moon",
+        "symbol": "https://assets.tcgdex.net/univ/sm/sm1/symbol"
+      },
+      "variants": {
+        "firstEdition": false,
+        "holo": false,
+        "normal": true,
+        "reverse": false,
+        "wPromo": false
+      },
+      "variants_detailed": [
+        {
+          "type": "normal",
+          "size": "standard",
+          "variantId": "generated"
+        }
+      ],
+      "dexId": [
+        748
+      ],
+      "hp": 110,
+      "types": [
+        "Psychic"
+      ],
+      "evolveFrom": "Mareanie",
+      "description": "Toxapex crawls along the ocean floor on its 12 legs. It leaves a trail of Corsola bits scattered in its wake.",
+      "stage": "Stage1",
+      "abilities": [
+        {
+          "type": "Ability",
+          "name": "Toxic Spikes",
+          "effect": "Whenever your opponent’s Active Pokémon retreats, their new Active Pokémon is Poisoned."
+        }
+      ],
+      "attacks": [
+        {
+          "cost": [
+            "Psychic",
+            "Colorless",
+            "Colorless"
+          ],
+          "name": "Venoshock",
+          "effect": "If your opponent’s Active Pokémon is Poisoned, this attack does 50 more damage.",
+          "damage": "50+"
+        }
+      ],
+      "weaknesses": [
+        {
+          "type": "Psychic",
+          "value": "×2"
+        }
+      ],
+      "retreat": 3,
+      "legal": {
+        "standard": false,
+        "expanded": true
+      },
+      "updated": "2026-08-16T23:23:08+03:00",
+      "thirdParty": {
+        "cardmarket": 295374,
+        "tcgplayer": 126934
+      },
+      "pricing": {
+        "cardmarket": {
+          "updated": "2026-10-27T22:08:34.018Z",
+          "unit": "EUR",
+          "idProduct": 295374,
+          "avg": 0.56,
+          "low": 0.05,
+          "trend": 0.65,
+          "avg1": 1.25,
+          "avg7": 0.6,
+          "avg30": 0.56,
+          "avg-holo": 0.34,
+          "low-holo": 0.1,
+          "trend-holo": 0.28,
+          "avg1-holo": 0.5,
+          "avg7-holo": 0.44,
+          "avg30-holo": 0.73
+        },
+        "tcgplayer": null
+      }
+    }
+  ],
+  "dragapultCard": {
+    "category": "Pokemon",
+    "id": "sv08.5-073",
+    "illustrator": "5ban Graphics",
+    "image": "https://assets.tcgdex.net/en/sv/sv08.5/073",
+    "localId": "073",
+    "name": "Dragapult ex",
+    "rarity": "Double rare",
+    "set": {
+      "cardCount": {
+        "official": 131,
+        "total": 180
+      },
+      "id": "sv08.5",
+      "logo": "https://assets.tcgdex.net/en/sv/sv08.5/logo",
+      "name": "Prismatic Evolutions"
+    },
+    "variants": {
+      "firstEdition": false,
+      "holo": true,
+      "normal": false,
+      "reverse": false,
+      "wPromo": false
+    },
+    "variants_detailed": [
+      {
+        "type": "holo",
+        "size": "standard",
+        "thirdParty": {
+          "cardmarket": 805462,
+          "tcgplayer": 610428
+        },
+        "variantId": "jr7oetx1mqug9",
+        "pricing": {
+          "cardmarket": {
+            "updated": "2026-10-27T17:48:09.413Z",
+            "unit": "EUR",
+            "idProduct": 805462,
+            "avg": 1.49,
+            "low": 0.4,
+            "trend": 1.36,
+            "avg1": 1.23,
+            "avg7": 1.49,
+            "avg30": 1.49,
+            "avg-holo": null,
+            "low-holo": null,
+            "trend-holo": 0,
+            "avg1-holo": null,
+            "avg7-holo": null,
+            "avg30-holo": null
+          },
+          "tcgplayer": null
+        }
+      }
+    ],
+    "dexId": [
+      887
+    ],
+    "hp": 320,
+    "types": [
+      "Dragon"
+    ],
+    "evolveFrom": "Drakloak",
+    "stage": "Stage2",
+    "suffix": "ex",
+    "attacks": [
+      {
+        "cost": [
+          "Colorless"
+        ],
+        "name": "Jet Headbutt",
+        "damage": 70
+      },
+      {
+        "cost": [
+          "Fire",
+          "Psychic"
+        ],
+        "name": "Phantom Dive",
+        "effect": "Put 6 damage counters on your opponent's Benched Pokémon in any way you like.",
+        "damage": 200
+      }
+    ],
+    "retreat": 1,
+    "regulationMark": "H",
+    "legal": {
+      "standard": true,
+      "expanded": true
+    },
+    "updated": "2026-04-25T23:46:36+03:00",
+    "pricing": {
+      "cardmarket": {
+        "updated": "2026-10-27T17:48:09.413Z",
+        "unit": "EUR",
+        "idProduct": 805462,
+        "avg": 1.49,
+        "low": 0.4,
+        "trend": 1.36,
+        "avg1": 1.23,
+        "avg7": 1.49,
+        "avg30": 1.49,
+        "avg-holo": null,
+        "low-holo": null,
+        "trend-holo": 0,
+        "avg1-holo": null,
+        "avg7-holo": null,
+        "avg30-holo": null
+      },
+      "tcgplayer": null
+    }
+  },
+  "dragapultSetDate": "2025-01-17",
+  "mixedPrintings": [
+    {
+      "id": "sv04.5-054",
+      "name": "Charizard ex",
+      "setLabel": "Paldean Fates 2024"
+    },
+    {
+      "id": "sv04.5-234",
+      "name": "Charizard ex",
+      "setLabel": "Paldean Fates 2024"
+    },
+    {
+      "id": "sv03.5-006",
+      "name": "Charizard ex",
+      "setLabel": "151 2023"
+    },
+    {
+      "id": "sv03.5-183",
+      "name": "Charizard ex",
+      "setLabel": "151 2023"
+    },
+    {
+      "id": "sv03.5-199",
+      "name": "Charizard ex",
+      "setLabel": "151 2023"
+    },
+    {
+      "id": "sv03-125",
+      "name": "Charizard ex",
+      "setLabel": "Obsidian Flames 2023"
+    },
+    {
+      "id": "sv03-215",
+      "name": "Charizard ex",
+      "setLabel": "Obsidian Flames 2023"
+    },
+    {
+      "id": "sv03-223",
+      "name": "Charizard ex",
+      "setLabel": "Obsidian Flames 2023"
+    },
+    {
+      "id": "sv03-228",
+      "name": "Charizard ex",
+      "setLabel": "Obsidian Flames 2023"
+    },
+    {
+      "id": "svp-056",
+      "name": "Charizard ex",
+      "setLabel": "SVP Black Star Promos 2023"
+    },
+    {
+      "id": "svp-074",
+      "name": "Charizard ex",
+      "setLabel": "SVP Black Star Promos 2023"
+    },
+    {
+      "id": "svp-161",
+      "name": "Charizard ex",
+      "setLabel": "SVP Black Star Promos 2023"
+    },
+    {
+      "id": "svp-196",
+      "name": "Charizard ex",
+      "setLabel": "SVP Black Star Promos 2023"
+    },
+    {
+      "id": "xy12-12",
+      "name": "Charizard EX",
+      "setLabel": "Evolutions 2016"
+    },
+    {
+      "id": "g1-11",
+      "name": "Charizard EX",
+      "setLabel": "Generations 2016"
+    },
+    {
+      "id": "xy2-100",
+      "name": "Charizard EX",
+      "setLabel": "Flashfire 2014"
+    },
+    {
+      "id": "xy2-11",
+      "name": "Charizard EX",
+      "setLabel": "Flashfire 2014"
+    },
+    {
+      "id": "xy2-12",
+      "name": "Charizard EX",
+      "setLabel": "Flashfire 2014"
+    },
+    {
+      "id": "xyp-XY121",
+      "name": "Charizard EX",
+      "setLabel": "XY Black Star Promos 2013"
+    },
+    {
+      "id": "xyp-XY17",
+      "name": "Charizard EX",
+      "setLabel": "XY Black Star Promos 2013"
+    },
+    {
+      "id": "xyp-XY29",
+      "name": "Charizard EX",
+      "setLabel": "XY Black Star Promos 2013"
+    },
+    {
+      "id": "ex6-105",
+      "name": "Charizard ex",
+      "setLabel": "FireRed & LeafGreen 2004"
+    },
+    {
+      "id": "a1-036",
+      "name": "Charizard ex",
+      "setLabel": "Genetic Apex 2024"
+    },
+    {
+      "id": "A1-036",
+      "name": "Charizard ex",
+      "setLabel": "Genetic Apex 2024"
+    },
+    {
+      "id": "a1-253",
+      "name": "Charizard ex",
+      "setLabel": "Genetic Apex 2024"
+    },
+    {
+      "id": "A1-253",
+      "name": "Charizard ex",
+      "setLabel": "Genetic Apex 2024"
+    },
+    {
+      "id": "a1-280",
+      "name": "Charizard ex",
+      "setLabel": "Genetic Apex 2024"
+    },
+    {
+      "id": "A1-280",
+      "name": "Charizard ex",
+      "setLabel": "Genetic Apex 2024"
+    },
+    {
+      "id": "a1-284",
+      "name": "Charizard ex",
+      "setLabel": "Genetic Apex 2024"
+    },
+    {
+      "id": "A1-284",
+      "name": "Charizard ex",
+      "setLabel": "Genetic Apex 2024"
+    },
+    {
+      "id": "a2b-010",
+      "name": "Charizard ex",
+      "setLabel": "Shining Revelry 2025"
+    },
+    {
+      "id": "A2b-010",
+      "name": "Charizard ex",
+      "setLabel": "Shining Revelry 2025"
+    },
+    {
+      "id": "a2b-080",
+      "name": "Charizard ex",
+      "setLabel": "Shining Revelry 2025"
+    },
+    {
+      "id": "A2b-080",
+      "name": "Charizard ex",
+      "setLabel": "Shining Revelry 2025"
+    },
+    {
+      "id": "a2b-108",
+      "name": "Charizard ex",
+      "setLabel": "Shining Revelry 2025"
+    },
+    {
+      "id": "A2b-108",
+      "name": "Charizard ex",
+      "setLabel": "Shining Revelry 2025"
+    },
+    {
+      "id": "a4b-059",
+      "name": "Charizard ex",
+      "setLabel": "Deluxe Pack: ex 2025"
+    },
+    {
+      "id": "a4b-060",
+      "name": "Charizard ex",
+      "setLabel": "Deluxe Pack: ex 2025"
+    },
+    {
+      "id": "a4b-361",
+      "name": "Charizard ex",
+      "setLabel": "Deluxe Pack: ex 2025"
+    }
+  ]
+}

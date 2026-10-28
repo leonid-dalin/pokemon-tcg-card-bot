@@ -10,16 +10,28 @@ import type { Card } from "../src/api/types.js";
  * pile into your hand" finds Old Rod but misses Dedenne, whose attack says the
  * same thing. This walks every card once and keeps the text worth searching.
  *
+ * Each entry records its parts as well, so a result can say whether an
+ * ability, an attack or Trainer wording matched, and its category, so a search
+ * can be narrowed to Pokemon, Trainers or Energy.
+ *
  *   npm run index:text
  *
  * It is a few minutes of requests, so run it when a set releases, not on boot.
  */
 const CONCURRENCY = 6;
 
+interface IndexedPart {
+  kind: "ability" | "attack" | "effect";
+  name?: string;
+  text: string;
+}
+
 interface IndexedCard {
   id: string;
   name: string;
   text: string;
+  category: "Pokemon" | "Trainer" | "Energy";
+  parts: IndexedPart[];
 }
 
 const client = new TcgdexClient({ timeoutMs: 20_000, retries: 4 });
@@ -36,6 +48,18 @@ function textOf(card: Card): string {
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
+function partsOf(card: Card): IndexedPart[] {
+  const parts: IndexedPart[] = [];
+  if (card.effect) parts.push({ kind: "effect", text: card.effect });
+  for (const ability of card.abilities ?? []) {
+    parts.push({ kind: "ability", name: ability.name, text: ability.effect ?? "" });
+  }
+  for (const attack of card.attacks ?? []) {
+    parts.push({ kind: "attack", name: attack.name, text: attack.effect ?? "" });
+  }
+  return parts;
+}
+
 const summaries = await client.listCards();
 console.log(`cards to inspect: ${summaries.length}`);
 
@@ -50,7 +74,8 @@ for (let start = 0; start < summaries.length; start += CONCURRENCY) {
       try {
         const card = await client.getCard(summary.id);
         const text = textOf(card);
-        return text.length > 0 ? { id: summary.id, name: summary.name, text } : undefined;
+        const category: IndexedCard["category"] = card.category === "Trainer" || card.category === "Energy" ? card.category : "Pokemon";
+        return text.length > 0 ? { id: summary.id, name: summary.name, text, category, parts: partsOf(card) } : undefined;
       } catch (error) {
         // A card the list names but the API does not serve has no text to index.
         if (error instanceof TcgdexError && error.status === 404) return undefined;
