@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CardLookup } from "../lookup.js";
 import { cardReply } from "../src/discord/replies.js";
+import { cardmarketRow } from "../src/discord/printing-buttons.js";
 import { parseDecklist } from "../src/decklist.js";
 import { resolveDeckCards } from "../src/deck-check.js";
 import type { Card } from "../src/api/types.js";
@@ -18,13 +19,17 @@ const labels = (reply: ReturnType<typeof cardReply>) =>
   reply.components?.flatMap((row) => row.toJSON().components.map((c) => (c as { label?: string }).label)) ?? [];
 
 describe("cardReply listing links", () => {
-  it("carries the Cardmarket link beside Details", () => {
-    expect(labels(cardReply(lookup))).toEqual(["Details", "Limitless", "Cardmarket"]);
+  it("carries Limitless beside Details, with Cardmarket reserved for the details embed", () => {
+    expect(labels(cardReply(lookup))).toEqual(["Details", "Limitless"]);
   });
 
-  it("carries no Cardmarket link for a pocket card", () => {
+  it("carries Limitless for a pocket card too", () => {
     const pocket: CardLookup = { card: { id: "A1-001", name: "Bulbasaur", image: "https://example.test/b.webp" }, alternates: [] };
     expect(labels(cardReply(pocket))).toEqual(["Details", "Limitless"]);
+  });
+
+  it("gives the details embed a Cardmarket row for a physical card", () => {
+    expect(cardmarketRow(lookup.card.id, lookup.card.name)).toBeDefined();
   });
 });
 

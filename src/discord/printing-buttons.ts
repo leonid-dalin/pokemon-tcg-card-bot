@@ -33,19 +33,14 @@ export function printingRows(alternates: CardSummary[], ownerId?: string): Actio
   return [row];
 }
 
-export function detailsRow(cardId: string, label = "Details", name?: string): ActionRowBuilder<ButtonBuilder>[] {
-  // The listing links ride in the Details row: a link button needs no owner
-  // check, because it only opens a page.
+export function detailsRow(cardId: string, label = "Details"): ActionRowBuilder<ButtonBuilder>[] {
+  // Limitless rides in the Details row: a link button needs no owner check,
+  // because it only opens a page. Cardmarket belongs on the details embed
+  // instead, where a reader asked about the card as a listing.
   const links: ButtonBuilder[] = [];
   const limitless = limitlessUrl(cardId);
   if (limitless) {
     links.push(new ButtonBuilder().setLabel("Limitless").setURL(limitless).setStyle(ButtonStyle.Link));
-  }
-  if (name) {
-    const cardmarket = cardmarketUrl(cardId, name);
-    if (cardmarket) {
-      links.push(new ButtonBuilder().setLabel("Cardmarket").setURL(cardmarket).setStyle(ButtonStyle.Link));
-    }
   }
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -53,6 +48,18 @@ export function detailsRow(cardId: string, label = "Details", name?: string): Ac
       ...links,
     ),
   ];
+}
+
+/**
+ * The Cardmarket link as its own row, for the details embed reply. Undefined
+ * when the card has no Cardmarket listing, such as a Pocket card.
+ */
+export function cardmarketRow(cardId: string, name: string): ActionRowBuilder<ButtonBuilder> | undefined {
+  const cardmarket = cardmarketUrl(cardId, name);
+  if (!cardmarket) return undefined;
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setLabel("Cardmarket").setURL(cardmarket).setStyle(ButtonStyle.Link),
+  );
 }
 
 /**

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { cardmarketUrl, limitlessUrl } from "../src/links.js";
-import { detailsRow } from "../src/discord/printing-buttons.js";
+import { cardmarketRow, detailsRow } from "../src/discord/printing-buttons.js";
 
-const buttons = (cardId: string, name?: string) => {
-  const row = detailsRow(cardId, "Details", name)[0]!;
+const buttons = (cardId: string) => {
+  const row = detailsRow(cardId, "Details")[0]!;
   return (row.toJSON() as { components: { label?: string; url?: string; custom_id?: string }[] }).components;
 };
 
@@ -40,9 +40,9 @@ describe("limitlessUrl", () => {
 });
 
 describe("cardmarketUrl", () => {
-  it("opens the Cardmarket listing search for the card", () => {
+  it("uses the Search format the site's own UI builds", () => {
     expect(cardmarketUrl("sv01-181", "Nest Ball")).toBe(
-      "https://www.cardmarket.com/en/Pokemon/Products?searchString=Nest+Ball+SVI+181",
+      "https://www.cardmarket.com/en/Pokemon/Products/Search?category=-1&searchString=Nest+Ball+SVI&category=-1&searchMode=v2",
     );
   });
 
@@ -56,19 +56,23 @@ describe("cardmarketUrl", () => {
 });
 
 describe("link buttons on the details row", () => {
-  it("carries Details, Limitless and Cardmarket in one row", () => {
-    const row = buttons("sv01-181", "Nest Ball");
-    expect(row.map((b) => b.label)).toEqual(["Details", "Limitless", "Cardmarket"]);
-    expect(row[1]!.url).toContain("limitlesstcg.com/cards/SVI/181");
-    expect(row[2]!.url).toContain("cardmarket.com");
-  });
-
-  it("offers Limitless without Cardmarket for a pocket card", () => {
-    const row = buttons("A1-001", "Bulbasaur");
+  it("carries Details and Limitless, with Cardmarket on the details embed instead", () => {
+    const row = buttons("sv01-181");
     expect(row.map((b) => b.label)).toEqual(["Details", "Limitless"]);
+    expect(row[1]!.url).toContain("limitlesstcg.com/cards/SVI/181");
   });
 
-  it("leaves the Details button alone when no listing links exist", () => {
+  it("gives a Cardmarket row for the details embed, with the site's Search format", () => {
+    const row = cardmarketRow("sv01-181", "Nest Ball")!.toJSON() as { components: { label?: string; url?: string }[] };
+    expect(row.components[0]!.label).toBe("Cardmarket");
+    expect(row.components[0]!.url).toContain("Products/Search?category=-1&searchString=Nest+Ball+SVI");
+  });
+
+  it("gives no Cardmarket row for a pocket card", () => {
+    expect(cardmarketRow("A1-001", "Bulbasaur")).toBeUndefined();
+  });
+
+  it("leaves the Details button alone when no links exist", () => {
     const row = buttons("zzz9-999");
     expect(row.map((b) => b.label)).toEqual(["Details"]);
     expect(row[0]!.custom_id).toBe("details:zzz9-999");

@@ -37,15 +37,15 @@ export function limitlessUrl(cardId: string): string | undefined {
 }
 
 /**
- * The Cardmarket listing search for a card. Cardmarket blocks deep product
- * links to non-browsers, so the search for the name with its printed code and
- * number is the reliable entry point. Pocket sets have no code and no
- * Cardmarket listings, so they get no link.
+ * The Cardmarket listing search for a card, in the Search format the site's own
+ * UI builds. Cardmarket blocks deep product links to non-browsers, so the
+ * search for the name with its printed set code is the reliable entry point.
+ * Pocket sets have no code and no Cardmarket listings, so they get no link.
  */
 export function cardmarketUrl(cardId: string, name: string): string | undefined {
   const parts = split(cardId);
   const entry = parts ? byId.get(parts.prefix) : undefined;
   if (!parts || !entry?.code) return undefined;
-  const query = `${name} ${entry.code.replace(":", " ")} ${bareNumber(parts.number)}`;
-  return `https://www.cardmarket.com/en/Pokemon/Products?searchString=${encodeURIComponent(query).replaceAll("%20", "+")}`;
+  const query = `${name} ${entry.code.replace(":", " ")}`;
+  return `https://www.cardmarket.com/en/Pokemon/Products/Search?category=-1&searchString=${encodeURIComponent(query).replaceAll("%20", "+")}&category=-1&searchMode=v2`;
 }

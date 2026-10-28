@@ -14,7 +14,7 @@ import { searchCardGroups } from "../text-search.js";
 import { printingItems, printingsOf } from "../printings.js";
 import { setChecklistReply } from "../set-checklist.js";
 import { helpView } from "../help.js";
-import { printingIdFrom, detailsIdFrom, MISS_MENU_ID, MISS_MENU_PREFIX } from "./printing-buttons.js";
+import { printingIdFrom, detailsIdFrom, cardmarketRow, MISS_MENU_ID, MISS_MENU_PREFIX } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
 import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
@@ -174,6 +174,7 @@ export async function handleDetailsButton(
   // A Pocket card answers with the Pocket source, so the footer has to follow the lookup.
   await interaction.editReply({
     embeds: [toEmbed(renderCardDetails(lookup.card, lookup.alternates, { attribution: lookup.attribution ?? context.attribution }))],
+    ...(cardmarketRow(lookup.card.id, lookup.card.name) ? { components: [cardmarketRow(lookup.card.id, lookup.card.name)!] } : {}),
   });
 }
 export async function handlePageButton(

@@ -13,7 +13,7 @@ export const MAX_EMBEDS_PER_MESSAGE = 5;
 export function cardReply(lookup: CardLookup, ownerId?: string) {
   const components = isImageOnly(lookup)
     ? []
-    : [...printingRows(lookup.alternates, ownerId), ...detailsRow(lookup.card.id, "Details", lookup.card.name)];
+    : [...printingRows(lookup.alternates, ownerId), ...detailsRow(lookup.card.id)];
   return {
     embeds: toEmbeds(lookupEmbeds(lookup)),
     ...(components.length > 0 ? { components } : {}),
@@ -80,7 +80,7 @@ export function mentionReply(found: CardLookup[], misses: MentionMiss[], ownerId
     ...(found.length === 1 && found[0]
       ? isImageOnly(found[0])
         ? []
-        : [...printingRows(found[0].alternates, ownerId), ...detailsRow(found[0].card.id, "Details", found[0].card.name)]
+        : [...printingRows(found[0].alternates, ownerId), ...detailsRow(found[0].card.id)]
       : detailsRows(found.filter((lookup) => !isImageOnly(lookup)))),
     ...misses.flatMap((miss, index) => missMenu(miss.closest, index)),
   ];
