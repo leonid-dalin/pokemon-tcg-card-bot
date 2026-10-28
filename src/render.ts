@@ -310,7 +310,7 @@ export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[]): Emb
         .join("\n");
       fields.push({ name: "Not Standard legal", value: truncate(lines, FIELD_VALUE_LIMIT) });
     }
-    const price = deckPrice(deck, resolved);
+    const price = deckPrice(resolved);
     if (price) fields.push({ name: "Deck price", value: price, inline: false });
   }
 
@@ -328,18 +328,23 @@ export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[]): Emb
  * printing carries no price are left out of the sum and named in the count, so
  * a reader can see how much of the deck the figure covers.
  */
-export function deckPrice(deck: ParsedDeck, resolved: ResolvedLine[]): string | undefined {
+export function deckPrice(resolved: ResolvedLine[]): string | undefined {
   let total = 0;
   let priced = 0;
+  // A line counts towards the coverage even when it resolved to no card, so a
+  // deck half-unresolved does not claim full coverage.
+  let eligible = 0;
   for (const { line, card } of resolved) {
-    if (!card || isBasicEnergy(card)) continue;
+    if (card && isBasicEnergy(card)) continue;
+    eligible += line.count;
+    if (!card) continue;
     const average = cardmarketAverage(card);
     if (average === undefined) continue;
     total += average * line.count;
     priced += line.count;
   }
   if (priced === 0) return undefined;
-  return `≈ ${total.toFixed(2)} EUR (Cardmarket average, ${priced} of ${deck.total} cards priced)`;
+  return `≈ ${total.toFixed(2)} EUR (Cardmarket average, ${priced} of ${eligible} cards priced)`;
 }
 
 export function renderSet(set: SetSummary | CardSetRef, attribution = DEFAULT_ATTRIBUTION): EmbedView {

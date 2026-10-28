@@ -1,29 +1,44 @@
 [
   {
-    "id": "me04-048",
-    "name": "Mega Gallade ex",
-    "text": "Battle Bond. Once during your turn, you may attach a Fighting Energy card from your hand to this Pokémon. Gale Slash. If this Pokémon has no damage counters on it, this attack does 150 more damage.",
+    "id": "30th-c-009",
+    "name": "Greninja BREAK",
+    "text": "Giant Water Shuriken. Once during your turn (before your attack) , if this Pokémon is your Active Pokémon, you may discard a Water Energy card from your hand. If you do, put 6 damage counters on 1 of your oppponent's Pokémon.",
+    "category": "Pokemon",
     "parts": [
       {
         "kind": "ability",
-        "name": "Battle Bond",
-        "text": "Once during your turn, you may attach a Fighting Energy card from your hand to this Pokémon."
-      },
-      {
-        "kind": "attack",
-        "name": "Gale Slash",
-        "text": "If this Pokémon has no damage counters on it, this attack does 150 more damage."
+        "name": "Giant Water Shuriken",
+        "text": "Once during your turn (before your attack)\t   , if this Pokémon is your Active Pokémon, you may discard a Water Energy card from your hand. If you do, put 6 damage counters on 1 of your oppponent's Pokémon."
       }
     ]
   },
   {
-    "id": "sv02-185",
-    "name": "Iono",
-    "text": "Choose 1 of your opponent's Active Pokémon and put it and any attached cards back into their owner's hand.",
+    "id": "2022swsh-14",
+    "name": "Drampa",
+    "text": "Corkscrew Punch. Berkshire. If your Benched Pokémon have any damage counters on them, this attack does 90 more damage.",
+    "category": "Pokemon",
+    "parts": [
+      {
+        "kind": "attack",
+        "name": "Corkscrew Punch",
+        "text": ""
+      },
+      {
+        "kind": "attack",
+        "name": "Berkshire",
+        "text": "If your Benched Pokémon have any damage counters on them, this attack does 90 more damage."
+      }
+    ]
+  },
+  {
+    "id": "swsh11-164",
+    "name": "Miss Fortune Sisters",
+    "text": "Look at the top 5 cards of your opponent's deck and discard any number of Item cards you find there. Your opponent shuffles the other cards back into their deck.",
+    "category": "Trainer",
     "parts": [
       {
         "kind": "effect",
-        "text": "Choose 1 of your opponent's Active Pokémon and put it and any attached cards back into their owner's hand."
+        "text": "Look at the top 5 cards of your opponent's deck and discard any number of Item cards you find there. Your opponent shuffles the other cards back into their deck."
       }
     ]
   }

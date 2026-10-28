@@ -7,14 +7,14 @@ import {
   type StringSelectMenuInteraction,
 } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
-import { lookupById, lookupCard } from "../lookup.js";
+import { CARD_ID, lookupById, lookupCard, POCKET_ATTRIBUTION } from "../lookup.js";
 import { renderCardDetails, renderSet } from "../render.js";
 import { printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
 import { printingItems, printingsOf } from "../printings.js";
 import { setChecklistReply } from "../set-checklist.js";
 import { helpView } from "../help.js";
-import { printingIdFrom, detailsIdFrom, MISS_MENU_ID } from "./printing-buttons.js";
+import { printingIdFrom, detailsIdFrom, MISS_MENU_ID, MISS_MENU_PREFIX } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
 import { listReply, filterFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
@@ -124,7 +124,11 @@ export async function handleCardCommand(
   const setHint = interaction.options.getString("set")?.trim() || undefined;
 
   await interaction.deferReply();
-  const lookup = await lookupCard(context.client, query, setHint, { attribution: context.attribution, energyEmoji: context.energyEmoji });
+  // Autocomplete lists card ids, so a picked printing has to be pinned rather
+  // than searched for by the id text as if it were a name.
+  const lookup = CARD_ID.test(query)
+    ? await lookupById(context.client, query, { attribution: context.attribution, energyEmoji: context.energyEmoji })
+    : await lookupCard(context.client, query, setHint, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;
@@ -161,14 +165,15 @@ export async function handleDetailsButton(
 ): Promise<void> {
   const id = detailsIdFrom(interaction.customId);
   if (!id) return;
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const lookup = await lookupById(context.client, id, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
-    await interaction.reply({ content: `No card matched \`${id}\`.`, flags: MessageFlags.Ephemeral });
+    await interaction.editReply({ content: `No card matched \`${id}\`.` });
     return;
   }
-  await interaction.reply({
-    embeds: [toEmbed(renderCardDetails(lookup.card, lookup.alternates, { attribution: context.attribution }))],
-    flags: MessageFlags.Ephemeral,
+  // A Pocket card answers with the Pocket source, so the footer has to follow the lookup.
+  await interaction.editReply({
+    embeds: [toEmbed(renderCardDetails(lookup.card, lookup.alternates, { attribution: lookup.attribution ?? context.attribution }))],
   });
 }
 export async function handlePageButton(
@@ -216,7 +221,7 @@ export async function handleOpenCardMenu(
 ): Promise<void> {
   const cardId = interaction.values[0];
   if (!cardId) return;
-  if (interaction.customId !== MISS_MENU_ID) {
+  if (interaction.customId !== MISS_MENU_ID && !interaction.customId.startsWith(MISS_MENU_PREFIX)) {
     const token = pageTokenFrom(interaction.customId);
     if (!token) return;
     if (!context.pages.get(token)) {
@@ -224,12 +229,15 @@ export async function handleOpenCardMenu(
       return;
     }
   }
+  // The lookup goes to TCGdex, which can outlast the three seconds a component
+  // has to answer.
+  await interaction.deferReply();
   const lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
-    await interaction.reply({ content: `No card matched \`${cardId}\`.`, flags: MessageFlags.Ephemeral });
+    await interaction.editReply({ content: `No card matched \`${cardId}\`.` });
     return;
   }
-  await interaction.reply(cardReply(lookup, interaction.user.id));
+  await interaction.editReply(cardReply(lookup, interaction.user.id));
 }
 
 export async function handleSearchCommand(
@@ -265,6 +273,17 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
   await interaction.reply({ embeds: [toEmbed(helpView())] });
 }
 
+/** Pocket ids are `a1-001` or `p-a-001`; TCGdex ids never start with those sets. */
+const POCKET_ID = /^(?:[ab]\d+[a-z]?|p-[ab])-/i;
+
+/** Both sources get named when the list mixes them, since each row came from one or the other. */
+function footerFor(printings: { id: string }[], attribution: string): string {
+  const pocket = printings.some((printing) => POCKET_ID.test(printing.id));
+  const physical = printings.some((printing) => !POCKET_ID.test(printing.id));
+  if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards`;
+  return pocket ? POCKET_ATTRIBUTION : attribution;
+}
+
 export async function handlePrintingsCommand(
   context: CommandContext,
   interaction: ChatInputCommandInteraction,
@@ -272,7 +291,10 @@ export async function handlePrintingsCommand(
   const query = interaction.options.getString("name", true).trim();
   await interaction.deferReply();
 
-  const printings = await printingsOf(context.client, query);
+  // A picked autocomplete entry is a card id, so resolve it first and list that
+  // card's name; a typed name goes straight to the listing.
+  const pinned = CARD_ID.test(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
+  const printings = await printingsOf(context.client, pinned?.card.name ?? query);
   if (printings.length === 0) {
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;
@@ -283,7 +305,8 @@ export async function handlePrintingsCommand(
     items: printingItems(printings),
     perPage: 10,
     ownerId: interaction.user.id,
-    footer: context.attribution,
+    // A mixed list has to credit both sources, or the footer hides where half the rows came from.
+    footer: footerFor(printings, context.attribution),
   };
   const token = context.pages.put(page);
   await interaction.editReply(listReply(page, token, 0));

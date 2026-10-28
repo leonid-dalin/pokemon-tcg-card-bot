@@ -200,8 +200,15 @@ function highlight(sentence: string, tokens: string[], maxLength: number): strin
     const boundary = prefix.lastIndexOf(" ");
     excerpt = prefix.slice(0, boundary > 0 ? boundary : prefix.length);
   }
-  for (const token of [...new Set(tokens)].sort((a, b) => b.length - a.length)) {
-    excerpt = excerpt.replace(new RegExp(escapeRegExp(token), "gi"), (match) => `**${match}**`);
+  // One pass, longest term first, so a shorter term cannot match inside the
+  // bold marks an earlier term already wrote.
+  const alternation = [...new Set(tokens)]
+    .filter((token) => token.length > 0)
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+    .join("|");
+  if (alternation) {
+    excerpt = excerpt.replace(new RegExp(alternation, "gi"), (match) => `**${match}**`);
   }
   return truncated ? `${excerpt}…` : excerpt;
 }

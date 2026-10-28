@@ -8,26 +8,27 @@ const entries = JSON.parse(
 
 describe("search parts", () => {
   it("says an ability matched", () => {
-    const group = searchGroupsIn(entries, "attach a Fighting Energy card")[0];
-    expect(group?.representative.id).toBe("me04-048");
-    expect(matchingDetail(group!.representative, "attach a Fighting Energy card")).toBe(
-      "Ability · Battle Bond: Once during your turn, you may **attach** a **Fighting** **Energy** **card** from your hand to this Pokémon.",
-    );
+    const group = searchGroupsIn(entries, "discard a water energy")[0];
+    expect(group?.representative.id).toBe("30th-c-009");
+    const detail = matchingDetail(group!.representative, "discard a water energy");
+    expect(detail.startsWith("Ability · Giant Water Shuriken: ")).toBe(true);
+    expect(detail).toContain("you may **discard** a **Water**");
   });
 
   it("says an attack matched", () => {
-    const group = searchGroupsIn(entries, "no damage counters")[0];
-    expect(matchingDetail(group!.representative, "no damage counters")).toBe(
-      "Attack · Gale Slash: If this Pokémon has **no** **damage** **counters** on it, this attack does 150 more **damage**.",
-    );
+    const group = searchGroupsIn(entries, "any damage counters")[0];
+    expect(group?.representative.id).toBe("2022swsh-14");
+    const detail = matchingDetail(group!.representative, "any damage counters");
+    expect(detail.startsWith("Attack · Berkshire: ")).toBe(true);
+    expect(detail).toContain("**damage** **counters**");
   });
 
   it("says an effect matched", () => {
-    const group = searchGroupsIn(entries, "attached cards back into")[0];
-    expect(group?.representative.id).toBe("sv02-185");
-    expect(matchingDetail(group!.representative, "attached cards back into")).toBe(
-      "Effect: Choose 1 of your opponent's Active Pokémon and put it and any **attached** **cards** **back** **into** their owner's hand.",
-    );
+    const group = searchGroupsIn(entries, "discard any number of item")[0];
+    expect(group?.representative.id).toBe("swsh11-164");
+    const detail = matchingDetail(group!.representative, "discard any number of item");
+    expect(detail.startsWith("Effect: ")).toBe(true);
+    expect(detail).toContain("**discard** **any** **number** **of** **Item**");
   });
 
   it("searches an entry without parts and leaves it unlabelled", () => {

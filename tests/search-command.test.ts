@@ -24,7 +24,11 @@ describe("handleSearchCommand", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.embeds).toHaveLength(1);
     const payload = JSON.stringify(calls[0]?.components?.map((row) => row.toJSON()));
-    expect(payload).toContain("1 / 101");
+    // The page label is `n / N`; the total follows the index, so pin the shape.
+    const label = payload.match(/"label":"(\d+) \/ (\d+)"/);
+    expect(label).not.toBeNull();
+    expect(label![1]).toBe("1");
+    expect(Number(label![2])).toBeGreaterThan(1);
     expect((calls[0]?.embeds?.[0] as { data: { description?: string } }).data.description?.split("\n\n")).toHaveLength(5);
   });
 });

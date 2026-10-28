@@ -4,7 +4,9 @@ import { printedNumber } from "../printed.js";
 
 export const PRINTING_PREFIX = "printing:";
 export const DETAILS_PREFIX = "details:";
-export const MISS_MENU_ID = "open:miss";
+/** `open:miss` and `open:miss<N>`; the number separates two misses in one reply. */
+export const MISS_MENU_PREFIX = "open:miss";
+export const MISS_MENU_ID = MISS_MENU_PREFIX;
 const MAX_BUTTONS = 5;
 const MAX_OPTIONS = 5;
 
@@ -40,16 +42,18 @@ export function detailsRow(cardId: string, label = "Details"): ActionRowBuilder<
 
 /**
  * The closest cards after a miss, as a menu. Anyone may pick one: the card is
- * posted as a new reply, so nothing shared changes.
+ * posted as a new reply, so nothing shared changes. Each menu carries its miss
+ * index, because a reply with two misses holds two of them and Discord rejects
+ * duplicate custom ids.
  */
-export function missMenu(closest: CardSummary[]): ActionRowBuilder<StringSelectMenuBuilder>[] {
+export function missMenu(closest: CardSummary[], index = 0): ActionRowBuilder<StringSelectMenuBuilder>[] {
   if (closest.length === 0) return [];
   const options = closest.slice(0, MAX_OPTIONS).map((card) => ({
     label: `${card.name} · ${printedNumber(card.id)}`.slice(0, 100),
     value: card.id,
   }));
   const menu = new StringSelectMenuBuilder()
-    .setCustomId(MISS_MENU_ID)
+    .setCustomId(`${MISS_MENU_PREFIX}${index}`)
     .setPlaceholder("Pick the closest card")
     .addOptions(options);
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];

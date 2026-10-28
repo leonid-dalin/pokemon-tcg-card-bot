@@ -20,6 +20,12 @@ export function cardReply(lookup: CardLookup, ownerId?: string) {
   };
 }
 
+/** Discord rejects an embed title over 256 characters, and the count plus quotes take the rest. */
+const TITLE_LIMIT = 80;
+
+/** More than this is more than anyone scrolls, and every row costs a search of its own. */
+const MAX_ITEMS = 250;
+
 /** A text search answer, shared by `/search` and `@bot search`. */
 export function searchReply(
   query: string,
@@ -36,9 +42,10 @@ export function searchReply(
     // prints the marks, so say what was searched instead of blaming the cards.
     return { content: quoted ? `${base} The words were searched; the quote marks are matched literally, so a card would have to print them.` : base };
   }
+  const shown = groups.slice(0, MAX_ITEMS);
   const page: ListPage = {
-    title: `${groups.length} cards mention "${unquote(query)}"`,
-    items: groups.map(({ representative, printings }) => ({
+    title: `${groups.length} cards mention "${unquote(query).slice(0, TITLE_LIMIT)}"`,
+    items: shown.map(({ representative, printings }) => ({
       cardId: representative.id,
       heading: `**${representative.name}** · ${printedNumber(representative.id)}${printings > 1 ? ` · ${printings} printings` : ""}`,
       detail: matchingDetail(representative, query),
@@ -46,8 +53,8 @@ export function searchReply(
     })),
     perPage: 5,
     ownerId,
-    footer: attribution,
-    filterable: groups.some((group) => group.representative.category !== undefined),
+    footer: groups.length > MAX_ITEMS ? `${attribution} · the first ${MAX_ITEMS} of ${groups.length}` : attribution,
+    filterable: shown.some((group) => group.representative.category !== undefined),
   };
   const token = pages.put(page);
   return listReply(page, token, 0);
@@ -77,7 +84,7 @@ export function mentionReply(found: CardLookup[], misses: MentionMiss[], ownerId
         ? []
         : [...printingRows(found[0].alternates, ownerId), ...detailsRow(found[0].card.id)]
       : detailsRows(found.filter((lookup) => !isImageOnly(lookup)))),
-    ...misses.flatMap((miss) => missMenu(miss.closest)),
+    ...misses.flatMap((miss, index) => missMenu(miss.closest, index)),
   ];
   return {
     ...(embeds.length > 0 ? { embeds } : {}),

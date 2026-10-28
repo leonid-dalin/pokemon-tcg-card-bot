@@ -2,7 +2,8 @@ import type { Card } from "./api/types.js";
 import type { TcgdexClient } from "./api/tcgdex.js";
 import type { DeckLine, ParsedDeck } from "./decklist.js";
 import { SET_INDEX } from "./data/set-index.js";
-import { normaliseName, rankPrintings } from "./resolve.js";
+import { normaliseName, rankPrintings, scoreCandidate } from "./resolve.js";
+import { setRecency } from "./set-index.js";
 
 export interface ResolvedLine {
   line: DeckLine;
@@ -43,9 +44,12 @@ async function resolveLine(client: TcgdexClient, line: DeckLine): Promise<Card |
     // id prefix. The set id is not always that prefix: SVI prints as sv01.
     const prefix = entryByCode.get(normaliseName(line.setCode))?.id ?? line.setCode;
     const bare = line.number.replace(/^0+(?=\d)/, "");
+    const wanted = normaliseName(line.name);
     for (const candidate of [`${prefix}-${bare}`, `${prefix}-${bare.padStart(3, "0")}`]) {
       const card = await client.getCard(candidate).catch(() => undefined);
-      if (card) return card;
+      // A printing a set reuses for another card would otherwise be accepted on
+      // its number alone, so the name has to agree.
+      if (card && normaliseName(card.name) === wanted) return card;
     }
   }
   return resolveByName(client, line.name);
@@ -53,11 +57,20 @@ async function resolveLine(client: TcgdexClient, line: DeckLine): Promise<Card |
 
 /**
  * A fallback by name. The printed code can name a printing TCGdex does not
- * serve, so the name decides, and the newest printing wins when several match.
+ * serve, so the name decides. A tie breaks on the name score, then on whether
+ * the printing has artwork, then on the newest set, the order a card lookup
+ * uses, so the same name resolves to the same printing either way.
  */
 async function resolveByName(client: TcgdexClient, name: string): Promise<Card | undefined> {
   const cards = await client.searchByName(name).catch(() => []);
-  const [best] = rankPrintings(cards, name);
+  const ranked = rankPrintings(cards, name);
+  const [best] = [...ranked].sort((a, b) => {
+    const score = scoreCandidate(name, b.name) - scoreCandidate(name, a.name);
+    if (score !== 0) return score;
+    const art = (b.image ? 1 : 0) - (a.image ? 1 : 0);
+    if (art !== 0) return art;
+    return setRecency(b.id) - setRecency(a.id);
+  });
   if (!best) return undefined;
   return client.getCard(best.id).catch(() => undefined);
 }

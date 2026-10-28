@@ -47,7 +47,7 @@ Names match regardless of case, accents, apostrophes and spacing, so `pokemon ca
 5. Register the slash commands, then start the bot:
 
    ```bash
-   npm run register        # publishes /card, /printings, /set and /search
+   npm run register        # publishes /card, /printings, /set, /search and /help
    npm run dev             # runs from source
    ```
 
