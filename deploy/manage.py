@@ -41,6 +41,19 @@ def run(*args, **kwargs):
     return subprocess.run(args, check=True, capture_output=True, text=True, **kwargs).stdout.strip()
 
 
+def preflight(unpacked):
+    """Run the bundle smoke test as the service user without operator secrets."""
+    # The executable must be resolved from a trusted search path that includes the
+    # administrative directories; a bare PATH would miss /sbin runuser on Bookworm.
+    runuser = shutil.which("runuser", path="/usr/sbin:/sbin:/usr/bin:/bin")
+    if not runuser:
+        raise RuntimeError("runuser is required for the service-user preflight")
+    progress("Checking bundled runtime, card data and SQLite as the service user")
+    run(runuser, "-u", "pokemon-card-bot", "--", str(unpacked / "bin/node"),
+        "--max-old-space-size=192", str(unpacked / "deploy/smoke.mjs"), cwd="/tmp", timeout=120,
+        env={"PATH": "/usr/bin:/bin"})
+
+
 def systemctl(*args):
     return run("systemctl", *args)
 
@@ -185,6 +198,10 @@ def recover():
         print("Unreadable update state; see docs/deployment.md for manual recovery", file=sys.stderr)
         raise SystemExit(1)
     progress("Recovering an interrupted update")
+    # A crash between the phase write and the link replacement can leave them
+    # disagreeing; the selected release decides the actual phase.
+    if phase == "checkpointed" and current() == release:
+        phase = "switched"
     if phase == "ready":
         # The new release reached readiness; always refresh the success record so a
         # stale checkpoint from an older update can never be rolled back into.
@@ -220,15 +237,19 @@ def activate(release):
         print("Bot is stopped; update skipped")
         return
     backup = ROOT / "backups" / f"{int(time.time_ns())}-{previous.name}"
-    progress("Stopping bot and taking a settings checkpoint")
-    snapshot(backup)
-    begin_activation(release, previous, backup)
     try:
-        (backup / "previous").write_text(previous.name)
+        # Stop first so the checkpoint captures every setting the old process
+        # acknowledged; downloads and the preflight already ran before this point.
+        progress("Stopping the bot and taking the authoritative settings checkpoint")
         systemctl("stop", SERVICE)
-        point_to(release)
+        snapshot(backup)
+        (backup / "previous").write_text(previous.name)
+        begin_activation(release, previous, backup)
+        # Persist the switch intent before replacing the link, so a crash in the
+        # gap is recovered as a switch rather than left on the old phase.
         atomic_json(STATE, {"phase": "switched", "release": release.name,
                             "previous": previous.name, "backup": backup.name})
+        point_to(release)
         progress(f"Starting {release.name} and waiting for Discord readiness")
         systemctl("start", SERVICE)
         wait_ready()
@@ -238,10 +259,14 @@ def activate(release):
         progress("Startup failed or interrupted; restoring previous code and settings")
         with contextlib.suppress(Exception):
             systemctl("stop", SERVICE)
-        restore(backup)
-        point_to(previous)
-        atomic_text(ROOT / "failed-revision", release.name)
-        STATE.unlink()
+        # A checkpoint that never completed means the old database is untouched;
+        # either way the previous release is the only safe thing to start.
+        with contextlib.suppress(Exception):
+            if backup.is_dir():
+                restore(backup)
+            point_to(previous)
+            atomic_text(ROOT / "failed-revision", release.name)
+            STATE.unlink()
         systemctl("start", SERVICE)
         raise
     atomic_json(ROOT / "rollback.json", {"backup": backup.name, "from": release.name})
@@ -280,11 +305,7 @@ def fetch(sha):
         manifest(unpacked, sha)
         # Run without credentials and as the service user before stopping the live bot.
         os.chmod(stage, 0o755)
-        progress("Checking bundled runtime, card data and SQLite as the service user")
-        # A minimal environment keeps any operator secrets out of the preflight.
-        run("runuser", "-u", "pokemon-card-bot", "--", str(unpacked / "bin/node"),
-            "--max-old-space-size=192", str(unpacked / "deploy/smoke.mjs"), cwd="/tmp", timeout=120,
-            env={"PATH": "/usr/bin:/bin"})
+        preflight(unpacked)
         unpacked.rename(target)
     return target
 
@@ -375,6 +396,14 @@ def rollback():
     previous_name = valid_sha((backup / "previous").read_text().strip())
     target = ROOT / "releases" / previous_name
     manifest(target, previous_name)
+    # Validate every checkpoint component before touching the running bot; an
+    # incomplete checkpoint must never leave the service stopped.
+    try:
+        snapshot_info = json.loads((backup / "snapshot.json").read_text())
+        if snapshot_info["settingsExisted"] and not (backup / "settings.db").is_file():
+            raise ValueError("checkpoint database is missing")
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise RuntimeError(f"rollback checkpoint is unusable ({type(error).__name__})") from error
     systemctl("stop", SERVICE)
     try:
         restore(backup)
@@ -382,7 +411,11 @@ def rollback():
         systemctl("start", SERVICE)
         wait_ready()
     except Exception:
-        progress("Rollback did not reach readiness; check the service journal")
+        # restore() only replaces the live database after a complete copy, so the
+        # installed release and its database are unchanged and can keep running.
+        progress("Rollback did not reach readiness; restarting the installed release")
+        with contextlib.suppress(Exception):
+            systemctl("start", SERVICE)
         raise
     atomic_text(ROOT / "failed-revision", info["from"])
     (ROOT / "rollback.json").unlink()

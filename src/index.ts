@@ -1,4 +1,4 @@
-import { Client, Events, Status } from "discord.js";
+import { Client, Events } from "discord.js";
 import { TcgdexClient } from "./api/tcgdex.js";
 import { loadConfig } from "./config.js";
 import { loadDotEnv } from "./env.js";
@@ -26,6 +26,7 @@ import { MentionBudget } from "./cooldown.js";
 import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
+import { createShardReadiness } from "./discord/shard-readiness.js";
 import { handleSettingsCommand } from "./discord/settings-command.js";
 import { startRuntimeStatus } from "./runtime-status.js";
 
@@ -43,9 +44,8 @@ const api = new TcgdexClient();
 const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore(), settings };
 
 const client = new Client(clientOptions(config));
-// isReady() latches after the first ready event, so also require the gateway
-// connection itself to be up; a reconnecting shard must not report ready.
-startRuntimeStatus(() => client.isReady() && client.ws.status === Status.Ready);
+// The gateway status alone misses a single reconnecting shard; track each shard.
+startRuntimeStatus(createShardReadiness(client));
 const budget =
   config.mentionCooldownSeconds > 0
     ? new MentionBudget({ refillSeconds: config.mentionCooldownSeconds })

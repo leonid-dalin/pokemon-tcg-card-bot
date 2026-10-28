@@ -93,7 +93,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(self.env.read_text(), "secret-placeholder")
         self.assertEqual((self.root / "failed-revision").read_text(), NEW)
 
-    def test_failed_snapshot_leaves_bot_untouched(self):
+    def test_failed_snapshot_restarts_the_previous_release(self):
         previous, release = self.release(OLD), self.release(NEW)
         m.point_to(previous)
         with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control, \
@@ -101,7 +101,7 @@ class DeploymentTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 m.activate(release)
             self.assertEqual(m.current(), previous)
-            control.assert_not_called()
+            self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
             self.assertFalse(m.STATE.exists())
 
     def test_interrupted_after_switch_restores_previous_code_and_settings(self):
@@ -168,6 +168,38 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
         self.assertFalse(m.STATE.exists())
 
+    def test_acknowledged_settings_survive_a_failed_activation(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("before-snapshot")
+        def stop_writes_final_setting(*args):
+            if args == ("stop", m.SERVICE):
+                self.database("acknowledged-before-stop")
+        with patch.object(m, "active", return_value=True), \
+                patch.object(m, "systemctl", side_effect=stop_writes_final_setting), \
+                patch.object(m, "wait_ready", side_effect=RuntimeError("readiness timeout")), \
+                patch.object(m.os, "chown"):
+            with self.assertRaisesRegex(RuntimeError, "readiness"):
+                m.activate(release)
+            self.assertEqual(self.value(), "acknowledged-before-stop")
+
+    def test_recovery_reconciles_a_checkpointed_phase_with_a_switched_link(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        backup = self.root / "backups" / "gap"
+        self.database("original")
+        m.snapshot(backup)
+        m.begin_activation(release, previous, backup)
+        (backup / "previous").write_text(previous.name)
+        # The link changed before the phase advanced: the crash hit the gap.
+        m.point_to(release)
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                patch.object(m.os, "chown"):
+            m.recover()
+        self.assertEqual(m.current(), previous)
+        self.assertEqual(self.value(), "original")
+        self.assertFalse(m.STATE.exists())
+
     def test_rollback_with_missing_checkpoint_keeps_current_release(self):
         previous, release = self.release(OLD), self.release(NEW)
         m.point_to(previous)
@@ -182,6 +214,38 @@ class DeploymentTests(unittest.TestCase):
             control.assert_not_called()
         self.assertEqual(m.current(), release)
         self.assertEqual(self.value(), "original")
+
+    def test_rollback_with_missing_checkpoint_database_never_stops_the_bot(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("original")
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                patch.object(m, "wait_ready"), patch.object(m.os, "chown"):
+            m.activate(release)
+        backup = next((self.root / "backups").iterdir())
+        (backup / "settings.db").unlink()
+        with patch.object(m, "systemctl") as control:
+            with self.assertRaisesRegex(RuntimeError, "unusable"):
+                m.rollback()
+            control.assert_not_called()
+        self.assertEqual(m.current(), release)
+        self.assertEqual(self.value(), "original")
+
+    def test_failed_restore_restarts_the_unchanged_installed_release(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("original")
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                patch.object(m, "wait_ready"), patch.object(m.os, "chown"):
+            m.activate(release)
+            self.database("newer")
+            with patch.object(m.shutil, "copyfileobj", side_effect=OSError("disk full")), \
+                    patch.object(m, "systemctl") as control:
+                with self.assertRaises(OSError):
+                    m.rollback()
+                self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+            self.assertEqual(m.current(), release)
+            self.assertEqual(self.value(), "newer")
 
     def test_prune_keeps_manual_backups_and_referenced_checkpoint(self):
         previous, release = self.release(OLD), self.release(NEW)
