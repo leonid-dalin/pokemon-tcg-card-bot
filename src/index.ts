@@ -6,12 +6,15 @@ import {
   handleAutocomplete,
   handleCardCommand,
   handleDetailsButton,
+  handleOpenCardMenu,
+  handlePageButton,
   handlePrintingButton,
   handleSearchCommand,
   handleSetCommand,
   type CommandContext,
 } from "./discord/commands.js";
 import { clientOptions } from "./discord/client-options.js";
+import { PageStore } from "./discord/pages.js";
 import { createMessageHandler } from "./discord/messages.js";
 import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
@@ -23,7 +26,7 @@ if (!acquireSingleInstanceLock()) process.exit(1);
 
 const config = loadConfig(process.env);
 const api = new TcgdexClient();
-const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji };
+const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore() };
 
 const client = new Client(clientOptions(config));
 const budget =
@@ -44,9 +47,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isButton()) {
       if (interaction.customId.startsWith("details:")) {
         await handleDetailsButton(context, interaction);
+      } else if (interaction.customId.startsWith("page:")) {
+        await handlePageButton(context, interaction);
       } else {
         await handlePrintingButton(context, interaction);
       }
+      return;
+    }
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("open:")) {
+      await handleOpenCardMenu(context, interaction);
       return;
     }
     if (!interaction.isChatInputCommand()) return;

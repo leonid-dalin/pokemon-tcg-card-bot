@@ -4,6 +4,7 @@ import {
   type AutocompleteInteraction,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
+  type StringSelectMenuInteraction,
 } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import { lookupById, lookupCard } from "../lookup.js";
@@ -13,12 +14,14 @@ import { searchCardText } from "../text-search.js";
 import { printingIdFrom, detailsIdFrom } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
+import { PageStore, listReply, pageIndexFrom, pageTokenFrom } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
 
 export interface CommandContext {
   client: TcgdexClient;
   attribution: string;
   energyEmoji: Record<string, string>;
+  pages: PageStore;
 }
 
 export const cardCommand = new SlashCommandBuilder()
@@ -144,6 +147,44 @@ export async function handleDetailsButton(
     flags: MessageFlags.Ephemeral,
   });
 }
+export async function handlePageButton(
+  context: CommandContext,
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const token = pageTokenFrom(interaction.customId);
+  const index = pageIndexFrom(interaction.customId);
+  if (!token || index === undefined) return;
+  const page = context.pages.get(token);
+  if (!page) {
+    await interaction.reply({ content: "This list has expired. Run the command again.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (page.ownerId !== interaction.user.id) {
+    await interaction.reply({ content: "Only the person who asked can change this. Ask for your own copy with [[name]] or /card.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await interaction.update(listReply(page, token, index));
+}
+
+export async function handleOpenCardMenu(
+  context: CommandContext,
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const token = pageTokenFrom(interaction.customId);
+  const cardId = interaction.values[0];
+  if (!token || !cardId) return;
+  if (!context.pages.get(token)) {
+    await interaction.reply({ content: "This list has expired. Run the command again.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  const lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
+  if (!lookup) {
+    await interaction.reply({ content: `No card matched \`${cardId}\`.`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await interaction.reply(cardReply(lookup, interaction.user.id));
+}
+
 export async function handleSearchCommand(
   context: CommandContext,
   interaction: ChatInputCommandInteraction,
