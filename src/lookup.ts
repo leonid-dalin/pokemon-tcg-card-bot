@@ -206,10 +206,13 @@ export async function lookupCard(
   if (pocketOnly) return lookupPocket(query, setHint, options);
   const resolved = setHint ? resolveSetHint(setHint) : undefined;
   if (setHint && !resolved) return undefined;
-  // A Pocket set hint does not force the physical game: the server preference applies
-  // and the package fallback stays available for it.
-  const forcedPhysical = Boolean(setHint) && !(resolved !== undefined && isPocketSet(resolved));
+  // An explicit Pocket set hint is a game choice: it overrides a physical-only
+  // preference, while without a preference the TCGdex path and its package
+  // fallback keep their existing behaviour.
+  const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
   const preference = options.gamePreference;
+  if (hintPocketSet && preference && preference.allowed !== "both") return lookupPocket(query, setHint, options);
+  const forcedPhysical = Boolean(setHint) && !hintPocketSet;
   if (!forcedPhysical && preference?.allowed === "pocket") return lookupPocket(query, setHint, options);
 
   // The preference's default game applies only to unhinted names, and only when the

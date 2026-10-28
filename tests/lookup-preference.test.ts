@@ -24,28 +24,41 @@ function clientReturning(summaries: CardSummary[]): TcgdexClient {
   return client;
 }
 
-const PTCG_ONLY = { allowed: "ptcg", default: "ptcg" } as const;
-const POCKET_ONLY = { allowed: "pocket", default: "pocket" } as const;
-const BOTH_PREFER_POCKET = { allowed: "both", default: "pocket" } as const;
+const PTCG_PREF = { allowed: "ptcg", default: "ptcg" } as const;
+const POCKET_PREF = { allowed: "pocket", default: "pocket" } as const;
+const BOTH_PREF_POCKET = { allowed: "both", default: "pocket" } as const;
 
 describe("per-server card game preference in lookupCard", () => {
   it("keeps a physical set hint in charge on a Pocket-only server", async () => {
     const client = clientReturning([{ id: "sv08.5-073", name: "Charizard ex", localId: "073" }]);
-    const lookup = await lookupCard(client, "Charizard ex", "sv08.5", { gamePreference: POCKET_ONLY });
+    const lookup = await lookupCard(client, "Charizard ex", "sv08.5", { gamePreference: POCKET_PREF });
     expect(lookup?.card.id).toBe("sv08.5-073");
     expect((client as unknown as { calls: () => number }).calls()).toBe(1);
   });
 
   it("lets an explicit Pocket hint win on a physical-only server", async () => {
     const client = clientReturning([]);
-    const lookup = await lookupCard(client, "Mewtwo", "pocket", { gamePreference: PTCG_ONLY });
+    const lookup = await lookupCard(client, "Mewtwo", "pocket", { gamePreference: PTCG_PREF });
     expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
   });
 
   it("routes a Pocket set hint to a Pocket card on a physical-only server", async () => {
     const client = clientReturning([{ id: "A1-036", name: "Charizard ex", localId: "036" }]);
-    const lookup = await lookupCard(client, "Charizard ex", "A1", { gamePreference: POCKET_ONLY });
+    const lookup = await lookupCard(client, "Charizard ex", "A1", { gamePreference: POCKET_PREF });
     expect(lookup?.card.id.toLowerCase()).toBe("a1-036");
+  });
+
+  it("resolves an explicit Pocket set hint through the package on a physical-only server", async () => {
+    const client = clientReturning([{ id: "A1-036", name: "Charizard ex", localId: "036" }]);
+    const lookup = await lookupCard(client, "Charizard ex", "A1", { gamePreference: PTCG_PREF });
+    expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
+    expect((client as unknown as { calls: () => number }).calls()).toBe(0);
+  });
+
+  it("falls back to the package for a Pocket set hint on a physical-only server with empty upstream", async () => {
+    const client = clientReturning([]);
+    const lookup = await lookupCard(client, "Charizard ex", "Genetic Apex", { gamePreference: PTCG_PREF });
+    expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
   });
 
   it("keeps a Pocket set hint eligible for package fallback when upstream is empty", async () => {
@@ -71,13 +84,13 @@ describe("per-server card game preference in lookupCard", () => {
       { id: "A1-036", name: "Charizard ex", localId: "036", image: "https://example.com/pocket.webp" },
       { id: "sv03-125", name: "Charizard ex", localId: "125" },
     ]);
-    const lookup = await lookupCard(client, "Charizard ex", undefined, { gamePreference: BOTH_PREFER_POCKET });
+    const lookup = await lookupCard(client, "Charizard ex", undefined, { gamePreference: BOTH_PREF_POCKET });
     expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
   });
 
   it("drops TCGdex Pocket records from a physical-only lookup", async () => {
     const client = clientReturning([{ id: "A2b-010", name: "Pikachu", localId: "010" }]);
-    const lookup = await lookupCard(client, "Pikachu", undefined, { gamePreference: PTCG_ONLY });
+    const lookup = await lookupCard(client, "Pikachu", undefined, { gamePreference: PTCG_PREF });
     expect(lookup).toBeUndefined();
   });
 
@@ -89,13 +102,13 @@ describe("per-server card game preference in lookupCard", () => {
 
   it("prefers the exact Pocket card on a shared name when Pocket is the default", async () => {
     const client = clientReturning([{ id: "sv08.5-073", name: "Mewtwo", localId: "073" }]);
-    const lookup = await lookupCard(client, "Mewtwo", undefined, { gamePreference: BOTH_PREFER_POCKET });
+    const lookup = await lookupCard(client, "Mewtwo", undefined, { gamePreference: BOTH_PREF_POCKET });
     expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
   });
 
   it("does not let a partial Pocket match beat an exact physical-only name", async () => {
     const client = clientReturning([{ id: "sv08.5-073", name: "Pikachu VMAX", localId: "073" }]);
-    const lookup = await lookupCard(client, "Pikachu VMAX", undefined, { gamePreference: BOTH_PREFER_POCKET });
+    const lookup = await lookupCard(client, "Pikachu VMAX", undefined, { gamePreference: BOTH_PREF_POCKET });
     expect(lookup?.card.name).toBe("Pikachu VMAX");
     expect(lookup?.attribution).toBeUndefined();
   });

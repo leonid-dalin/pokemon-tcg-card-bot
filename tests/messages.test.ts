@@ -356,6 +356,18 @@ describe("message handler", () => {
     expect(lookups).toBeGreaterThan(0);
   });
 
+  it("answers decklists with message replies off when decklists are on", async () => {
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: false, decklistReplies: true, autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0, updatedAt: "" }) };
+    const handle = handler({ settings });
+    const deckMessage = fakeMessage(DECK, { guildId: "g1" });
+    await handle(deckMessage.message);
+    expect(deckMessage.replies).toHaveLength(1);
+
+    const mention = fakeMessage("[[Dragapult ex]]", { guildId: "g1" });
+    await handle(mention.message);
+    expect(mention.replies).toEqual([]);
+  });
+
   it("replies only in selected channels and threads follow their parent", async () => {
     const settings = { get: (guildId: string) => ({ guildId, messageReplies: true, decklistReplies: false, autoReplyChannelMode: "selected" as const, selectedChannelIds: ["c-ok"], cooldownSeconds: 0, updatedAt: "" }) };
     const handle = handler({ settings });
