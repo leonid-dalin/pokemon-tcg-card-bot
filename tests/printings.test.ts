@@ -3,6 +3,9 @@ import type { CardSummary } from "../src/api/types.js";
 import type { TcgdexClient } from "../src/api/tcgdex.js";
 import { PageStore } from "../src/discord/pages.js";
 import { commandDefinitions, handlePrintingsCommand } from "../src/discord/commands.js";
+import { printingsOf, printingHeading } from "../src/printings.js";
+import { getPocketCard } from "../src/api/pocket.js";
+import { SET_INDEX } from "../src/data/set-index.js";
 
 const context = (client: TcgdexClient, pages = new PageStore()) => ({
   client,
@@ -101,8 +104,56 @@ describe("handlePrintingsCommand", () => {
     const { interaction: press, replies } = interaction("Charizard ex");
     await handlePrintingsCommand(context(client), press as never);
     const description = descriptionOf(replies[0]);
-    expect(description).toContain("TWM 130 · Twilight Masquerade 2024");
-    expect(description).toContain("Deluxe Pack: ex 2025");
+    // Real dates put the Pocket sets ahead of the physical printing, which now
+    // sits on the second page of an eleven-row list.
+    expect(description).toContain("A4B 59 · Deluxe Pack: ex 2025");
     expect(titleOf(replies[0])).toBe("11 printings of Charizard ex");
+    const pages = replies[0]?.components as { toJSON: () => { components: { custom_id?: string; label?: string } } }[];
+    expect(pages.some((row) => row.toJSON().components.some((component) => component.custom_id?.startsWith("page:") && component.label === "▶"))).toBe(true);
+  });
+});
+
+const offline = { searchByName: async () => [] } as unknown as TcgdexClient;
+
+function releaseDate(id: string): string | undefined {
+  return getPocketCard(id)?.set?.releaseDate ?? SET_INDEX.find((entry) => entry.id === id.split("-")[0])?.releaseDate;
+}
+
+describe("printingsOf chronology and identity", () => {
+  it("orders Pocket-only printings by their real release dates", async () => {
+    const dated = (await printingsOf(offline, "Charizard ex")).map((printing) => ({
+      id: printing.id,
+      date: releaseDate(printing.id),
+    }));
+    expect(dated.length).toBeGreaterThan(2);
+    for (const row of dated) expect(row.date, row.id).toBeTruthy();
+    for (let i = 1; i < dated.length; i += 1) {
+      expect(dated[i - 1]!.date! >= dated[i]!.date!, dated.map((row) => row.id).join(",")).toBe(true);
+    }
+  });
+
+  it("keeps one row for the same Pocket printing cased differently", async () => {
+    const client = { searchByName: async () => [{ id: "A1-036", name: "Charizard ex" }] } as unknown as TcgdexClient;
+    const printings = await printingsOf(client, "Charizard ex");
+    expect(printings.filter((printing) => printing.id.toLowerCase() === "a1-036")).toHaveLength(1);
+  });
+
+  it("sorts a mixed physical and Pocket list on one timeline", async () => {
+    const client = {
+      searchByName: async () => [
+        { id: "swsh4.5-8", name: "Crustle" },
+        { id: "bw5-8", name: "Crustle" },
+      ],
+    } as unknown as TcgdexClient;
+    const printings = await printingsOf(client, "Crustle");
+    const dates = printings.map((printing) => ({ id: printing.id, date: releaseDate(printing.id) }));
+    expect(dates.length).toBeGreaterThan(2);
+    for (let i = 1; i < dates.length; i += 1) {
+      expect(dates[i - 1]!.date! >= dates[i]!.date!).toBe(true);
+    }
+  });
+
+  it("prints a heading with the printed code and the set", () => {
+    expect(printingHeading({ id: "bw5-8", name: "Crustle", setLabel: "Dark Explorers 2012" })).toBe("DEX 8 · Dark Explorers 2012");
   });
 });
