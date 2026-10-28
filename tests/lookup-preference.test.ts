@@ -61,6 +61,15 @@ describe("per-server card game preference in lookupCard", () => {
     expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
   });
 
+  it("returns no result when a concrete Pocket set hint has no matching package card", async () => {
+    const client = clientReturning([]);
+    const lookup = await lookupCard(client, "Sigilyph", "A1", { gamePreference: PTCG_PREF });
+    expect(lookup).toBeUndefined();
+
+    const matching = await lookupCard(client, "Sigilyph", "A1a", { gamePreference: PTCG_PREF });
+    expect(matching?.card.id.toLowerCase()).toBe("a1a-033");
+  });
+
   it("keeps a Pocket set hint eligible for package fallback when upstream is empty", async () => {
     const client = clientReturning([]);
     const lookup = await lookupCard(client, "Charizard ex", "Genetic Apex");

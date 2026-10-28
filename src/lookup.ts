@@ -101,7 +101,13 @@ export const isCardId = (value: string): boolean => {
 export const POCKET_ATTRIBUTION = "Pocket card data from pokemon-tcg-pocket-cards";
 
 // Resolve against the package; use the hint's subset when it contains a match.
-function lookupPocket(query: string, setHint: string | undefined, options: LookupOptions): CardLookup | undefined {
+// requireSet keeps a concrete set hint from widening to unrelated package results.
+function lookupPocket(
+  query: string,
+  setHint: string | undefined,
+  options: LookupOptions,
+  requireSet = false,
+): CardLookup | undefined {
   const all = searchPocketByName(query);
   if (all.length === 0) return undefined;
 
@@ -114,7 +120,7 @@ function lookupPocket(query: string, setHint: string | undefined, options: Looku
         return setId === hint || setName.includes(hint);
       })
     : all;
-  const pool = filtered.length > 0 ? filtered : all;
+  const pool = filtered.length > 0 ? filtered : requireSet && hint ? [] : all;
 
   const [primary] = pool;
   if (!primary) return undefined;
@@ -211,7 +217,9 @@ export async function lookupCard(
   // fallback keep their existing behaviour.
   const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
   const preference = options.gamePreference;
-  if (hintPocketSet && preference && preference.allowed !== "both") return lookupPocket(query, setHint, options);
+  if (hintPocketSet && preference && preference.allowed !== "both") {
+    return lookupPocket(query, setHint, options, true);
+  }
   const forcedPhysical = Boolean(setHint) && !hintPocketSet;
   if (!forcedPhysical && preference?.allowed === "pocket") return lookupPocket(query, setHint, options);
 
