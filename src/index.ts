@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events } from "discord.js";
 import { TcgdexClient } from "./api/tcgdex.js";
 import { loadConfig } from "./config.js";
 import { loadDotEnv } from "./env.js";
@@ -10,6 +10,7 @@ import {
   handleSetCommand,
   type CommandContext,
 } from "./discord/commands.js";
+import { clientOptions } from "./discord/client-options.js";
 import { createMessageHandler } from "./discord/messages.js";
 import { MentionBudget } from "./cooldown.js";
 import { acquireSingleInstanceLock } from "./single-instance.js";
@@ -23,12 +24,7 @@ const config = loadConfig(process.env);
 const api = new TcgdexClient();
 const context: CommandContext = { client: api, attribution: config.attribution };
 
-const intents = [GatewayIntentBits.Guilds];
-if (config.mentionEnabled) {
-  intents.push(GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent);
-}
-
-const client = new Client({ intents });
+const client = new Client(clientOptions(config));
 const budget =
   config.mentionCooldownSeconds > 0
     ? new MentionBudget({ refillSeconds: config.mentionCooldownSeconds })

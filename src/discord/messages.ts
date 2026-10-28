@@ -24,8 +24,6 @@ export type IncomingMessage = Pick<
   "author" | "webhookId" | "system" | "content" | "attachments" | "embeds" | "stickers" | "channelId" | "reply"
 >;
 
-const quiet = { allowedMentions: { repliedUser: false } } as const;
-
 /**
  * Build the MessageCreate handler. Each message gets at most one reply: a
  * decklist, an `@bot search` answer, or the cards its `[[...]]` mentions name.
@@ -77,23 +75,23 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     if (deck) {
-      await message.reply({ embeds: toEmbeds([renderDecklist(deck)]), ...quiet }).catch(() => {});
+      await message.reply({ embeds: toEmbeds([renderDecklist(deck)]) }).catch(() => {});
       return;
     }
 
     if (searchQuery !== undefined) {
       if (searchQuery.length === 0) {
         await message
-          .reply({ content: "Add what to look for after search, for example: search stadium.", ...quiet })
+          .reply({ content: "Add what to look for after search, for example: search stadium." })
           .catch(() => {});
         return;
       }
       try {
         const reply = searchReply(searchQuery, searchCardText(searchQuery), config.attribution);
-        await message.reply({ ...reply, ...quiet }).catch(() => {});
+        await message.reply({ ...reply }).catch(() => {});
       } catch (error) {
         console.error("mention search failed", error);
-        await message.reply({ content: "Card search failed, try again in a moment.", ...quiet }).catch(() => {});
+        await message.reply({ content: "Card search failed, try again in a moment." }).catch(() => {});
       }
       return;
     }
@@ -108,11 +106,11 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name) });
         if (found.length >= MAX_EMBEDS_PER_MESSAGE) break;
       }
-      await message.reply({ ...mentionReply(found, misses), ...quiet });
+      await message.reply({ ...mentionReply(found, misses) });
     } catch (error) {
       console.error("mention lookup failed", error);
       // A dead API used to leave the channel with nothing at all.
-      await message.reply({ content: "Card lookup failed, try again in a moment.", ...quiet }).catch(() => {});
+      await message.reply({ content: "Card lookup failed, try again in a moment." }).catch(() => {});
     }
   };
 }

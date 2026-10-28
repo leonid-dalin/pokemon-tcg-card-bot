@@ -79,10 +79,12 @@ describe("message handler", () => {
     const { message, replies } = fakeMessage("look at [[Dragapult ex]]");
     await handler()(message);
     expect(replies).toHaveLength(1);
-    const reply = replies[0] as { embeds: unknown[]; components: unknown[]; allowedMentions: unknown };
+    const reply = replies[0] as { embeds: unknown[]; components: unknown[] };
     expect(reply.embeds).toHaveLength(1);
     expect(reply.components).toHaveLength(1);
-    expect(reply.allowedMentions).toEqual({ repliedUser: false });
+    // A reply's own allowedMentions would replace the client default that
+    // stops the bot pinging anyone.
+    expect(replies.every((payload) => !("allowedMentions" in payload))).toBe(true);
   });
 
   it("answers a miss with the closest names", async () => {
