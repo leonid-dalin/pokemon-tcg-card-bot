@@ -29,10 +29,18 @@ describe("printingsForButtons", () => {
     expect(buttons).toHaveLength(crustleIds.length);
   });
 
-  it("keeps every printing for a trainer, whose wording never changes", () => {
-    const nest = ["sv01-181", "sv03.5-150"].map((id) => ({ id, name: "Nest Ball" }));
-    // The category bypass keeps every other candidate; the card itself is never its own button.
-    const buttons = printingsForButtons({ id: "sv01-181", name: "Nest Ball", category: "Trainer" } as Card, nest);
-    expect(buttons).toHaveLength(1);
+  it("keeps a Great Ball reprint only when its effect is the same", () => {
+    // dp7-85 searches and benches; xy1-118 and bw2-93 look at seven. The old
+    // effect must not offer the new one, while the equal reprint stays.
+    const fromOld = printingsForButtons({ id: "dp7-85", name: "Great Ball", category: "Trainer" } as Card, [
+      { id: "xy1-118", name: "Great Ball" },
+      { id: "bw2-93", name: "Great Ball" },
+    ]);
+    expect(fromOld.map((s) => s.id)).toEqual([]);
+    const fromNew = printingsForButtons({ id: "xy1-118", name: "Great Ball", category: "Trainer" } as Card, [
+      { id: "dp7-85", name: "Great Ball" },
+      { id: "bw2-93", name: "Great Ball" },
+    ]);
+    expect(fromNew.map((s) => s.id)).toEqual(["bw2-93"]);
   });
 });

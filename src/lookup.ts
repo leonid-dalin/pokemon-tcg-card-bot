@@ -91,7 +91,7 @@ function toLookup(
 export function printingsForButtons(card: Card, candidates: CardSummary[]): CardSummary[] {
   const alternates = candidates.filter((entry) => entry.id !== card.id);
   const primary = indexedText(card.id);
-  if (primary === undefined || card.category !== "Pokemon") return alternates;
+  if (primary === undefined) return alternates;
   return alternates.filter((entry) => indexedText(entry.id) === primary);
 }
 
@@ -194,7 +194,7 @@ export function accentVariants(query: string): string[] {
  * finds nothing. A name that searches fine, `Slowpoke` being the common case,
  * therefore never pays for a second request.
  */
-async function searchWithAccents(client: TcgdexClient, query: string): Promise<CardSummary[]> {
+export async function searchWithAccents(client: TcgdexClient, query: string): Promise<CardSummary[]> {
   const literal = await client.searchByName(query);
   if (literal.length > 0) return literal;
   for (const variant of accentVariants(query)) {
