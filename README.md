@@ -19,11 +19,11 @@ A Discord bot for Pokémon TCG and Pokémon TCG Pocket cards, answered from a sl
 | `[[Card name\|sv08.5-073]]` | The exact printing with that card id |
 | `[[Card name\|pocket]]` | The Pocket version. `ptcgp` and `tcgp` work as well |
 | `[[!Card name]]` | The scan alone, with no fields and no buttons |
-| A pasted decklist | The list, counted against 60, with cards that are not Standard legal and a Cardmarket price. Off unless `DECKLIST_ENABLED=true` |
+| A pasted decklist | The list, counted against 60, with cards that are not Standard legal and a Cardmarket price where the card data and prices are available. Off unless `DECKLIST_ENABLED=true` |
 
 A card reply shows the front first: the name linked to its scan, then HP, type, stage, what it evolves from and how many prizes it gives up, then the wording of Trainers and Energy, one field per ability and per attack with the cost as energy tokens, and weakness, resistance and retreat. Everything printed on the card but not played with sits behind the `Details` button, which answers only whoever presses it: the set and release date, rarity, illustrator, format legality, prices and the other printings. Card ids are written the way players write them, so `me04-048` reads `CRI 48` and a Pocket card reads `B4B 133`.
 
-Names match regardless of case, accents, apostrophes and spacing, so `pokemon catcher` finds Pokémon Catcher. Printing buttons swap the card in place, and only the person who asked for the reply may press them. A name that matches nothing gets `No card matched` and a menu of the closest names. `[[...]]` inside backticks or a code block is ignored, so you can explain the syntax in the same channel
+Names match regardless of case, accents, apostrophes and spacing, so `pokemon catcher` finds Pokémon Catcher. Printing buttons swap the card in place, and only the person who asked for the reply may press them. A name that matches nothing gets `No card matched`, and in most paths a menu of the closest names: a one-word miss and `/card` resolve without suggestions. `[[...]]` inside backticks or a code block is ignored, so you can explain the syntax in the same channel
 
 ## Requirements
 
@@ -126,4 +126,4 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report vu
 
 ## Licence
 
-This project's code is licensed under the Apache License 2.0, see [LICENSE](LICENSE). Card data, the Pocket package and the avatar image keep their own terms, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Pocket package is AGPL-3.0, so read the notices before you redistribute a build that includes `node_modules`. Credit for the ideas this bot borrows sits in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md)
+This project's code is licensed under the Apache License 2.0, see [LICENSE](LICENSE). Card data, the Pocket package and the avatar image keep their own terms, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Pocket package is AGPL-3.0-or-later, so read the notices before you redistribute a build that includes `node_modules`. Credit for the ideas this bot borrows sits in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md)
