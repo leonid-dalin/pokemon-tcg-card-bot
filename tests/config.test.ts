@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 
@@ -31,6 +32,14 @@ describe("loadConfig", () => {
       mentionCooldownSeconds: 30,
       attribution: "Data from somewhere",
     });
+  });
+
+  it("documents every setting it reads in .env.example", () => {
+    const example = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
+    const documented = [...example.matchAll(/^#?\s*([A-Z_]+)=/gm)].map((match) => match[1]).sort();
+    const source = readFileSync(new URL("../src/config.ts", import.meta.url), "utf8");
+    const read = [...new Set([...source.matchAll(/env\.([A-Z_]+)/g)].map((match) => match[1]))].sort();
+    expect(documented).toEqual(read);
   });
 
   it.each(["DISCORD_TOKEN", "DISCORD_CLIENT_ID"])("refuses to start without %s", (key) => {
