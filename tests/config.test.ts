@@ -14,6 +14,7 @@ describe("loadConfig", () => {
       mentionCooldownSeconds: 0,
       attribution: "Card data from TCGdex",
       energyEmoji: {},
+      invocationLogRetentionDays: 60,
     });
   });
 
