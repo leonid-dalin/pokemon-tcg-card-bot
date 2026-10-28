@@ -42,10 +42,12 @@ export function searchReply(
       cardId: representative.id,
       heading: `**${representative.name}** · ${printedNumber(representative.id)}${printings > 1 ? ` · ${printings} printings` : ""}`,
       detail: matchingDetail(representative, query),
+      ...(representative.category ? { category: representative.category } : {}),
     })),
     perPage: 5,
     ownerId,
     footer: attribution,
+    filterable: groups.some((group) => group.representative.category !== undefined),
   };
   const token = pages.put(page);
   return listReply(page, token, 0);

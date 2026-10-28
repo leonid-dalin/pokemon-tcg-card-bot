@@ -6,6 +6,7 @@ import {
   handleAutocomplete,
   handleCardCommand,
   handleDetailsButton,
+  handleFilterMenu,
   handleHelpCommand,
   handleOpenCardMenu,
   handlePageButton,
@@ -58,6 +59,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("open:")) {
       await handleOpenCardMenu(context, interaction);
+      return;
+    }
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith("filter:")) {
+      await handleFilterMenu(context, interaction);
       return;
     }
     if (!interaction.isChatInputCommand()) return;

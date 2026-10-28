@@ -17,7 +17,7 @@ import { helpView } from "../help.js";
 import { printingIdFrom, detailsIdFrom, MISS_MENU_ID } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
-import { listReply, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
+import { listReply, filterFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
 
 export interface CommandContext {
@@ -187,7 +187,27 @@ export async function handlePageButton(
     await interaction.reply({ content: "Only the person who asked can change this. Ask for your own copy with [[name]] or /card.", flags: MessageFlags.Ephemeral });
     return;
   }
-  await interaction.update(listReply(page, token, index));
+  await interaction.update(listReply(page, token, index, pageFilterFrom(interaction.customId)));
+}
+
+/** Narrowing a search to Pokemon, Trainers or Energy is a view change, so it edits the message in place. */
+export async function handleFilterMenu(
+  context: CommandContext,
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  const filter = filterFrom(interaction.customId);
+  const token = interaction.customId.slice("filter:".length);
+  if (!filter || !token) return;
+  const page = context.pages.get(token);
+  if (!page) {
+    await interaction.reply({ content: "This list has expired. Run the command again.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (page.ownerId !== interaction.user.id) {
+    await interaction.reply({ content: "Only the person who asked can change this. Ask for your own copy with [[name]] or /card.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await interaction.update(listReply(page, token, 0, filter));
 }
 
 export async function handleOpenCardMenu(

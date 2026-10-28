@@ -153,7 +153,8 @@ describe("message handler", () => {
     await handler()(message);
     expect(replies).toHaveLength(1);
     expect(replies[0]?.embeds).toHaveLength(1);
-    expect(replies[0]?.components).toHaveLength(2);
+    // Pages, the category filter and the open-a-card menu.
+    expect(replies[0]?.components).toHaveLength(3);
   });
 
   it("asks for search words when none were given", async () => {

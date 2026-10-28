@@ -11,7 +11,8 @@ import type { Card } from "../src/api/types.js";
  * same thing. This walks every card once and keeps the text worth searching.
  *
  * Each entry records its parts as well, so a result can say whether an
- * ability, an attack or Trainer wording matched.
+ * ability, an attack or Trainer wording matched, and its category, so a search
+ * can be narrowed to Pokemon, Trainers or Energy.
  *
  *   npm run index:text
  *
@@ -29,6 +30,7 @@ interface IndexedCard {
   id: string;
   name: string;
   text: string;
+  category: "Pokemon" | "Trainer" | "Energy";
   parts: IndexedPart[];
 }
 
@@ -72,7 +74,8 @@ for (let start = 0; start < summaries.length; start += CONCURRENCY) {
       try {
         const card = await client.getCard(summary.id);
         const text = textOf(card);
-        return text.length > 0 ? { id: summary.id, name: summary.name, text, parts: partsOf(card) } : undefined;
+        const category: IndexedCard["category"] = card.category === "Trainer" || card.category === "Energy" ? card.category : "Pokemon";
+        return text.length > 0 ? { id: summary.id, name: summary.name, text, category, parts: partsOf(card) } : undefined;
       } catch (error) {
         // A card the list names but the API does not serve has no text to index.
         if (error instanceof TcgdexError && error.status === 404) return undefined;

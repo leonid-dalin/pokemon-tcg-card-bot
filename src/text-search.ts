@@ -13,6 +13,8 @@ export interface TextHit {
   id: string;
   name: string;
   text: string;
+  /** Pokemon, Trainer or Energy. Absent in an index built before it was recorded. */
+  category?: "Pokemon" | "Trainer" | "Energy";
   /** Absent in an index built before the parts were recorded. */
   parts?: TextPart[];
 }
@@ -134,7 +136,7 @@ function findHits(entries: TextHit[], query: string): { card: TextHit; nameHits:
 export function searchCardText(query: string, limit = Number.POSITIVE_INFINITY): TextHit[] {
   return findHits(load(), query)
     .slice(0, limit)
-    .map(({ card }) => ({ id: card.id, name: card.name, text: card.text, parts: card.parts }));
+    .map(({ card }) => ({ id: card.id, name: card.name, text: card.text, category: card.category, parts: card.parts }));
 }
 
 export function searchCardGroups(query: string): TextGroup[] {
@@ -155,7 +157,7 @@ export function searchGroupsIn(entries: TextHit[], query: string): TextGroup[] {
     if (setRecency(card.id) > setRecency(group.card.id)) group.card = card;
   }
   return [...groups.values()].map(({ card, printings }) => ({
-    representative: { id: card.id, name: card.name, text: card.text, parts: card.parts },
+    representative: { id: card.id, name: card.name, text: card.text, category: card.category, parts: card.parts },
     printings,
   }));
 }
