@@ -89,7 +89,12 @@ export function listReply(page: ListPage, token: string, index: number, filter?:
   embeds: EmbedBuilder[];
   components: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[];
 } {
-  const items = filteredItems(page, filter);
+  const narrowed = filteredItems(page, filter);
+  // A filter that matches nothing must not blank the message: keep the full
+  // list and say the choice found nothing.
+  const emptyChoice = narrowed.length === 0 && page.items.length > 0 && filter !== undefined && filter !== "all";
+  const items = emptyChoice ? page.items : narrowed;
+  const applied = emptyChoice ? undefined : filter;
   const current = clampIndex({ ...page, items }, index);
   const totalPages = Math.max(1, Math.ceil(items.length / page.perPage));
   const start = current * page.perPage;
@@ -97,26 +102,29 @@ export function listReply(page: ListPage, token: string, index: number, filter?:
   const embed = new EmbedBuilder().setColor(0x5865f2).setTitle(page.title).setFooter({ text: page.footer });
   const description = shown.map((item) => `${item.heading}${item.detail ? `\n${item.detail}` : ""}`).join("\n\n");
   if (description) embed.setDescription(description);
+  if (emptyChoice) embed.setDescription(`${FILTER_LABELS[filter!] ?? filter} has no card in these results. Showing all of them.`);
 
   const components: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] = [];
   if (totalPages > 1) {
     const row = new ActionRowBuilder<ButtonBuilder>();
     row.addComponents(
-      new ButtonBuilder().setCustomId(`page:${token}:${current - 1}:${filter ?? "all"}`).setLabel("◀").setStyle(ButtonStyle.Secondary).setDisabled(current === 0),
+      new ButtonBuilder().setCustomId(`page:${token}:${current - 1}:${applied ?? "all"}`).setLabel("◀").setStyle(ButtonStyle.Secondary).setDisabled(current === 0),
       new ButtonBuilder().setCustomId(`page-label:${token}`).setLabel(`${current + 1} / ${totalPages}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
-      new ButtonBuilder().setCustomId(`page:${token}:${current + 1}:${filter ?? "all"}`).setLabel("▶").setStyle(ButtonStyle.Secondary).setDisabled(current === totalPages - 1),
+      new ButtonBuilder().setCustomId(`page:${token}:${current + 1}:${applied ?? "all"}`).setLabel("▶").setStyle(ButtonStyle.Secondary).setDisabled(current === totalPages - 1),
     );
     components.push(row as ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>);
   }
 
   if (page.filterable) {
-    const choices = filterChoices(items);
+    // Choices come from the whole page, not the narrowed list, so a reader can
+    // always widen the view again after picking one category.
+    const choices = filterChoices(page.items);
     // A row that can only select the current category would not change the list.
     if (choices.length > 2) {
       const menu = new StringSelectMenuBuilder()
         .setCustomId(`filter:${token}`)
         .setPlaceholder("Show only")
-        .addOptions(choices.map((choice) => ({ label: choice.label, value: choice.value, default: choice.value === (filter ?? "all") })));
+        .addOptions(choices.map((choice) => ({ label: choice.label, value: choice.value, default: choice.value === (applied ?? "all") })));
       components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu) as ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>);
     }
   }
@@ -155,7 +163,8 @@ function filterChoices(items: ListItem[]): { label: string; value: string }[] {
   return choices;
 }
 
-export function filterFrom(customId: string): string | undefined {
-  const match = /^filter:[^:]+$/.exec(customId);
-  return match ? customId.slice("filter:".length) : undefined;
+/** The page token carried by a filter menu, which is the whole id after `filter:`. */
+export function filterTokenFrom(customId: string): string | undefined {
+  const match = /^filter:([^:]+)$/.exec(customId);
+  return match?.[1];
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listReply, filterFrom, pageFilterFrom, pageIndexFrom, type ListPage } from "../src/discord/pages.js";
+import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, type ListPage } from "../src/discord/pages.js";
 
 const items = (categories: (string | undefined)[]) =>
   categories.map((category, index) => ({
@@ -70,9 +70,9 @@ describe("filter row", () => {
 
 describe("custom ids", () => {
   it("reads a filter id", () => {
-    expect(filterFrom("filter:abcdefgh")).toBe("abcdefgh");
-    expect(filterFrom("filter:")).toBeUndefined();
-    expect(filterFrom("open:abcdefgh")).toBeUndefined();
+    expect(filterTokenFrom("filter:abcdefgh")).toBe("abcdefgh");
+    expect(filterTokenFrom("filter:")).toBeUndefined();
+    expect(filterTokenFrom("open:abcdefgh")).toBeUndefined();
   });
 
   it("reads a page id that still has no filter, for messages already sent", () => {

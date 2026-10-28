@@ -17,7 +17,7 @@ import { helpView } from "../help.js";
 import { printingIdFrom, detailsIdFrom, MISS_MENU_ID, MISS_MENU_PREFIX } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
-import { listReply, filterFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
+import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
 
 export interface CommandContext {
@@ -200,8 +200,9 @@ export async function handleFilterMenu(
   context: CommandContext,
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const filter = filterFrom(interaction.customId);
-  const token = interaction.customId.slice("filter:".length);
+  // The chosen category is the menu's value; the custom id only carries the token.
+  const filter = interaction.values[0];
+  const token = filterTokenFrom(interaction.customId);
   if (!filter || !token) return;
   const page = context.pages.get(token);
   if (!page) {
