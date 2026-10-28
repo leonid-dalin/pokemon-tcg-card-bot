@@ -47,9 +47,23 @@ function indexPath(): string {
   throw new Error("text-index.json is missing; run npm run index:text");
 }
 
+/** Some committed entries carry source markup, energy-symbol `span` wrappers
+ * and `em` emphasis among them. Search must see the visible words only, so the
+ * tags go and their inner text stays, keeping words adjacent where the card
+ * shows them adjacent. Applied once at load, so every consumer of the text,
+ * matching and excerpts alike, works on the same clean string. */
+function visible(text: string): string {
+  return text.replace(/<[^>]+>/g, "");
+}
+
 function load(): TextHit[] {
   if (cache) return cache;
-  cache = JSON.parse(readFileSync(indexPath(), "utf8")) as TextHit[];
+  const raw = JSON.parse(readFileSync(indexPath(), "utf8")) as TextHit[];
+  cache = raw.map((entry) => ({
+    ...entry,
+    text: visible(entry.text ?? ""),
+    parts: entry.parts?.map((part) => ({ ...part, name: part.name === undefined ? undefined : visible(part.name), text: visible(part.text ?? "") })),
+  }));
   return cache;
 }
 
@@ -82,11 +96,13 @@ const normalisedCache = new WeakMap<object, string>();
 /** A word, keeping an apostrophe inside it so `opponent's` stays one word. */
 const WORD = /[a-z0-9]+(?:'[a-z0-9]+)*/g;
 
-/** Fold case, accents and spacing, once per card. */
+/** Fold case, accents and spacing, once per card. Source markup is stripped
+ * here too, so direct entries that bypass the cleaned index still match and
+ * explain on visible wording. */
 function normalisedText(card: TextHit): string {
   const cached = normalisedCache.get(card);
   if (cached !== undefined) return cached;
-  const value = normaliseName(card.text);
+  const value = normaliseName(visible(card.text));
   normalisedCache.set(card, value);
   return value;
 }
@@ -299,7 +315,7 @@ function firstMatchAt(sentence: string, tokens: string[]): number {
 
 export function matchingSentence(text: string, query: string, maxLength = 160): string {
   const tokens = queryTokens(query);
-  const selected = rankSentences(text, tokens)[0]?.sentence ?? text;
+  const selected = rankSentences(visible(text), tokens)[0]?.sentence ?? visible(text);
   return highlight(selected, tokens, maxLength);
 }
 
@@ -311,7 +327,29 @@ function partLabel(part: TextPart): string {
 
 /** The wording of a part, with its name in front as the card shows it. */
 function partText(part: TextPart): string {
-  return [part.name, part.text].filter((piece) => (piece ?? "").length > 0).join(". ");
+  return [part.name, part.text]
+    .filter((piece) => (piece ?? "").length > 0)
+    .map((piece) => visible(piece!))
+    .join(". ");
+}
+
+/** The sentence of a part that prints the quoted phrase, as whole words. A
+ * phrase that crosses a sentence boundary picks the smallest run of
+ * neighbouring sentences that holds it, so the explanation stays contiguous. */
+function phraseSentence(part: TextPart, phrase: string): string | undefined {
+  const sentences = splitSentences(partText(part));
+  const runs = sentences.map((sentence) => (normaliseName(sentence).match(WORD) ?? []).join(" "));
+  for (const [index, run] of runs.entries()) {
+    if ((` ${run} `).includes(` ${phrase} `)) return sentences[index];
+  }
+  for (let start = 0; start < sentences.length; start += 1) {
+    let run = "";
+    for (let end = start; end < sentences.length; end += 1) {
+      run = run ? `${run} ${runs[end]}` : runs[end]!;
+      if ((` ${run} `).includes(` ${phrase} `)) return sentences.slice(start, end + 1).join(" ");
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -325,12 +363,14 @@ export function matchingDetail(hit: TextHit, query: string, maxLength = 160): st
   const phrase = quoted ? queryWords(raw).join(" ") : undefined;
   let best: { part: TextPart; sentence: string; matches: number } | undefined;
   for (const part of hit.parts ?? []) {
-    // A quoted query must be explained by the part that actually prints the
-    // phrase: a card whose other attacks mention the words in passing would
-    // otherwise win the unordered score and show the wrong wording.
+    // A quoted query must be explained by the sentence that actually prints the
+    // phrase. Unordered token scoring would happily show a neighbouring
+    // sentence that merely shares the words.
     if (phrase) {
-      const partWords = (normaliseName(partText(part)).match(WORD) ?? []).join(" ");
-      if (!(` ${partWords} `).includes(` ${phrase} `)) continue;
+      const chosen = phraseSentence(part, phrase);
+      if (!chosen) continue;
+      if (!best) best = { part, sentence: chosen, matches: tokens.length };
+      continue;
     }
     for (const ranked of rankSentences(partText(part), tokens)) {
       if (!best || ranked.matches > best.matches) {

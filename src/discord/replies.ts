@@ -52,9 +52,11 @@ export function searchReply(
     })),
     perPage: 5,
     ownerId,
-    footer: groups.length > MAX_ITEMS ? `${attribution} · the first ${MAX_ITEMS} of ${groups.length}` : attribution,
+    footer: attribution,
     filterable: shown.some((group) => group.representative.category !== undefined),
     categoryCounts,
+    universeTotal: groups.length,
+    displayCap: MAX_ITEMS,
   };
   const token = pages.put(page);
   return listReply(page, token, 0);

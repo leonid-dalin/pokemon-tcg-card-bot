@@ -6,6 +6,7 @@ import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
+import { SET_INDEX } from "./data/set-index.js";
 
 export interface CardLookup {
   card: Card;
@@ -95,12 +96,20 @@ export function printingsForButtons(card: Card, candidates: CardSummary[]): Card
   return alternates.filter((entry) => indexedText(entry.id) === primary);
 }
 
-/** A full card id, which pins one exact printing rather than a name. Set ids
- * may end in subset letters (swsh12.5gg) or carry none (swshp), and the local
- * number may carry its own letters (GG65, SV004, SWSH020). A name with a
- * hyphen, like Porygon-Z, carries no digit and must not match. */
-export const CARD_ID = /^(?=.{3,24}$)[a-z0-9.]+[a-z]{0,3}-[a-z0-9]{1,8}$/i;
-export const isCardId = (value: string): boolean => CARD_ID.test(value) && /\d/.test(value);
+/** A full card id, which pins one exact printing rather than a name. The set
+ * part may itself carry hyphens (30th-c), and the local number may be letters
+ * or punctuation (GG65, A, !, %3F), so the split happens at the final hyphen
+ * and the set side has to be a known set id. A name with a hyphen, like
+ * Porygon-Z or Ho-Oh, is not a set and must not match. */
+const SET_IDS = new Set(SET_INDEX.map((entry) => normaliseName(entry.id)));
+const LOCAL_ID = /^[a-z0-9.!%]{1,8}$/i;
+export const CARD_ID = /^[a-z0-9.]+(?:-[a-z0-9.]+)*-[a-z0-9.!%]{1,8}$/i;
+export const isCardId = (value: string): boolean => {
+  const at = value.lastIndexOf("-");
+  if (at <= 0 || at === value.length - 1) return false;
+  if (!LOCAL_ID.test(value.slice(at + 1))) return false;
+  return SET_IDS.has(normaliseName(value.slice(0, at)));
+};
 
 /** Attribution for Pocket cards, which never come from TCGdex. */
 export const POCKET_ATTRIBUTION = "Pocket card data from pokemon-tcg-pocket-cards";

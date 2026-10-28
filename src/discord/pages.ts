@@ -19,6 +19,11 @@ export interface ListPage {
   filterable?: boolean;
   /** Category totals over every match, before the cap; the menu promises these. */
   categoryCounts?: Record<string, number>;
+  /** How many cards matched in total, before any cap or category. */
+  universeTotal?: number;
+  /** The most items one view may show. Only a search sets this; ordinary
+   * lists stay complete at any size. */
+  displayCap?: number;
 }
 
 export class PageStore {
@@ -88,6 +93,16 @@ export function pageFilterFrom(customId: string): string | undefined {
   return match?.[1];
 }
 
+/** The truncation notice a view deserves: uncapped views claim nothing. */
+function viewFooter(page: ListPage, applied: string | undefined): string {
+  if (page.displayCap === undefined) return page.footer;
+  const total = applied === undefined || applied === "all"
+    ? page.universeTotal ?? page.items.length
+    : page.categoryCounts?.[applied];
+  if (total === undefined || total <= page.displayCap) return page.footer;
+  return `${page.footer} · the first ${page.displayCap} of ${total}`;
+}
+
 /** The display cap for an unfiltered view, shared with the search store. */
 export const LIST_CAP = 250;
 
@@ -95,19 +110,30 @@ export function listReply(page: ListPage, token: string, index: number, filter?:
   embeds: EmbedBuilder[];
   components: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[];
 } {
-  // The stored union carries the first items of every category, so the all view
-  // is cut to the cap again; a category filter selects from the same union.
-  const narrowed = (filter === undefined || filter === "all" ? page.items.slice(0, LIST_CAP) : filteredItems(page, filter));
+  // Only a search page carries a display cap, and it applies to every view of
+  // that page. Ordinary lists stay complete at any size.
+  const cap = page.displayCap;
+  const narrowed =
+    filter === undefined || filter === "all"
+      ? cap
+        ? page.items.slice(0, cap)
+        : page.items
+      : cap
+        ? filteredItems(page, filter).slice(0, cap)
+        : filteredItems(page, filter);
   // A filter that matches nothing must not blank the message: keep the full
   // list and say the choice found nothing.
   const emptyChoice = narrowed.length === 0 && page.items.length > 0 && filter !== undefined && filter !== "all";
   const items = emptyChoice ? page.items : narrowed;
   const applied = emptyChoice ? undefined : filter;
   const current = clampIndex({ ...page, items }, index);
+  // A search page derives its truncation notice from the view actually shown:
+  // the all view against the whole universe, a category against its own count.
+  const footer = viewFooter(page, applied);
   const totalPages = Math.max(1, Math.ceil(items.length / page.perPage));
   const start = current * page.perPage;
   const shown = items.slice(start, start + page.perPage);
-  const embed = new EmbedBuilder().setColor(0x5865f2).setTitle(page.title).setFooter({ text: page.footer });
+  const embed = new EmbedBuilder().setColor(0x5865f2).setTitle(page.title).setFooter({ text: footer });
   const description = shown.map((item) => `${item.heading}${item.detail ? `\n${item.detail}` : ""}`).join("\n\n");
   if (description) embed.setDescription(description);
   if (emptyChoice) embed.setDescription(`${FILTER_LABELS[filter!] ?? filter} has no card in these results. Showing all of them.`);
