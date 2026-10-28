@@ -73,7 +73,7 @@ function replyText(payload: ReplyPayload): string {
 export function createMessageHandler(context: MessageContext): (message: IncomingMessage) => Promise<void> {
   const { api, config, budget } = context;
   let warnedAboutContent = false;
-  const guildBudgets = new Map<string, MentionBudget | undefined>();
+  const guildBudgets = new Map<string, { refillSeconds: number; budget: MentionBudget | undefined }>();
   const MAX_GUILD_BUDGETS = 1000;
 
   return async (message) => {
@@ -132,15 +132,16 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
 
     let activeBudget = budget;
     if (message.guildId) {
-      if (guildBudgets.has(message.guildId)) {
-        activeBudget = guildBudgets.get(message.guildId);
+      const cooldown = guild ? guild.cooldownSeconds : config.mentionCooldownSeconds;
+      const cached = guildBudgets.get(message.guildId);
+      if (cached && cached.refillSeconds === cooldown) {
+        activeBudget = cached.budget;
       } else {
-        const cooldown = guild ? guild.cooldownSeconds : config.mentionCooldownSeconds;
         activeBudget = cooldown > 0 ? new MentionBudget({ refillSeconds: cooldown }) : undefined;
         if (guildBudgets.size >= MAX_GUILD_BUDGETS) {
           guildBudgets.delete(guildBudgets.keys().next().value as string);
         }
-        guildBudgets.set(message.guildId, activeBudget);
+        guildBudgets.set(message.guildId, { refillSeconds: cooldown, budget: activeBudget });
       }
     }
 
@@ -159,7 +160,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     if (deck) {
-      const resolved = config.decklistEnabled ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
+      const resolved = decklistOn ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
       await logReply({ embeds: toEmbeds([renderDecklist(deck, resolved)]) as never });
       return;
     }

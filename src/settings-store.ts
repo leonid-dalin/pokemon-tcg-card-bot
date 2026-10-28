@@ -1,4 +1,6 @@
 import { createRequire } from "node:module";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { errorCategory } from "./diagnostics.js";
 
 type SqliteDatabase = import("node:sqlite").DatabaseSync;
@@ -75,7 +77,9 @@ export class SettingsStore {
   constructor(path: string | undefined, private readonly defaults: SettingsDefaults) {
     try {
       const { DatabaseSync } = requireSqlite("node:sqlite") as typeof import("node:sqlite");
+      if (path) mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
       this.db = new DatabaseSync(path ?? ":memory:");
+      this.db.exec("PRAGMA busy_timeout = 5000");
     } catch (error) {
       throw new Error(`could not open the settings database (${errorCategory(error)})`);
     }
@@ -145,7 +149,7 @@ export class SettingsStore {
     if (patch.autoReplyChannelMode !== undefined && patch.autoReplyChannelMode !== "all" && patch.autoReplyChannelMode !== "selected") {
       throw new Error("autoReplyChannelMode must be all or selected");
     }
-    const current = this.get(guildId);
+    const current = this.currentWithinTransaction(guildId);
     const next: GuildSettings = {
       guildId,
       messageReplies: patch.messageReplies ?? current.messageReplies,
@@ -156,6 +160,7 @@ export class SettingsStore {
       updatedAt: new Date().toISOString(),
     };
     this.db.exec("BEGIN IMMEDIATE");
+    let committed = false;
     try {
       this.db
         .prepare(
@@ -180,11 +185,30 @@ export class SettingsStore {
           next.updatedAt,
         );
       this.db.exec("COMMIT");
+      committed = true;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      if (!committed) this.db.exec("ROLLBACK");
       throw new Error(`could not save settings for guild ${guildId} (${errorCategory(error)})`);
     }
     return next;
+  }
+
+  private currentWithinTransaction(guildId: string): GuildSettings {
+    const row = this.db.prepare("SELECT * FROM guild_settings WHERE guild_id = ?").get(guildId) as
+      | SettingsRow
+      | undefined;
+    if (!row) {
+      return {
+        guildId,
+        messageReplies: this.defaults.messageReplies,
+        decklistReplies: this.defaults.decklistReplies,
+        autoReplyChannelMode: "all",
+        selectedChannelIds: [],
+        cooldownSeconds: this.defaults.cooldownSeconds,
+        updatedAt: "",
+      };
+    }
+    return readRow(guildId, row);
   }
 
   delete(guildId: string): void {

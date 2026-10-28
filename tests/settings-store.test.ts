@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsStore } from "../src/settings-store.js";
@@ -126,5 +126,31 @@ describe("SettingsStore", () => {
     expect(() => store.update("g1", { cooldownSeconds: -1 })).toThrow("seconds");
     expect(() => store.update("g1", { autoReplyChannelMode: "sometimes" as never })).toThrow("all or selected");
     expect(store.get("g1").cooldownSeconds).toBe(30);
+  });
+
+  it("creates a fresh nested data directory and reopens it", () => {
+    const path = tempPath();
+    const nested = join(dirname(path), "nested", "deeper", "settings.db");
+    dirs.push(dirname(dirname(nested)));
+    const first = new SettingsStore(nested, DEFAULTS);
+    first.update("g1", { cooldownSeconds: 7 });
+    first.close();
+
+    const second = new SettingsStore(nested, DEFAULTS);
+    expect(second.get("g1").cooldownSeconds).toBe(7);
+    second.close();
+  });
+
+  it("preserves both writers' fields when two connections patch the same guild", () => {
+    const path = tempPath();
+    const writerA = new SettingsStore(path, DEFAULTS);
+    const writerB = new SettingsStore(path, DEFAULTS);
+    writerA.update("g1", { cooldownSeconds: 0 });
+    writerB.update("g1", { decklistReplies: true });
+
+    for (const store of [writerA, writerB]) {
+      expect(store.get("g1")).toMatchObject({ cooldownSeconds: 0, decklistReplies: true });
+      store.close();
+    }
   });
 });

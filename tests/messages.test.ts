@@ -317,4 +317,41 @@ describe("message handler", () => {
     expect(lax.map(({ replies }) => replies).map((r) => r.length)).toEqual([1, 1, 1, 1]);
     expect(strict.map(({ replies }) => replies).map((r) => r.length)).toEqual([1, 1, 1, 0]);
   });
+
+  it("applies a cooldown change to the next message in both directions", async () => {
+    let cooldown = 0;
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: true, decklistReplies: false, autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: cooldown, updatedAt: "" }) };
+    const handle = handler({ settings });
+    const send = () => fakeMessage("[[Dragapult ex]]", { guildId: "g1", author: "same" });
+
+    const before = [send(), send(), send(), send()];
+    for (const message of before) await handle(message.message);
+    expect(before.map(({ replies }) => replies.length)).toEqual([1, 1, 1, 1]);
+
+    cooldown = 60;
+    const after = [send(), send(), send(), send()];
+    for (const message of after) await handle(message.message);
+    expect(after.map(({ replies }) => replies.length)).toEqual([1, 1, 1, 0]);
+
+    cooldown = 0;
+    const restored = send();
+    await handle(restored.message);
+    expect(restored.replies).toHaveLength(1);
+  });
+
+  it("resolves deck cards from the guild override when the deployment default is off", async () => {
+    let lookups = 0;
+    const api = {
+      searchByName: async (name: string) => [{ id: "sv08.5-073", name: "Dragapult ex", localId: "073" }],
+      getCard: async (id: string) => {
+        lookups += 1;
+        return { ...dragapult, id };
+      },
+    } as unknown as TcgdexClient;
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: true, decklistReplies: true, autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0, updatedAt: "" }) };
+    const { message, replies } = fakeMessage(DECK, { guildId: "g1" });
+    await handler({ api, settings })(message);
+    expect(replies).toHaveLength(1);
+    expect(lookups).toBeGreaterThan(0);
+  });
 });

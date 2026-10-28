@@ -100,7 +100,6 @@ client.on(
 );
 
 client.on(Events.GuildDelete, (guild) => {
-  if (guild.available === false) return;
   try {
     settings.delete(guild.id);
   } catch (error) {
