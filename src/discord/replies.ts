@@ -1,7 +1,7 @@
 import type { CardSummary } from "../api/types.js";
 import { printedNumber } from "../printed.js";
 import { isImageOnly, lookupEmbeds, type CardLookup } from "../lookup.js";
-import { matchingDetail, type TextGroup } from "../text-search.js";
+import { matchingDetail, unquote, type TextGroup } from "../text-search.js";
 import { toEmbeds } from "./embeds.js";
 import { listReply, type ListPage, type PageStore } from "./pages.js";
 import { detailsRow, detailsRows, missMenu, printingRows } from "./printing-buttons.js";
@@ -28,9 +28,16 @@ export function searchReply(
   ownerId: string,
   pages: PageStore,
 ) {
-  if (groups.length === 0) return { content: `No card wording mentions \`${query}\`.` };
+  if (groups.length === 0) {
+    const words = unquote(query);
+    const quoted = words !== query.trim();
+    const base = `No card wording mentions \`${quoted ? words : query}\`.`;
+    // A query that is still quoted at this point could only match a card that
+    // prints the marks, so say what was searched instead of blaming the cards.
+    return { content: quoted ? `${base} The words were searched; the quote marks are matched literally, so a card would have to print them.` : base };
+  }
   const page: ListPage = {
-    title: `${groups.length} cards mention \"${query}\"`,
+    title: `${groups.length} cards mention "${unquote(query)}"`,
     items: groups.map(({ representative, printings }) => ({
       cardId: representative.id,
       heading: `**${representative.name}** · ${printedNumber(representative.id)}${printings > 1 ? ` · ${printings} printings` : ""}`,

@@ -70,8 +70,31 @@ function normalisedText(card: TextHit): string {
   return value;
 }
 
+/**
+ * The quote marks people wrap a phrase in. A quoted search used to keep them in
+ * the words, so no card could match; they are punctuation around the phrase,
+ * not part of it.
+ */
+export const WRAPPING_QUOTES: [string, string][] = [
+  ['"', '"'],
+  ["'", "'"],
+  ["\u201c", "\u201d"],
+  ["\u2018", "\u2019"],
+];
+
+/** Drop one pair of quotes around the whole query, keeping any inside it. */
+export function unquote(query: string): string {
+  const trimmed = query.trim();
+  for (const [open, close] of WRAPPING_QUOTES) {
+    if (trimmed.length >= 2 && trimmed.startsWith(open) && trimmed.endsWith(close)) {
+      return trimmed.slice(open.length, trimmed.length - close.length).trim();
+    }
+  }
+  return trimmed;
+}
+
 function findHits(entries: TextHit[], query: string): { card: TextHit; nameHits: number; exact: boolean }[] {
-  const tokens = queryTokens(query);
+  const tokens = queryTokens(unquote(query));
   if (tokens.length === 0) return [];
   const hits: { card: TextHit; nameHits: number; exact: boolean }[] = [];
 
