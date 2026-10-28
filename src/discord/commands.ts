@@ -1,15 +1,18 @@
 import {
+  MessageFlags,
   SlashCommandBuilder,
   type AutocompleteInteraction,
+  type ButtonInteraction,
   type ChatInputCommandInteraction,
 } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
-import { lookupCard, lookupEmbeds } from "../lookup.js";
-import { renderSearchResults, renderSet } from "../render.js";
+import { lookupById, lookupCard } from "../lookup.js";
+import { renderSet } from "../render.js";
 import { searchCardText } from "../text-search.js";
-import { printingRows } from "./printing-buttons.js";
+import { printingIdFrom } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
-import { toEmbed, toEmbeds } from "./embeds.js";
+import { toEmbed } from "./embeds.js";
+import { cardReply, searchReply } from "./replies.js";
 
 export interface CommandContext {
   client: TcgdexClient;
@@ -97,10 +100,23 @@ export async function handleCardCommand(
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;
   }
-  await interaction.editReply({
-    embeds: toEmbeds(lookupEmbeds(lookup)),
-    components: printingRows(lookup.alternates),
-  });
+  await interaction.editReply(cardReply(lookup));
+}
+
+/** A printing button swaps the card message for the printing it names. */
+export async function handlePrintingButton(
+  context: CommandContext,
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const id = printingIdFrom(interaction.customId);
+  if (!id) return;
+  await interaction.deferUpdate();
+  const lookup = await lookupById(context.client, id, { attribution: context.attribution });
+  if (!lookup) {
+    await interaction.followUp({ content: `No card matched \`${id}\`.`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await interaction.editReply(cardReply(lookup));
 }
 
 export async function handleSearchCommand(
@@ -110,12 +126,7 @@ export async function handleSearchCommand(
   const text = interaction.options.getString("text", true).trim();
 
   await interaction.deferReply();
-  const cards = searchCardText(text);
-  if (cards.length === 0) {
-    await interaction.editReply({ content: `No card wording mentions \`${text}\`.` });
-    return;
-  }
-  await interaction.editReply({ embeds: [toEmbed(renderSearchResults(text, cards, context.attribution))] });
+  await interaction.editReply(searchReply(text, searchCardText(text), context.attribution));
 }
 
 export async function handleSetCommand(
