@@ -27,7 +27,11 @@ export interface MessageContext {
 export interface EffectiveGuildSettings {
   messageReplies: boolean;
   decklistReplies: boolean;
+  autoReplyChannelMode: "all" | "selected";
+  selectedChannelIds: string[];
   cooldownSeconds: number;
+  cardGames: "ptcg" | "pocket" | "both";
+  defaultCardGame: "ptcg" | "pocket";
 }
 
 export type IncomingMessage = Pick<
@@ -42,6 +46,7 @@ export type IncomingMessage = Pick<
   | "channelId"
   | "guildId"
   | "member"
+  | "channel"
   | "reply"
 >;
 
@@ -103,18 +108,26 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         console.error(`settings read failed (${errorCategory(error)})`);
         return;
       }
-      if (!guild.messageReplies) return;
     }
     const decklistOn = guild ? guild.decklistReplies : config.decklistEnabled;
+    const gamePreference = guild ? { allowed: guild.cardGames, default: guild.defaultCardGame } : undefined;
+    const messageRepliesOn = guild ? guild.messageReplies : true;
 
     const deck = decklistOn ? parseDecklist(message.content) : undefined;
     const selfId = context.selfId();
     // A bare bot mention is help; parse it before checking for a search query.
-    const wantsHelp = !deck && selfId ? parseHelpCommand(message.content, selfId) : undefined;
-    const searchQuery = !deck && !wantsHelp && selfId ? parseSearchCommand(message.content, selfId) : undefined;
-    const mentions = deck || wantsHelp || searchQuery !== undefined ? [] : extractMentions(message.content);
+    // Decklists answer on their own switch, so message replies off mutes only
+    // mentions, searches and help.
+    const wantsHelp = !deck && messageRepliesOn && selfId ? parseHelpCommand(message.content, selfId) : undefined;
+    const searchQuery =
+      !deck && !wantsHelp && messageRepliesOn && selfId ? parseSearchCommand(message.content, selfId) : undefined;
+    const mentions =
+      deck || wantsHelp || searchQuery !== undefined ? [] : messageRepliesOn ? extractMentions(message.content) : [];
     if (!deck && !wantsHelp && searchQuery === undefined && mentions.length === 0) return;
 
+    const channel = message.channel as { isThread?: () => boolean; parentId?: string | null } | undefined;
+    const replyChannelId = channel?.isThread?.() ? (channel.parentId ?? message.channelId) : message.channelId;
+    if (guild && guild.autoReplyChannelMode === "selected" && !guild.selectedChannelIds.includes(replyChannelId)) return;
     const isAdmin = Boolean(message.member?.permissions?.has?.("ManageGuild"));
     const redactUserMentions = (text: string) => text.replace(/<@[!&]?\d+>/g, "<@user>");
     const logReply = async (payload: ReplyPayload) => {
@@ -187,6 +200,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         const lookup = await lookupCard(api, mention.name, mention.setHint, {
           attribution: config.attribution,
           energyEmoji: config.energyEmoji,
+          ...(gamePreference ? { gamePreference } : {}),
         });
         console.log(`mention lookup -> ${lookup ? lookup.card.id : "no match"}`);
         if (lookup) found.push(mention.imageOnly ? { ...lookup, imageOnly: true } : lookup);

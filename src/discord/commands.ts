@@ -19,12 +19,21 @@ import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
 import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
+import { settingsCommand } from "./settings-command.js";
 
 export interface CommandContext {
   client: TcgdexClient;
   attribution: string;
   energyEmoji: Record<string, string>;
   pages: PageStore;
+  settings?: { get: (guildId: string) => import("../settings-store.js").GuildSettings } | undefined;
+}
+
+/** Reads the per-server game preference; explicit hints and exact IDs bypass it. */
+function gamePreference(context: CommandContext, guildId: string | null) {
+  if (!guildId || !context.settings) return undefined;
+  const settings = context.settings.get(guildId);
+  return { allowed: settings.cardGames, default: settings.defaultCardGame };
 }
 
 export const cardCommand = new SlashCommandBuilder()
@@ -86,7 +95,7 @@ export const helpCommand = new SlashCommandBuilder()
   .setName("help")
   .setDescription("List what the bot can do");
 
-export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand];
+export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand, settingsCommand];
 
 export async function handleAutocomplete(
   context: CommandContext,
@@ -125,9 +134,10 @@ export async function handleCardCommand(
 
   await interaction.deferReply();
   // Look up autocomplete values by card id.
+  const preference = gamePreference(context, interaction.guildId);
   const lookup = isCardId(query)
     ? await lookupById(context.client, query, { attribution: context.attribution, energyEmoji: context.energyEmoji })
-    : await lookupCard(context.client, query, setHint, { attribution: context.attribution, energyEmoji: context.energyEmoji });
+    : await lookupCard(context.client, query, setHint, { attribution: context.attribution, energyEmoji: context.energyEmoji, ...(preference ? { gamePreference: preference } : {}) });
   if (!lookup) {
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;
@@ -291,10 +301,11 @@ export async function handlePrintingsCommand(
 ): Promise<void> {
   const query = interaction.options.getString("name", true).trim();
   await interaction.deferReply();
+  const allowed = gamePreference(context, interaction.guildId)?.allowed ?? "both";
 
   // Autocomplete values are card ids; use the resolved name for the listing.
   const pinned = isCardId(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
-  const printings = await printingsOf(context.client, pinned?.card.name ?? query);
+  const printings = await printingsOf(context.client, pinned?.card.name ?? query, allowed);
   if (printings.length === 0) {
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;

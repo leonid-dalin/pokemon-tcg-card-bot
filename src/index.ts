@@ -26,6 +26,7 @@ import { MentionBudget } from "./cooldown.js";
 import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
+import { handleSettingsCommand } from "./discord/settings-command.js";
 
 loadDotEnv();
 
@@ -38,7 +39,7 @@ const settings = new SettingsStore(
   { messageReplies: config.mentionEnabled, decklistReplies: config.decklistEnabled, cooldownSeconds: config.mentionCooldownSeconds },
 );
 const api = new TcgdexClient();
-const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore() };
+const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore(), settings };
 
 const client = new Client(clientOptions(config));
 const budget =
@@ -87,6 +88,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handlePrintingsCommand(context, interaction);
     } else if (interaction.commandName === "help") {
       await handleHelpCommand(interaction);
+    } else if (interaction.commandName === "settings") {
+      await handleSettingsCommand({ settings, mentionEnabled: config.mentionEnabled }, interaction);
     }
   } catch (error) {
     console.error(`interaction failed (${errorCategory(error)})`);

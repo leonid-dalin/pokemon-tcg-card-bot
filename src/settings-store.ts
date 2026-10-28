@@ -16,6 +16,8 @@ export interface GuildSettings {
   autoReplyChannelMode: AutoReplyChannelMode;
   selectedChannelIds: string[];
   cooldownSeconds: number;
+  cardGames: CardGameScope;
+  defaultCardGame: CardGameDefault;
   updatedAt: string;
 }
 
@@ -25,15 +27,24 @@ export interface SettingsDefaults {
   cooldownSeconds: number;
 }
 
+export type CardGameScope = "ptcg" | "pocket" | "both";
+export type CardGameDefault = "ptcg" | "pocket";
+
 export interface GuildSettingsPatch {
   messageReplies?: boolean;
   decklistReplies?: boolean;
   autoReplyChannelMode?: AutoReplyChannelMode;
   selectedChannelIds?: string[];
   cooldownSeconds?: number;
+  cardGames?: CardGameScope;
+  defaultCardGame?: CardGameDefault;
 }
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+const CARD_GAME_SCOPES: CardGameScope[] = ["ptcg", "pocket", "both"];
+const CARD_GAME_DEFAULTS: CardGameDefault[] = ["ptcg", "pocket"];
+export const DEFAULT_CARD_GAMES: CardGameScope = "both";
+export const DEFAULT_CARD_GAME: CardGameDefault = "ptcg";
 
 interface SettingsRow {
   message_replies: number;
@@ -41,6 +52,8 @@ interface SettingsRow {
   auto_reply_channel_mode: string;
   selected_channel_ids: string;
   cooldown_seconds: number;
+  card_games: string;
+  default_card_game: string;
   updated_at: string;
 }
 
@@ -60,6 +73,12 @@ function readRow(guildId: string, row: SettingsRow): GuildSettings {
   if (!Number.isInteger(row.cooldown_seconds) || row.cooldown_seconds < 0) {
     throw new Error(`stored cooldown for guild ${guildId} is not a number of seconds`);
   }
+  if (!CARD_GAME_SCOPES.includes(row.card_games as CardGameScope)) {
+    throw new Error(`stored card game scope for guild ${guildId} is not ptcg, pocket or both`);
+  }
+  if (!CARD_GAME_DEFAULTS.includes(row.default_card_game as CardGameDefault)) {
+    throw new Error(`stored default card game for guild ${guildId} is not ptcg or pocket`);
+  }
   return {
     guildId,
     messageReplies: row.message_replies === 1,
@@ -67,6 +86,8 @@ function readRow(guildId: string, row: SettingsRow): GuildSettings {
     autoReplyChannelMode: row.auto_reply_channel_mode,
     selectedChannelIds: channels as string[],
     cooldownSeconds: row.cooldown_seconds,
+    cardGames: row.card_games as CardGameScope,
+    defaultCardGame: row.default_card_game as CardGameDefault,
     updatedAt: row.updated_at,
   };
 }
@@ -104,17 +125,24 @@ export class SettingsStore {
     }
     try {
       this.db.exec("BEGIN");
-      this.db.exec(`
-        CREATE TABLE guild_settings (
-          guild_id TEXT PRIMARY KEY,
-          message_replies INTEGER NOT NULL,
-          decklist_replies INTEGER NOT NULL,
-          auto_reply_channel_mode TEXT NOT NULL,
-          selected_channel_ids TEXT NOT NULL,
-          cooldown_seconds INTEGER NOT NULL,
-          updated_at TEXT NOT NULL
-        )
-      `);
+      if (version === 0) {
+        this.db.exec(`
+          CREATE TABLE guild_settings (
+            guild_id TEXT PRIMARY KEY,
+            message_replies INTEGER NOT NULL,
+            decklist_replies INTEGER NOT NULL,
+            auto_reply_channel_mode TEXT NOT NULL,
+            selected_channel_ids TEXT NOT NULL,
+            cooldown_seconds INTEGER NOT NULL,
+            card_games TEXT NOT NULL DEFAULT 'both',
+            default_card_game TEXT NOT NULL DEFAULT 'ptcg',
+            updated_at TEXT NOT NULL
+          )
+        `);
+      } else if (version === 1) {
+        this.db.exec("ALTER TABLE guild_settings ADD COLUMN card_games TEXT NOT NULL DEFAULT 'both'");
+        this.db.exec("ALTER TABLE guild_settings ADD COLUMN default_card_game TEXT NOT NULL DEFAULT 'ptcg'");
+      }
       this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
       this.db.exec("COMMIT");
     } catch (error) {
@@ -136,6 +164,8 @@ export class SettingsStore {
         autoReplyChannelMode: "all",
         selectedChannelIds: [],
         cooldownSeconds: this.defaults.cooldownSeconds,
+        cardGames: DEFAULT_CARD_GAMES,
+        defaultCardGame: DEFAULT_CARD_GAME,
         updatedAt: "",
       };
     }
@@ -149,6 +179,12 @@ export class SettingsStore {
     if (patch.autoReplyChannelMode !== undefined && patch.autoReplyChannelMode !== "all" && patch.autoReplyChannelMode !== "selected") {
       throw new Error("autoReplyChannelMode must be all or selected");
     }
+    if (patch.cardGames !== undefined && !CARD_GAME_SCOPES.includes(patch.cardGames)) {
+      throw new Error("cardGames must be ptcg, pocket or both");
+    }
+    if (patch.defaultCardGame !== undefined && !CARD_GAME_DEFAULTS.includes(patch.defaultCardGame)) {
+      throw new Error("defaultCardGame must be ptcg or pocket");
+    }
     let saved: GuildSettings | undefined;
     this.db.exec("BEGIN IMMEDIATE");
     let committed = false;
@@ -161,19 +197,23 @@ export class SettingsStore {
         autoReplyChannelMode: patch.autoReplyChannelMode ?? current.autoReplyChannelMode,
         selectedChannelIds: patch.selectedChannelIds ?? current.selectedChannelIds,
         cooldownSeconds: patch.cooldownSeconds ?? current.cooldownSeconds,
+        cardGames: patch.cardGames ?? current.cardGames,
+        defaultCardGame: patch.defaultCardGame ?? current.defaultCardGame,
         updatedAt: new Date().toISOString(),
       };
       this.db
         .prepare(
           `INSERT INTO guild_settings
-             (guild_id, message_replies, decklist_replies, auto_reply_channel_mode, selected_channel_ids, cooldown_seconds, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+             (guild_id, message_replies, decklist_replies, auto_reply_channel_mode, selected_channel_ids, cooldown_seconds, card_games, default_card_game, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(guild_id) DO UPDATE SET
              message_replies = excluded.message_replies,
              decklist_replies = excluded.decklist_replies,
              auto_reply_channel_mode = excluded.auto_reply_channel_mode,
              selected_channel_ids = excluded.selected_channel_ids,
              cooldown_seconds = excluded.cooldown_seconds,
+             card_games = excluded.card_games,
+             default_card_game = excluded.default_card_game,
              updated_at = excluded.updated_at`,
         )
         .run(
@@ -183,6 +223,8 @@ export class SettingsStore {
           next.autoReplyChannelMode,
           JSON.stringify(next.selectedChannelIds),
           next.cooldownSeconds,
+          next.cardGames,
+          next.defaultCardGame,
           next.updatedAt,
         );
       this.db.exec("COMMIT");
@@ -207,6 +249,8 @@ export class SettingsStore {
         autoReplyChannelMode: "all",
         selectedChannelIds: [],
         cooldownSeconds: this.defaults.cooldownSeconds,
+        cardGames: DEFAULT_CARD_GAMES,
+        defaultCardGame: DEFAULT_CARD_GAME,
         updatedAt: "",
       };
     }
