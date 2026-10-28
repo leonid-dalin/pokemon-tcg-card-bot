@@ -4,7 +4,7 @@ import { lookupEmbeds, type CardLookup } from "../lookup.js";
 import { matchingDetail, type TextGroup } from "../text-search.js";
 import { toEmbeds } from "./embeds.js";
 import { listReply, type ListPage, type PageStore } from "./pages.js";
-import { detailsRow, detailsRows, printingRows } from "./printing-buttons.js";
+import { detailsRow, detailsRows, missMenu, printingRows } from "./printing-buttons.js";
 
 /** Most embeds Discord accepts in one message is ten; five keeps a reply readable. */
 export const MAX_EMBEDS_PER_MESSAGE = 5;
@@ -56,15 +56,18 @@ export function mentionReply(found: CardLookup[], misses: MentionMiss[], ownerId
   const content = misses
     .map(({ raw, closest }) => {
       const base = `No card matched \`${raw}\`.`;
-      if (closest.length === 0) return base;
-      return `${base} Closest: ${closest.map((card) => `\`${card.name}\` (${printedNumber(card.id)})`).join(", ")}.`;
+      return closest.length === 0 ? base : `${base} Pick the closest below.`;
     })
     .join("\n");
-  const components = found.length === 1 && found[0]
-    ? [...printingRows(found[0].alternates, ownerId), ...detailsRow(found[0].card.id)]
-    : detailsRows(found);
+  const components = [
+    ...(found.length === 1 && found[0]
+      ? [...printingRows(found[0].alternates, ownerId), ...detailsRow(found[0].card.id)]
+      : detailsRows(found)),
+    ...misses.flatMap((miss) => missMenu(miss.closest)),
+  ];
   return {
-    ...(embeds.length > 0 ? { embeds, components } : {}),
+    ...(embeds.length > 0 ? { embeds } : {}),
     ...(content ? { content } : {}),
+    ...(components.length > 0 ? { components } : {}),
   };
 }

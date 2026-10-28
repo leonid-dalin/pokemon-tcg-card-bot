@@ -107,7 +107,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         });
         console.log(`mention [[${mention.raw}]] -> ${lookup ? lookup.card.id : "no match"}`);
         if (lookup) found.push(lookup);
-        else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name) });
+        else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5) });
         if (found.length >= MAX_EMBEDS_PER_MESSAGE) break;
       }
       await message.reply({ ...mentionReply(found, misses, message.author.id) });

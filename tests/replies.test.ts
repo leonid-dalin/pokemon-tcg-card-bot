@@ -25,6 +25,32 @@ describe("mentionReply", () => {
       { raw: "Foo", closest: [] },
       { raw: "Bar ex", closest: [{ id: "sv01-001", name: "Bar" }] },
     ]);
-    expect(reply).toEqual({ content: "No card matched `Foo`.\nNo card matched `Bar ex`. Closest: `Bar` (SVI 1)." });
+    expect(reply.content).toBe("No card matched `Foo`.\nNo card matched `Bar ex`. Pick the closest below.");
+  });
+
+  it("offers the closest cards as a menu after a miss", () => {
+    const reply = mentionReply([], [
+      { raw: "Bar ex", closest: [{ id: "sv01-001", name: "Bar" }, { id: "sv01-002", name: "Bar ex" }] },
+    ]);
+    expect("components" in reply && reply.components).toHaveLength(1);
+    const menu = reply.components![0]!.toJSON() as { components: { options: { label: string; value: string }[] }[] };
+    expect(menu.components[0]?.options.map((option) => option.value)).toEqual(["sv01-001", "sv01-002"]);
+    expect(menu.components[0]?.options[0]?.label).toBe("Bar · SVI 1");
+  });
+
+  it("gives a miss without suggestions no menu", () => {
+    const reply = mentionReply([], [{ raw: "Foo", closest: [] }]);
+    expect("components" in reply).toBe(false);
+  });
+
+  it("keeps four rows for one found card and two misses", () => {
+    const reply = mentionReply(
+      [{ card: { id: "sv01-001", name: "Bar" }, alternates: [{ id: "sv01-002", name: "Bar" }] }],
+      [
+        { raw: "Baz", closest: [{ id: "sv01-003", name: "Baz" }] },
+        { raw: "Qux", closest: [{ id: "sv01-004", name: "Qux" }] },
+      ],
+    );
+    expect("components" in reply && reply.components).toHaveLength(4);
   });
 });

@@ -11,7 +11,7 @@ import { lookupById, lookupCard } from "../lookup.js";
 import { renderCardDetails, renderSet } from "../render.js";
 import { printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
-import { printingIdFrom, detailsIdFrom } from "./printing-buttons.js";
+import { printingIdFrom, detailsIdFrom, MISS_MENU_ID } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
 import { listReply, pageIndexFrom, pageTokenFrom, type PageStore } from "./pages.js";
@@ -170,12 +170,15 @@ export async function handleOpenCardMenu(
   context: CommandContext,
   interaction: StringSelectMenuInteraction,
 ): Promise<void> {
-  const token = pageTokenFrom(interaction.customId);
   const cardId = interaction.values[0];
-  if (!token || !cardId) return;
-  if (!context.pages.get(token)) {
-    await interaction.reply({ content: "This list has expired. Run the command again.", flags: MessageFlags.Ephemeral });
-    return;
+  if (!cardId) return;
+  if (interaction.customId !== MISS_MENU_ID) {
+    const token = pageTokenFrom(interaction.customId);
+    if (!token) return;
+    if (!context.pages.get(token)) {
+      await interaction.reply({ content: "This list has expired. Run the command again.", flags: MessageFlags.Ephemeral });
+      return;
+    }
   }
   const lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {

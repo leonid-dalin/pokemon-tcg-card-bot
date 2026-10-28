@@ -1,10 +1,12 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from "discord.js";
 import type { CardSummary } from "../api/types.js";
 import { printedNumber } from "../printed.js";
 
 export const PRINTING_PREFIX = "printing:";
 export const DETAILS_PREFIX = "details:";
+export const MISS_MENU_ID = "open:miss";
 const MAX_BUTTONS = 5;
+const MAX_OPTIONS = 5;
 
 export interface PrintingButtonId {
   cardId: string;
@@ -34,6 +36,23 @@ export function detailsRow(cardId: string, label = "Details"): ActionRowBuilder<
       new ButtonBuilder().setCustomId(`${DETAILS_PREFIX}${cardId}`).setLabel(label).setStyle(ButtonStyle.Secondary),
     ),
   ];
+}
+
+/**
+ * The closest cards after a miss, as a menu. Anyone may pick one: the card is
+ * posted as a new reply, so nothing shared changes.
+ */
+export function missMenu(closest: CardSummary[]): ActionRowBuilder<StringSelectMenuBuilder>[] {
+  if (closest.length === 0) return [];
+  const options = closest.slice(0, MAX_OPTIONS).map((card) => ({
+    label: `${card.name} · ${printedNumber(card.id)}`.slice(0, 100),
+    value: card.id,
+  }));
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(MISS_MENU_ID)
+    .setPlaceholder("Pick the closest card")
+    .addOptions(options);
+  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];
 }
 
 export function detailsRows(lookups: { card: { id: string; name: string } }[]): ActionRowBuilder<ButtonBuilder>[] {

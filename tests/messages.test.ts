@@ -89,12 +89,15 @@ describe("message handler", () => {
     expect(replies.every((payload) => !("allowedMentions" in payload))).toBe(true);
   });
 
-  it("answers a miss with the closest names", async () => {
+  it("answers a miss with the closest names in a menu", async () => {
     const { message, replies } = fakeMessage("[[Dragapult zzz]]");
     await handler()(message);
-    expect(replies[0]?.content).toBe(
-      "No card matched `Dragapult zzz`. Closest: `Dragapult ex` (PRE 73), `Dragapult ex` (TWM 130).",
-    );
+    expect(replies[0]?.content).toBe("No card matched `Dragapult zzz`. Pick the closest below.");
+    const components = (replies[0] as { components: { toJSON: () => unknown }[] }).components;
+    expect(components).toHaveLength(1);
+    const menu = components[0]!.toJSON() as { components: { options: { label: string; value: string }[] }[] };
+    expect(menu.components[0]?.options.map((option) => option.value)).toEqual(["sv08.5-073", "sv06-130"]);
+    expect(menu.components[0]?.options[0]?.label).toBe("Dragapult ex · PRE 73");
   });
 
   it("reports a failed lookup instead of staying silent", async () => {
