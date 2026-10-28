@@ -56,7 +56,9 @@ npm run register
 npm run dev
 ```
 
-`register` replaces this application's command definitions in the configured guild, or globally when `DISCORD_GUILD_ID` is unset. Run it again after changing slash-command names or options. It publishes `/card`, `/printings`, `/set`, `/search` and `/help`
+`register` replaces this application's command definitions in the configured guild, or globally when `DISCORD_GUILD_ID` is unset. Run it again after changing slash-command names or options. It publishes `/card`, `/printings`, `/set`, `/search`, `/help` and `/settings`
+
+`/settings` is guild-only and restricted to members with the Manage Server permission, both in the command definition and in the handler. Its `view` subcommand also reports deployment-wide switches such as `MENTION_ENABLED=false`. The environment values remain the defaults for servers that have not changed anything
 
 Enable Message Content in the developer portal for ordinary-message replies. See the [configuration table](../README.md#configuration) for the switches that control mentions, decklists and throttling
 

@@ -27,6 +27,8 @@ export interface MessageContext {
 export interface EffectiveGuildSettings {
   messageReplies: boolean;
   decklistReplies: boolean;
+  autoReplyChannelMode: "all" | "selected";
+  selectedChannelIds: string[];
   cooldownSeconds: number;
 }
 
@@ -42,6 +44,7 @@ export type IncomingMessage = Pick<
   | "channelId"
   | "guildId"
   | "member"
+  | "channel"
   | "reply"
 >;
 
@@ -104,6 +107,9 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         return;
       }
       if (!guild.messageReplies) return;
+      const channel = message.channel as { isThread?: () => boolean; parentId?: string | null } | undefined;
+      const replyChannelId = channel?.isThread?.() ? (channel.parentId ?? message.channelId) : message.channelId;
+      if (guild.autoReplyChannelMode === "selected" && !guild.selectedChannelIds.includes(replyChannelId)) return;
     }
     const decklistOn = guild ? guild.decklistReplies : config.decklistEnabled;
 

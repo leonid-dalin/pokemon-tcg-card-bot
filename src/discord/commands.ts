@@ -19,6 +19,7 @@ import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
 import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
+import { settingsCommand } from "./settings-command.js";
 
 export interface CommandContext {
   client: TcgdexClient;
@@ -86,7 +87,7 @@ export const helpCommand = new SlashCommandBuilder()
   .setName("help")
   .setDescription("List what the bot can do");
 
-export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand];
+export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand, settingsCommand];
 
 export async function handleAutocomplete(
   context: CommandContext,

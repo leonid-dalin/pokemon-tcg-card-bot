@@ -29,7 +29,7 @@ function fakeApi(options: { failSearch?: boolean } = {}): TcgdexClient {
 
 function fakeMessage(
   content: string,
-  overrides: Partial<{ bot: boolean; webhookId: string | null; system: boolean; author: string; guildId: string; member: unknown }> = {},
+  overrides: Partial<{ bot: boolean; webhookId: string | null; system: boolean; author: string; guildId: string; member: unknown; channelId: string; channel: unknown }> = {},
 ) {
   const replies: Record<string, unknown>[] = [];
   const message = {
@@ -40,9 +40,10 @@ function fakeMessage(
     attachments: { size: 0 },
     embeds: [],
     stickers: { size: 0 },
-    channelId: "c",
+    channelId: overrides.channelId ?? "c",
     guildId: overrides.guildId,
     member: overrides.member,
+    channel: overrides.channel,
     reply: async (payload: Record<string, unknown>) => {
       replies.push(payload);
       return {};
@@ -353,5 +354,40 @@ describe("message handler", () => {
     await handler({ api, settings })(message);
     expect(replies).toHaveLength(1);
     expect(lookups).toBeGreaterThan(0);
+  });
+
+  it("replies only in selected channels and threads follow their parent", async () => {
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: true, decklistReplies: false, autoReplyChannelMode: "selected" as const, selectedChannelIds: ["c-ok"], cooldownSeconds: 0, updatedAt: "" }) };
+    const handle = handler({ settings });
+
+    const elsewhere = fakeMessage("[[Dragapult ex]]", { guildId: "g1", channelId: "c-other" });
+    await handle(elsewhere.message);
+    expect(elsewhere.replies).toEqual([]);
+
+    const selected = fakeMessage("[[Dragapult ex]]", { guildId: "g1", channelId: "c-ok" });
+    await handle(selected.message);
+    expect(selected.replies).toHaveLength(1);
+
+    const thread = fakeMessage("[[Dragapult ex]]", {
+      guildId: "g1",
+      channelId: "c-thread",
+      channel: { isThread: () => true, parentId: "c-ok" },
+    });
+    await handle(thread.message);
+    expect(thread.replies).toHaveLength(1);
+  });
+
+  it("treats an empty selected list as no automatic replies", async () => {
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: true, decklistReplies: false, autoReplyChannelMode: "selected" as const, selectedChannelIds: [], cooldownSeconds: 0, updatedAt: "" }) };
+    const { message, replies } = fakeMessage("[[Dragapult ex]]", { guildId: "g1" });
+    await handler({ settings })(message);
+    expect(replies).toEqual([]);
+  });
+
+  it("replies in every channel when the mode is all", async () => {
+    const settings = { get: (guildId: string) => ({ guildId, messageReplies: true, decklistReplies: false, autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0, updatedAt: "" }) };
+    const anywhere = fakeMessage("[[Dragapult ex]]", { guildId: "g1", channelId: "any" });
+    await handler({ settings })(anywhere.message);
+    expect(anywhere.replies).toHaveLength(1);
   });
 });
