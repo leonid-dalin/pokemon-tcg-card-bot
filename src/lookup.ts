@@ -7,8 +7,9 @@ import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
 
 export interface CardLookup {
   card: Card;
-  view: EmbedView;
   alternates: CardSummary[];
+  /** Footer credit naming the source that served the card. */
+  attribution?: string;
 }
 
 export interface LookupOptions {
@@ -52,6 +53,24 @@ async function withEnglishPricing(client: TcgdexClient, card: Card): Promise<Car
   return card;
 }
 
+/**
+ * The one rule for "other printings": the same card name, never the card
+ * itself. Every lookup path builds its result here, so TCGdex and Pocket
+ * answers cannot drift apart.
+ */
+function toLookup(
+  card: Card,
+  candidates: CardSummary[],
+  attribution: string | undefined,
+  limit = 10,
+): CardLookup {
+  const name = normaliseName(card.name);
+  const alternates = candidates
+    .filter((entry) => entry.id !== card.id && normaliseName(entry.name) === name)
+    .slice(0, limit);
+  return { card, alternates, ...(attribution ? { attribution } : {}) };
+}
+
 /** A full card id, which pins one exact printing rather than a set. */
 export const CARD_ID = /^[a-z0-9.]{1,12}-\d{1,4}$/i;
 
@@ -82,14 +101,7 @@ function lookupPocket(query: string, setHint: string | undefined, options: Looku
   if (!primary) return undefined;
   const card = getPocketCard(primary.id);
   if (!card) return undefined;
-
-  return {
-    card,
-    view: renderCard(card, {
-      attribution: POCKET_ATTRIBUTION,
-    }),
-    alternates: pool.filter((entry) => entry.id !== primary.id).slice(0, options.alternateLimit ?? 10),
-  };
+  return toLookup(card, pool, POCKET_ATTRIBUTION, options.alternateLimit);
 }
 
 /**
@@ -121,17 +133,7 @@ export async function lookupById(
   const candidates = pocketCard
     ? searchPocketByName(pinned.name)
     : await client.searchByName(pinned.name).catch(() => []);
-  const sameName = candidates
-    .filter((entry) => entry.id !== pinned.id && normaliseName(entry.name) === normaliseName(pinned.name))
-    .slice(0, options.alternateLimit ?? 10);
-  const attribution = pocketCard ? POCKET_ATTRIBUTION : options.attribution;
-  return {
-    card: pinned,
-    view: renderCard(pinned, {
-      ...(attribution ? { attribution } : {}),
-    }),
-    alternates: sameName,
-  };
+  return toLookup(pinned, candidates, pocketCard ? POCKET_ATTRIBUTION : options.attribution, options.alternateLimit);
 }
 
 /**
@@ -162,14 +164,13 @@ export async function lookupCard(
   // would answer with a printing the asker did not ask for.
   if (setHint && !resolved) return undefined;
   const summaries = await client.searchByName(query);
-  const matched = rankPrintings(summaries, query, resolved ?? (pocketOnly ? undefined : setHint));
+  const matched = rankPrintings(summaries, query, resolved);
 
   // A hint that resolved to a real set pins that set exactly. Prefix matching
   // would let "A1" also match "A1a", and the newer set then wins the ranking.
-  const pinned = resolved
+  const ranked = resolved
     ? matched.filter((card) => normaliseName(setIdOf(card.id)) === normaliseName(resolved))
     : matched;
-  const ranked = pinned;
   // TCGdex stops before the newest Pocket sets, so an empty result falls back
   // to the bundled Pocket data before giving up.
   if (ranked.length === 0) return lookupPocket(query, setHint, options);
@@ -179,19 +180,7 @@ export async function lookupCard(
   if (!primary) return undefined;
 
   const card = await withEnglishPricing(client, await client.getCard(primary.id));
-  // "Printings of X" only makes sense for the same card name, so a query for
-  // "Dragapult ex" never lists the plain Dragapult as another printing.
-  const target = normaliseName(card.name);
-  const alternates = ordered
-    .filter((entry) => entry.id !== primary.id && normaliseName(entry.name) === target)
-    .slice(0, options.alternateLimit ?? 10);
-  return {
-    card,
-    view: renderCard(card, {
-      ...(options.attribution ? { attribution: options.attribution } : {}),
-    }),
-    alternates,
-  };
+  return toLookup(card, ordered, options.attribution, options.alternateLimit);
 }
 
 /**
@@ -199,7 +188,8 @@ export async function lookupCard(
  * second embed, because two embeds read as two answers to one question.
  */
 export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
-  if (lookup.alternates.length === 0) return [lookup.view];
+  const view = renderCard(lookup.card, lookup.attribution ? { attribution: lookup.attribution } : {});
+  if (lookup.alternates.length === 0) return [view];
 
   const seen = new Set<string>();
   const ids = lookup.alternates
@@ -208,7 +198,7 @@ export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
     .join(", ");
   const value = `${ids}
 Narrow it with \`[[${lookup.card.name}|setId]]\`.`;
-  return [{ ...lookup.view, fields: [...lookup.view.fields, { name: "Other printings", value }] }];
+  return [{ ...view, fields: [...view.fields, { name: "Other printings", value }] }];
 }
 
 export function isMissing(error: unknown): boolean {

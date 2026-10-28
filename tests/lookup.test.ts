@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TcgdexClient, TcgdexError } from "../src/api/tcgdex.js";
 import type { Card } from "../src/api/types.js";
-import { POCKET_ATTRIBUTION, lookupById, lookupCard, lookupEmbeds, suggestNames } from "../src/lookup.js";
+import { POCKET_ATTRIBUTION, lookupById, lookupCard, lookupEmbeds, suggestNames, type CardLookup } from "../src/lookup.js";
+
+/** The embed a lookup renders to, before Other printings are appended. */
+const viewOf = (lookup?: CardLookup) => (lookup ? lookupEmbeds({ ...lookup, alternates: [] })[0] : undefined);
 
 const dragapult = JSON.parse(
   readFileSync(new URL("./fixtures/dragapult-ex-sv08.5-073.json", import.meta.url), "utf8"),
@@ -111,7 +114,7 @@ describe("lookupCard", () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Dragapult ex");
     expect(lookup?.card.id).toBe("sv08.5-073");
-    expect(lookup?.view.title).toBe("Dragapult ex · #073/131");
+    expect(viewOf(lookup)?.title).toBe("Dragapult ex · #073/131");
     expect(lookup?.alternates.map((card) => card.id)).toEqual(["sv06-130"]);
   });
 
@@ -217,11 +220,11 @@ describe("lookupCard", () => {
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "Crustle ex", "ptcgp");
     expect(lookup?.card.id).toBe("b4b-133");
-    expect(lookup?.view.fields.find((field) => field.name === "Set")?.value).toContain("Deluxe Pack: Mega");
-    expect(lookup?.view.fields.find((field) => field.name === "Attack")?.value).toContain("Boulder Crush");
-    expect(lookup?.view.fields.some((field) => field.name === "Legal")).toBe(false);
-    expect(lookup?.view.footer).toContain("pokemon-tcg-pocket-cards");
-    expect(lookup?.view.footer).not.toContain("TCGdex");
+    expect(viewOf(lookup)?.fields.find((field) => field.name === "Set")?.value).toContain("Deluxe Pack: Mega");
+    expect(viewOf(lookup)?.fields.find((field) => field.name === "Attack")?.value).toContain("Boulder Crush");
+    expect(viewOf(lookup)?.fields.some((field) => field.name === "Legal")).toBe(false);
+    expect(viewOf(lookup)?.footer).toContain("pokemon-tcg-pocket-cards");
+    expect(viewOf(lookup)?.footer).not.toContain("TCGdex");
   });
 
   it("prefers a printing with art over a newer one without", async () => {
@@ -262,7 +265,7 @@ describe("lookupById", () => {
     expect(lookup?.card.name).toBe("Mewtwo");
     expect(lookup?.alternates.length).toBeGreaterThan(0);
     expect(lookup?.alternates.every((entry) => /^(a|b|p)[a-z0-9]*-\d{3}$/.test(entry.id))).toBe(true);
-    expect(lookup?.view.footer).toContain(POCKET_ATTRIBUTION);
+    expect(viewOf(lookup)?.footer).toContain(POCKET_ATTRIBUTION);
   });
 });
 
@@ -310,5 +313,16 @@ describe("lookup contracts", () => {
       { id: "sv06-012", name: "Crustle", localId: "012" },
     ]);
     await expect(suggestNames(client, "Crustle")).resolves.toEqual([]);
+  });
+});
+
+describe("other printings", () => {
+  it("lists only same-name printings for a Pocket partial match too", async () => {
+    stubFetch({});
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "Mewtw", "pocket");
+    expect(lookup).toBeDefined();
+    expect(lookup?.alternates.length).toBeGreaterThan(0);
+    expect(lookup?.alternates.every((entry) => entry.name === lookup.card.name)).toBe(true);
   });
 });
