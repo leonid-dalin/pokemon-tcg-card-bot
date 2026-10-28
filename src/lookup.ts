@@ -5,6 +5,7 @@ import { printedNumber } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
+import { isPocketCard } from "./prizes.js";
 import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
 
@@ -203,28 +204,31 @@ export async function lookupCard(
   // A Pocket alias selects the package catalogue; forcing a game always wins.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
   if (pocketOnly) return lookupPocket(query, setHint, options);
+  // A physical set hint forces the physical game, so it outranks the server preference.
+  const forcedPhysical = Boolean(setHint);
   const preference = options.gamePreference;
-  if (preference?.allowed === "pocket") return lookupPocket(query, setHint, options);
+  if (!forcedPhysical && preference?.allowed === "pocket") return lookupPocket(query, setHint, options);
   const resolved = setHint ? resolveSetHint(setHint) : undefined;
 
   // Reject unknown set hints before the name search.
   if (setHint && !resolved) return undefined;
-  // A set hint pins a physical printing, so the preference's default game applies
-  // only to unhinted names.
+  // The preference's default game applies only to unhinted names, and only when the
+  // package has the exact requested name; partial package matches must not win.
   if (preference?.allowed === "both" && preference.default === "pocket" && !setHint) {
     const pocket = lookupPocket(query, undefined, options);
-    if (pocket) return pocket;
+    if (pocket && normaliseName(pocket.card.name) === normaliseName(query)) return pocket;
   }
   const summaries = await searchWithAccents(client, query);
-  const matched = rankPrintings(summaries, query, resolved);
+  const matched = (preference?.allowed === "ptcg" ? summaries.filter((card) => !isPocketCard(card as Card)) : summaries).filter(Boolean) as CardSummary[];
+  const rankedBySet = rankPrintings(matched, query, resolved);
 
   // Enforce the exact resolved set after rankPrintings' partial set matching.
   const ranked = resolved
-    ? matched.filter((card) => normaliseName(setIdOf(card.id)) === normaliseName(resolved))
-    : matched;
+    ? rankedBySet.filter((card) => normaliseName(setIdOf(card.id)) === normaliseName(resolved))
+    : rankedBySet;
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
-    if (preference?.allowed === "ptcg") return undefined;
+    if (preference?.allowed === "ptcg" || forcedPhysical) return undefined;
     return lookupPocket(query, setHint, options);
   }
 

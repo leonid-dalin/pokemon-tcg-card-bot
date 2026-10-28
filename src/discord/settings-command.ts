@@ -135,14 +135,21 @@ export async function handleSettingsCommand(
     return;
   }
   const guildId = interaction.guildId;
-  const reply = (content: string) => interaction.reply(ephemeral(content));
+  // Acknowledge before touching storage: the store may wait up to five seconds on a
+  // lock, past Discord's three-second initial-response deadline.
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const reply = async (content: string) => {
+    await interaction.editReply({ content });
+  };
   const apply = async (patch: GuildSettingsPatch, confirm: string) => {
     try {
       context.settings.update(guildId, patch);
-      await reply(confirm);
     } catch (error) {
       await reply(`Could not save that change (${errorCategory(error)}). Nothing was changed.`);
+      return;
     }
+    // A delivery failure must not claim the committed change was rolled back.
+    await reply(confirm).catch(() => {});
   };
 
   const group = interaction.options.getSubcommandGroup(false);
@@ -222,11 +229,12 @@ export async function handleSettingsCommand(
       return;
     }
     const remaining = existing.filter((id) => id !== channelId);
+    const emptied = remaining.length === 0 && context.settings.get(guildId).autoReplyChannelMode === "selected";
     await apply(
       { selectedChannelIds: remaining },
-      remaining.length
-        ? `<#${channelId}> removed.`
-        : `<#${channelId}> removed. The selected list is empty, so automatic replies are off everywhere.`,
+      emptied
+        ? `<#${channelId}> removed. The selected list is empty, so automatic replies are off everywhere.`
+        : `<#${channelId}> removed.`,
     );
     return;
   }
@@ -277,9 +285,10 @@ export async function handleSettingsCommand(
   if (sub === "reset") {
     try {
       context.settings.delete(guildId);
-      await reply("Settings reset to the deployment defaults.");
     } catch (error) {
       await reply(`Could not reset the settings (${errorCategory(error)}). Nothing was changed.`);
+      return;
     }
+    await reply("Settings reset to the deployment defaults.").catch(() => {});
   }
 }

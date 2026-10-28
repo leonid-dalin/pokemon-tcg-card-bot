@@ -47,6 +47,8 @@ export async function printingsOf(client: TcgdexClient, name: string, allowed: "
   try {
     for (const card of await searchWithAccents(client, name)) {
       if (allowed === "pocket") continue;
+      // TCGdex serves Pocket records too, so a physical-only list must drop them.
+      if (allowed === "ptcg" && isPocketCard(card as never)) continue;
       if (normaliseName(card.name) !== wanted) continue;
       const date = releaseDateOf(card.id);
       rows.push({ printing: { id: card.id, name: card.name, setLabel: labelOf(card.id, date) }, date, fromPackage: false });

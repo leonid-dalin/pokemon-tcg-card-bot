@@ -38,7 +38,8 @@ function fakeStore(row: Partial<GuildSettings> = {}, failUpdate = false): Store 
 function fakeInteraction(
   sub: string[],
   values: Record<string, unknown> = {},
-  overrides: Partial<{ guild: boolean; permissions: string[] }> = {},
+  overrides: Partial<{ guild: boolean; permissions: string[]; failEdit: boolean }> = {},
+  events?: string[],
 ) {
   const replies: Record<string, unknown>[] = [];
   const inGuild = overrides.guild ?? true;
@@ -61,12 +62,22 @@ function fakeInteraction(
       getString: (name: string) => values[name] as string,
       getChannel: (name: string) => ({ id: values[name] as string }),
     },
+    deferReply: async () => {
+      events?.push("deferred");
+      return {};
+    },
     reply: async (payload: Record<string, unknown>) => {
       replies.push(payload);
       return {};
     },
+    editReply: async (payload: Record<string, unknown>) => {
+      if (overrides.failEdit) throw new Error("delivery failed");
+      events?.push("responded");
+      replies.push(payload);
+      return {};
+    },
   };
-  return { interaction: interaction as unknown as ChatInputCommandInteraction, replies };
+  return { interaction: interaction as unknown as ChatInputCommandInteraction, replies, events: events ?? [] };
 }
 
 const run = (store: Store, interaction: ChatInputCommandInteraction) =>
@@ -162,6 +173,42 @@ describe("settings command", () => {
     await run(store, interaction);
     expect(store.deleted).toBe(true);
     expect(replies[0]?.content).toContain("reset");
+  });
+
+  it("acknowledges the interaction before touching storage", async () => {
+    const events: string[] = [];
+    const store = fakeStore();
+    const original = store.update.bind(store);
+    store.update = ((id: string, patch: GuildSettingsPatch) => {
+      events.push("saved");
+      return original(id, patch);
+    }) as typeof store.update;
+    const { interaction } = fakeInteraction(["messages"], { enabled: false }, {}, events);
+    await run(store, interaction);
+    expect(events).toEqual(["deferred", "saved", "responded"]);
+  });
+
+  it("does not report a failed confirmation as a failed save", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["messages"], { enabled: false }, { failEdit: true });
+    await run(store, interaction);
+    expect(store.updates).toEqual([{ messageReplies: false }]);
+    expect(replies).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("describes an emptied selected list by the channel mode it leaves behind", async () => {
+    const allMode = fakeStore({ autoReplyChannelMode: "all", selectedChannelIds: ["111"] });
+    let run2 = fakeInteraction(["channels", "remove"], { channel: "111" });
+    await run(allMode, run2.interaction);
+    expect(run2.replies[0]?.content).toBe("<#111> removed.");
+    expect(run2.replies[0]?.content).not.toContain("off everywhere");
+
+    const selectedMode = fakeStore({ autoReplyChannelMode: "selected", selectedChannelIds: ["111"] });
+    run2 = fakeInteraction(["channels", "remove"], { channel: "111" });
+    await run(selectedMode, run2.interaction);
+    expect(run2.replies[0]?.content).toContain("off everywhere");
   });
 
   it("shows the card game scope and preferred game", async () => {
