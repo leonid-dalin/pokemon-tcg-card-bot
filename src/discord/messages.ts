@@ -55,16 +55,32 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       return;
     }
 
+    // Work out what the message asks for before spending anything on it.
     const deck = config.decklistEnabled ? parseDecklist(message.content) : undefined;
+    // Slash commands need the command picker, which is awkward on a phone. A
+    // mention plus the word search does the same job from the message box.
+    const selfId = context.selfId();
+    const searchQuery = !deck && selfId ? parseSearchCommand(message.content, selfId) : undefined;
+    const mentions = deck || searchQuery !== undefined ? [] : extractMentions(message.content);
+    if (!deck && searchQuery === undefined && mentions.length === 0) return;
+
+    // Every reply draws on the same budget, so a decklist or a search cannot be
+    // used to get round the limit on mentions. Keyed per member, not per
+    // channel: a channel-wide budget lets one person's request swallow
+    // everyone else's.
+    if (budget) {
+      const verdict = budget.take(`${message.channelId}:${message.author.id}`);
+      if (!verdict.allowed) {
+        console.log(`skipped a reply to ${message.author.username}: ${verdict.retryAfterSeconds}s until the next one`);
+        return;
+      }
+    }
+
     if (deck) {
       await message.reply({ embeds: toEmbeds([renderDecklist(deck)]), ...quiet }).catch(() => {});
       return;
     }
 
-    // Slash commands need the command picker, which is awkward on a phone. A
-    // mention plus the word search does the same job from the message box.
-    const selfId = context.selfId();
-    const searchQuery = selfId ? parseSearchCommand(message.content, selfId) : undefined;
     if (searchQuery !== undefined) {
       if (searchQuery.length === 0) {
         await message
@@ -80,21 +96,6 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         await message.reply({ content: "Card search failed, try again in a moment.", ...quiet }).catch(() => {});
       }
       return;
-    }
-
-    const mentions = extractMentions(message.content);
-    if (mentions.length === 0) return;
-
-    // Keyed per member, not per channel: a channel-wide budget lets one person's
-    // mention swallow everyone else's.
-    if (budget) {
-      const verdict = budget.take(`${message.channelId}:${message.author.id}`);
-      if (!verdict.allowed) {
-        console.log(
-          `skipped [[${mentions[0]?.raw ?? ""}]] from ${message.author.username}: ${verdict.retryAfterSeconds}s until the next one`,
-        );
-        return;
-      }
     }
 
     try {

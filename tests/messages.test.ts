@@ -134,6 +134,28 @@ describe("message handler", () => {
     expect(second.replies).toEqual([]);
   });
 
+  it.each([
+    ["an @bot search", `<@${BOT_ID}> search draw 2 cards`, {}],
+    ["a pasted decklist", DECK, { decklistEnabled: true }],
+  ])("throttles %s on the same budget as mentions", async (_label, content, config) => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const handle = handler({ budget: new MentionBudget({ capacity: 1, refillSeconds: 60 }) }, config);
+    const first = fakeMessage(content);
+    const second = fakeMessage("[[Dragapult ex]]");
+    await handle(first.message);
+    await handle(second.message);
+    expect(first.replies).toHaveLength(1);
+    expect(second.replies).toEqual([]);
+  });
+
+  it("spends no budget on a message it does not answer", async () => {
+    const handle = handler({ budget: new MentionBudget({ capacity: 1, refillSeconds: 60 }) });
+    await handle(fakeMessage("just chatting").message);
+    const mention = fakeMessage("[[Dragapult ex]]");
+    await handle(mention.message);
+    expect(mention.replies).toHaveLength(1);
+  });
+
   it("warns once when message text arrives empty", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const handle = handler();
