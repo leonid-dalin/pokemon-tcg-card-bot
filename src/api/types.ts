@@ -71,6 +71,7 @@ export interface Card {
   variants_detailed?: VariantDetail[];
   variants?: Record<string, boolean>;
   updated?: string;
+  points?: number;
 }
 
 export interface CardSummary {

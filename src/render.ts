@@ -1,6 +1,7 @@
 import type { Attack, Card, CardSetRef, Pricing, SetSummary } from "./api/types.js";
 import type { ParsedDeck } from "./decklist.js";
 import { energyCost } from "./energy.js";
+import { isPocketCard, prizeCount } from "./prizes.js";
 import { printedNumber } from "./printed.js";
 
 export interface EmbedField {
@@ -150,12 +151,15 @@ export interface RenderOptions {
 }
 
 function cardProfile(card: Card): string | undefined {
+  const count = prizeCount(card);
+  const reward = count > 1 ? `${count} ${isPocketCard(card) ? "Points" : "Prizes"}` : undefined;
   if (card.category === "Trainer" || card.category === "Energy") return [card.category, card.trainerType].filter(Boolean).join(" · ");
   return [
     card.hp ? `${card.hp} HP` : undefined,
     card.types?.length ? card.types.join("/") : undefined,
     formatStage(card.stage),
     card.evolveFrom ? `from ${card.evolveFrom}` : undefined,
+    reward,
   ]
     .filter(Boolean)
     .join(" · ");
