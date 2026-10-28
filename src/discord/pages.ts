@@ -88,11 +88,16 @@ export function pageFilterFrom(customId: string): string | undefined {
   return match?.[1];
 }
 
+/** The display cap for an unfiltered view, shared with the search store. */
+export const LIST_CAP = 250;
+
 export function listReply(page: ListPage, token: string, index: number, filter?: string): {
   embeds: EmbedBuilder[];
   components: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[];
 } {
-  const narrowed = filteredItems(page, filter);
+  // The stored union carries the first items of every category, so the all view
+  // is cut to the cap again; a category filter selects from the same union.
+  const narrowed = (filter === undefined || filter === "all" ? page.items.slice(0, LIST_CAP) : filteredItems(page, filter));
   // A filter that matches nothing must not blank the message: keep the full
   // list and say the choice found nothing.
   const emptyChoice = narrowed.length === 0 && page.items.length > 0 && filter !== undefined && filter !== "all";
