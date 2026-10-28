@@ -21,7 +21,9 @@ import { PageStore } from "./discord/pages.js";
 import { createMessageHandler } from "./discord/messages.js";
 import { errorCategory } from "./diagnostics.js";
 import { InvocationLog } from "./invocation-log.js";
+import { SettingsStore } from "./settings-store.js";
 import { MentionBudget } from "./cooldown.js";
+import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
 
@@ -31,6 +33,10 @@ if (!acquireSingleInstanceLock()) process.exit(1);
 
 const config = loadConfig(process.env);
 const invocations = new InvocationLog(config.invocationLogDir, config.invocationLogRetentionDays);
+const settings = new SettingsStore(
+  config.dataDir ? join(config.dataDir, "settings.db") : undefined,
+  { messageReplies: config.mentionEnabled, decklistReplies: config.decklistEnabled, cooldownSeconds: config.mentionCooldownSeconds },
+);
 const api = new TcgdexClient();
 const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore() };
 
@@ -90,8 +96,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(
   Events.MessageCreate,
-  createMessageHandler({ api, config, budget, invocations, pages: context.pages, selfId: () => client.user?.id }),
+  createMessageHandler({ api, config, budget, invocations, settings, pages: context.pages, selfId: () => client.user?.id }),
 );
+
+client.on(Events.GuildDelete, (guild) => {
+  if (guild.available === false) return;
+  try {
+    settings.delete(guild.id);
+  } catch (error) {
+    console.error(`settings removal failed (${errorCategory(error)})`);
+  }
+});
 
 process.on("unhandledRejection", (error) => console.error(`unhandled rejection (${errorCategory(error)})`));
 

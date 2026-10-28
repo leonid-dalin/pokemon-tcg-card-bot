@@ -13,6 +13,7 @@ export interface Config {
   energyEmoji: Record<string, string>;
   invocationLogDir?: string;
   invocationLogRetentionDays: number;
+  dataDir?: string;
 }
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -60,5 +61,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     energyEmoji: parseEnergyEmoji(env.ENERGY_EMOJI),
     ...(env.INVOCATION_LOG_DIR?.trim() ? { invocationLogDir: env.INVOCATION_LOG_DIR.trim() } : {}),
     invocationLogRetentionDays: Math.min(parsePositiveInt(env.INVOCATION_LOG_RETENTION_DAYS, 60), 60),
+    ...(env.DATA_DIR?.trim() ? { dataDir: env.DATA_DIR.trim() } : {}),
   };
 }

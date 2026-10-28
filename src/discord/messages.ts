@@ -1,7 +1,7 @@
 import type { Message } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import type { Config } from "../config.js";
-import type { MentionBudget } from "../cooldown.js";
+import { MentionBudget } from "../cooldown.js";
 import { parseDecklist } from "../decklist.js";
 import { resolveDeckCards } from "../deck-check.js";
 import { errorCategory } from "../diagnostics.js";
@@ -15,12 +15,19 @@ import { MAX_EMBEDS_PER_MESSAGE, mentionReply, searchReply, type MentionMiss } f
 
 export interface MessageContext {
   api: TcgdexClient;
-  config: Pick<Config, "mentionEnabled" | "decklistEnabled" | "attribution" | "energyEmoji">;
+  config: Pick<Config, "mentionEnabled" | "decklistEnabled" | "mentionCooldownSeconds" | "attribution" | "energyEmoji">;
   pages: import("./pages.js").PageStore;
   budget?: MentionBudget | undefined;
   invocations?: { record: (entry: import("../invocation-log.js").InvocationEntry) => void } | undefined;
+  settings?: { get: (guildId: string) => import("../settings-store.js").GuildSettings } | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
+}
+
+export interface EffectiveGuildSettings {
+  messageReplies: boolean;
+  decklistReplies: boolean;
+  cooldownSeconds: number;
 }
 
 export type IncomingMessage = Pick<
@@ -66,6 +73,8 @@ function replyText(payload: ReplyPayload): string {
 export function createMessageHandler(context: MessageContext): (message: IncomingMessage) => Promise<void> {
   const { api, config, budget } = context;
   let warnedAboutContent = false;
+  const guildBudgets = new Map<string, MentionBudget | undefined>();
+  const MAX_GUILD_BUDGETS = 1000;
 
   return async (message) => {
     if (!config.mentionEnabled) return;
@@ -86,7 +95,19 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       return;
     }
 
-    const deck = config.decklistEnabled ? parseDecklist(message.content) : undefined;
+    let guild: EffectiveGuildSettings | undefined;
+    if (message.guildId && context.settings) {
+      try {
+        guild = context.settings.get(message.guildId);
+      } catch (error) {
+        console.error(`settings read failed (${errorCategory(error)})`);
+        return;
+      }
+      if (!guild.messageReplies) return;
+    }
+    const decklistOn = guild ? guild.decklistReplies : config.decklistEnabled;
+
+    const deck = decklistOn ? parseDecklist(message.content) : undefined;
     const selfId = context.selfId();
     // A bare bot mention is help; parse it before checking for a search query.
     const wantsHelp = !deck && selfId ? parseHelpCommand(message.content, selfId) : undefined;
@@ -109,9 +130,23 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       }).catch(() => {});
     };
 
+    let activeBudget = budget;
+    if (message.guildId) {
+      if (guildBudgets.has(message.guildId)) {
+        activeBudget = guildBudgets.get(message.guildId);
+      } else {
+        const cooldown = guild ? guild.cooldownSeconds : config.mentionCooldownSeconds;
+        activeBudget = cooldown > 0 ? new MentionBudget({ refillSeconds: cooldown }) : undefined;
+        if (guildBudgets.size >= MAX_GUILD_BUDGETS) {
+          guildBudgets.delete(guildBudgets.keys().next().value as string);
+        }
+        guildBudgets.set(message.guildId, activeBudget);
+      }
+    }
+
     // Apply the same per-member, per-channel budget to every message reply.
-    if (budget) {
-      const verdict = budget.take(`${message.channelId}:${message.author.id}`);
+    if (activeBudget) {
+      const verdict = activeBudget.take(`${message.channelId}:${message.author.id}`);
       if (!verdict.allowed) {
         console.log(`skipped a reply: ${verdict.retryAfterSeconds}s until the next one`);
         return;
