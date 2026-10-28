@@ -24,7 +24,7 @@ describe("handleSearchCommand", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.embeds).toHaveLength(1);
     const payload = JSON.stringify(calls[0]?.components?.map((row) => row.toJSON()));
-    expect(payload).toContain("1 / 107");
+    expect(payload).toContain("1 / 101");
     expect((calls[0]?.embeds?.[0] as { data: { description?: string } }).data.description?.split("\n\n")).toHaveLength(5);
   });
 });

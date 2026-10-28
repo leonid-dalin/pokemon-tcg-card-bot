@@ -61,6 +61,9 @@ function queryTokens(query: string): string[] {
 
 const normalisedCache = new WeakMap<object, string>();
 
+/** A word, keeping an apostrophe inside it so `opponent's` stays one word. */
+const WORD = /[a-z0-9]+(?:'[a-z0-9]+)*/g;
+
 /** Fold case, accents and spacing, once per card. */
 function normalisedText(card: TextHit): string {
   const cached = normalisedCache.get(card);
@@ -93,19 +96,30 @@ export function unquote(query: string): string {
   return trimmed;
 }
 
+const wordCache = new WeakMap<object, Set<string>>();
+
+/** The words of a card's text, so `and` cannot match inside `Sand Screen`. */
+function wordsOf(card: TextHit): Set<string> {
+  const cached = wordCache.get(card);
+  if (cached) return cached;
+  const words = new Set(normalisedText(card).match(WORD) ?? []);
+  wordCache.set(card, words);
+  return words;
+}
+
 function findHits(entries: TextHit[], query: string): { card: TextHit; nameHits: number; exact: boolean }[] {
   const tokens = queryTokens(unquote(query));
   if (tokens.length === 0) return [];
   const hits: { card: TextHit; nameHits: number; exact: boolean }[] = [];
 
   for (const card of entries) {
-    const haystack = normalisedText(card);
-    const matchedAll = tokens.every((token) => haystack.includes(token));
-    const name = normaliseName(card.name);
-    const nameHits = tokens.filter((token) => name.includes(token)).length;
+    const words = wordsOf(card);
+    const matchedAll = tokens.every((token) => words.has(token));
+    const nameWords = new Set(normaliseName(card.name).match(WORD) ?? []);
+    const nameHits = tokens.filter((token) => nameWords.has(token)).length;
     const nameMatches = nameHits === tokens.length;
     if (!matchedAll && !nameMatches) continue;
-    hits.push({ card, nameHits, exact: name === normaliseName(query) });
+    hits.push({ card, nameHits, exact: normaliseName(card.name) === normaliseName(unquote(query)) });
   }
 
   hits.sort((a, b) => {
