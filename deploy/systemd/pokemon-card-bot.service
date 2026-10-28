@@ -1,0 +1,40 @@
+[Unit]
+Description=Pokemon TCG card bot
+Wants=network-online.target
+After=network-online.target nss-lookup.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+User=pokemon-card-bot
+Group=pokemon-card-bot
+EnvironmentFile=/etc/pokemon-card-bot/bot.env
+RuntimeDirectory=pokemon-card-bot
+RuntimeDirectoryMode=0700
+StateDirectory=pokemon-card-bot
+StateDirectoryMode=0700
+WorkingDirectory=/run/pokemon-card-bot
+ExecStart=/opt/pokemon-card-bot/current/bin/node --max-old-space-size=192 /opt/pokemon-card-bot/current/dist/src/index.js
+Restart=always
+RestartSec=30
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryHigh=256M
+MemoryMax=384M
+CPUQuota=100%
+Nice=10
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

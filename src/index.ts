@@ -27,6 +27,7 @@ import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
 import { handleSettingsCommand } from "./discord/settings-command.js";
+import { startRuntimeStatus } from "./runtime-status.js";
 
 loadDotEnv();
 
@@ -42,6 +43,7 @@ const api = new TcgdexClient();
 const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore(), settings };
 
 const client = new Client(clientOptions(config));
+startRuntimeStatus(() => client.isReady());
 const budget =
   config.mentionCooldownSeconds > 0
     ? new MentionBudget({ refillSeconds: config.mentionCooldownSeconds })

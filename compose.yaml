@@ -1,0 +1,29 @@
+services:
+  bot:
+    image: pokemon-card-bot:local
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      BOT_STATUS_FILE: /run/bot/status.json
+    volumes:
+      - bot-data:/data
+    tmpfs:
+      - /run/bot:uid=1000,gid=1000,mode=0700
+      - /tmp:uid=1000,gid=1000,mode=1777
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 384m
+    cpus: 1.0
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
+
+volumes:
+  bot-data:

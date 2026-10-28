@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for tested Pokemon TCG card bot updates
+
+[Timer]
+OnBootSec=10min
+OnUnitInactiveSec=30min
+RandomizedDelaySec=5min
+Unit=pokemon-card-bot-update.service
+
+[Install]
+WantedBy=timers.target

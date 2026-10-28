@@ -35,3 +35,73 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Deployment tests
+        run: python3 -m unittest discover -s deploy/tests -v
+
+      - name: Shell and service checks
+        run: |
+          shellcheck deploy/*.sh
+          for script in deploy/*.sh; do bash -n "$script"; done
+          sudo mkdir -p /opt/pokemon-card-bot/current/bin
+          sudo ln -s /usr/bin/true /opt/pokemon-card-bot/current/bin/node
+          sudo install -m 0755 deploy/manage.py /usr/local/sbin/pokemon-card-bot
+          systemd-analyze verify deploy/systemd/*.service deploy/systemd/*.timer
+
+  arm64:
+    needs: test
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck && npm test && npm run build
+      - name: Build native ARM64 bundle
+        env:
+          REVISION: ${{ github.sha }}
+        run: bash deploy/build-bundle.sh "$REVISION" "$RUNNER_TEMP/bundle"
+      - name: Test bundle on Debian 12 with the service memory limit
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          mkdir "$RUNNER_TEMP/unpacked"
+          tar -xzf "$RUNNER_TEMP/bundle/pokemon-card-bot-linux-arm64-$REVISION.tar.gz" -C "$RUNNER_TEMP/unpacked"
+          chmod 755 "$RUNNER_TEMP" "$RUNNER_TEMP/unpacked"
+          docker run --rm --memory=384m --cpus=1 --user 65534:65534 -v "$RUNNER_TEMP/unpacked:/app:ro" -w /tmp debian:bookworm-slim /app/bin/node --max-old-space-size=192 /app/deploy/smoke.mjs
+      - name: Build and test optional Docker image
+        run: |
+          docker build -t card-bot:test .
+          docker run --rm --memory=384m --user node --entrypoint node card-bot:test /app/deploy/smoke.mjs
+          cp .env.example .env
+          docker compose config --quiet
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pi-bundle
+          path: ${{ runner.temp }}/bundle/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-pi:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [test, arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: pi-bundle
+          path: bundle
+      - name: Publish tested Pi bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          if ! gh release view "pi-$REVISION" >/dev/null 2>&1; then
+            gh release create "pi-$REVISION" --target "$REVISION" --title "Pi $REVISION" --notes 'Tested Linux ARM64 deployment bundle' --prerelease --latest=false
+          fi
+          gh release upload "pi-$REVISION" bundle/* --clobber
