@@ -11,10 +11,11 @@ import { lookupById, lookupCard } from "../lookup.js";
 import { renderCardDetails, renderSet } from "../render.js";
 import { printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
+import { printingItems, printingsOf } from "../printings.js";
 import { printingIdFrom, detailsIdFrom, MISS_MENU_ID } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { toEmbed } from "./embeds.js";
-import { listReply, pageIndexFrom, pageTokenFrom, type PageStore } from "./pages.js";
+import { listReply, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
 
 export interface CommandContext {
@@ -62,7 +63,18 @@ export const searchCommand = new SlashCommandBuilder()
       .setRequired(true),
   );
 
-export const commandDefinitions = [cardCommand, setCommand, searchCommand];
+export const printingsCommand = new SlashCommandBuilder()
+  .setName("printings")
+  .setDescription("List every printing of a card")
+  .addStringOption((option) =>
+    option
+      .setName("name")
+      .setDescription("Card name, for example Dragapult ex")
+      .setRequired(true)
+      .setAutocomplete(true),
+  );
+
+export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand];
 
 export async function handleAutocomplete(
   context: CommandContext,
@@ -210,4 +222,28 @@ export async function handleSetCommand(
   } catch {
     await interaction.editReply({ content: `No set matched \`${id}\`.` });
   }
+}
+
+export async function handlePrintingsCommand(
+  context: CommandContext,
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  const query = interaction.options.getString("name", true).trim();
+  await interaction.deferReply();
+
+  const printings = await printingsOf(context.client, query);
+  if (printings.length === 0) {
+    await interaction.editReply({ content: `No card matched \`${query}\`.` });
+    return;
+  }
+
+  const page: ListPage = {
+    title: `${printings.length} ${printings.length === 1 ? "printing" : "printings"} of ${printings[0]!.name}`,
+    items: printingItems(printings),
+    perPage: 10,
+    ownerId: interaction.user.id,
+    footer: context.attribution,
+  };
+  const token = context.pages.put(page);
+  await interaction.editReply(listReply(page, token, 0));
 }
