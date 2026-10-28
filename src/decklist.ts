@@ -15,11 +15,7 @@ const HEADER = /^(pok[eé]mon|trainer|energy|total cards)\s*:?\s*(\d+)?\s*$/i;
 const CARD_LINE = /^(\d{1,2})\s+(.+?)(?:\s+([A-Z][A-Z0-9]{1,4})\s+(\d{1,3}))?$/;
 const TOTAL_LINE = /^total cards\s*:?\s*(\d+)/i;
 
-/**
- * Read a pasted PTCGL decklist. The format is a count, a card name and an
- * optional set code plus number, grouped under section headers. Returns
- * undefined for ordinary chat so the caller can stay quiet.
- */
+/** Parses a pasted decklist, returning undefined below the row or card thresholds. */
 export function parseDecklist(text: string): ParsedDeck | undefined {
   const rawLines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (rawLines.length < 5) return undefined;
@@ -45,8 +41,7 @@ export function parseDecklist(text: string): ParsedDeck | undefined {
     if (!card) continue;
     const count = Number.parseInt(card[1] ?? "", 10);
     const name = (card[2] ?? "").trim();
-    // Energy lines run to a dozen, so the ceiling is generous but still rejects a
-    // stray total that happens to look like a card line.
+    // Allow large Energy counts while filtering likely totals and malformed rows.
     if (!Number.isFinite(count) || count < 1 || count > 20 || name.length < 2) continue;
     lines.push({
       count,
@@ -56,7 +51,7 @@ export function parseDecklist(text: string): ParsedDeck | undefined {
     });
   }
 
-  // Ordinary chat can produce one or two matching lines; a deck has many.
+  // Require enough parsed rows and cards to distinguish a list from ordinary chat.
   if (lines.length < 5) return undefined;
   const total = lines.reduce((sum, line) => sum + line.count, 0);
   if (total < 10) return undefined;

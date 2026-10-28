@@ -22,7 +22,7 @@ describe("result order", () => {
     const newest = setRecency(found[0]!.representative.id);
     const sameSet = found.filter((group) => setRecency(group.representative.id) === newest);
     expect(sameSet.length).toBeGreaterThan(1);
-    // Relevance first, then text length; the order must not be text length alone.
+    // Check text-length and name-match ordering within the same recency rank.
     const lengths = sameSet.map((group) => group.representative.text.length);
     expect(lengths).toEqual([...lengths].sort((a, b) => a - b));
     const nameHits = sameSet.map((group) => group.representative.name.toLowerCase().split(" ").filter((w) => "deck".includes(w)).length);

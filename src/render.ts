@@ -43,14 +43,14 @@ const TYPE_COLOURS: Record<string, number> = {
 
 const DEFAULT_COLOUR = 0x5865f2;
 
-/** Footer credit when nothing more specific is configured. */
+/** Default source credit for embeds. */
 export const DEFAULT_ATTRIBUTION = "Card data from TCGdex";
 const FIELD_VALUE_LIMIT = 1024;
 
+/** Returns a complete image URL, or undefined when the card has no image. */
 export function cardImage(card: Card, size: "high" | "low" = "high"): string | undefined {
   if (!card.image) return undefined;
-  // TCGdex serves a base path that needs a size suffix; the Pocket data ships
-  // complete URLs, so only append when there is no file extension already.
+  // Preserve file URLs; expand TCGdex image paths with the requested size.
   return /\.(png|webp|jpe?g|gif)$/i.test(card.image) ? card.image : `${card.image}/${size}.webp`;
 }
 
@@ -95,8 +95,7 @@ interface PriceSummary {
   tcgplayer?: Pricing;
 }
 
-/** The TCGplayer card-level block may carry flat averages or nested per-variant
- * market prices; either way the reply needs one flat figure. */
+// Nested TCGplayer prices prefer the normal variant when present.
 function flattenTcgplayer(raw: NonNullable<Card["pricing"]>["tcgplayer"]): Pricing | undefined {
   if (!raw) return undefined;
   if (typeof raw.avg === "number" || typeof raw.trend === "number") return raw as Pricing;
@@ -112,8 +111,7 @@ function pickPricing(card: Card): PriceSummary {
   for (const variant of card.variants_detailed ?? []) {
     const pricing = variant.pricing;
     if (!pricing) continue;
-    // Per-source accumulation: a variant that prices only TCGplayer must not
-    // hide the Cardmarket figure another variant or the card itself carries.
+    // Select each source independently, with variant objects before card-level data.
     if (pricing.cardmarket && !perSource.cardmarket) perSource.cardmarket = pricing.cardmarket;
     if (pricing.tcgplayer && !perSource.tcgplayer) perSource.tcgplayer = pricing.tcgplayer;
   }
@@ -123,13 +121,14 @@ function pickPricing(card: Card): PriceSummary {
   return perSource;
 }
 
-/** The Cardmarket average for a card, which the price field and the deck price share. */
+/** Reads the selected Cardmarket average for deck totals. */
 export function cardmarketAverage(card: Card): number | undefined {
   const { cardmarket } = pickPricing(card);
   const avg = cardmarket?.avg;
   return typeof avg === "number" && !Number.isNaN(avg) ? avg : undefined;
 }
 
+/** Formats available price and trend data, or returns undefined when none can be shown. */
 export function priceField(card: Card): EmbedField | undefined {
   const { cardmarket, tcgplayer } = pickPricing(card);
   const lines: string[] = [];
@@ -214,6 +213,7 @@ function sharedCardView(card: Card, options: RenderOptions, fields: EmbedField[]
   };
 }
 
+/** Builds the card-front embed with gameplay fields and the available scan. */
 export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
   const fields: EmbedField[] = [];
 
@@ -239,7 +239,7 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
   return sharedCardView(card, options, fields, cardDescription(card));
 }
 
-/** The scan alone, for a mention that asks for the picture and nothing else. */
+/** Builds a scan embed with a title and source credit, without gameplay fields. */
 export function renderCardImage(card: Card, options: RenderOptions = {}): EmbedView {
   const image = cardImage(card);
   return {
@@ -252,6 +252,7 @@ export function renderCardImage(card: Card, options: RenderOptions = {}): EmbedV
   };
 }
 
+/** Builds set, collector, legality and pricing fields for a details reply. */
 export function renderCardDetails(
   card: Card,
   alternates: { id: string; name: string }[],
@@ -259,8 +260,7 @@ export function renderCardDetails(
 ): EmbedView {
   const fields: EmbedField[] = [];
   const set = card.set;
-  // The card response embeds only a set summary, so the release date falls back
-  // to the committed set index. A source-provided date stays first choice.
+  // Use the indexed release date when the card's set summary omits it.
   const indexedSet = setById.get(normaliseName(set?.id ?? ""));
   const setValue = [
     set?.name,
@@ -289,7 +289,7 @@ export function renderCardDetails(
   };
 }
 
-/** List view for a text search, capped so the description stays inside limits. */
+/** Builds a compact search summary with up to fifteen printing labels. */
 export function renderSearchResults(
   query: string,
   cards: { id: string; name: string }[],
@@ -309,7 +309,7 @@ and ${cards.length - 15} more` : ""}`, 4000),
   };
 }
 
-/** A pasted decklist, formatted, with the count checked against 60. */
+/** Formats a parsed deck and its supplied total, with optional legality and price data. */
 export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[]): EmbedView {
   const body = deck.lines
     .map((line) => {
@@ -345,15 +345,14 @@ export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[]): Emb
 }
 
 /**
- * The deck's cost from the Cardmarket average of each priced line. Lines whose
- * printing carries no price are left out of the sum and named in the count, so
- * a reader can see how much of the deck the figure covers.
+ * Formats the Cardmarket total and priced-copy coverage.
+ * Excludes resolved Basic Energy and includes unresolved copies in coverage.
+ * Returns undefined when no copies have an average price.
  */
 export function deckPrice(resolved: ResolvedLine[]): string | undefined {
   let total = 0;
   let priced = 0;
-  // A line counts towards the coverage even when it resolved to no card, so a
-  // deck half-unresolved does not claim full coverage.
+  // Coverage includes every copy except resolved Basic Energy.
   let eligible = 0;
   for (const { line, card } of resolved) {
     if (card && isBasicEnergy(card)) continue;

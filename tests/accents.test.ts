@@ -9,10 +9,7 @@ interface StubRoute {
   body: unknown;
 }
 
-/**
- * TCGdex matches name searches literally, so the stub answers only the exact
- * `name=` it was given. That is what makes an unaccented spelling return nothing.
- */
+/** The stub returns results only for the exact `name=` value it receives. */
 function stubSearch(hits: Record<string, { id: string; name: string }[]>) {
   const calls: string[] = [];
   vi.stubGlobal("fetch", async (input: string | URL) => {

@@ -20,4 +20,4 @@ photograph, included because the operator of this instance asked for it as the
 bot's profile picture. They are NOT covered by the Apache License 2.0 that covers
 the source code. Replace or remove them before redistributing this project.
 
-Full dependency, data and image terms are in THIRD_PARTY_NOTICES.md.
+Full dependency, data and image terms are in docs/THIRD_PARTY_NOTICES.md.

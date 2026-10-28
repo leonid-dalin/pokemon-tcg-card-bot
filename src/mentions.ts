@@ -2,21 +2,20 @@ export interface Mention {
   raw: string;
   name: string;
   setHint?: string;
-  /** The `!` prefix asks for the scan alone. */
+  /** Set by the `!` prefix to request a scan-only reply. */
   imageOnly?: true;
 }
 
 const MENTION_PATTERN = /\[\[([^[\]]{1,80})\]\]/g;
 
-/** Remove fenced blocks and inline code so documentation examples never fire. */
+// Exclude complete code blocks and inline code spans from mention matching.
 function stripCode(text: string): string {
   return text.replace(/```[\s\S]*?```/g, " ").replace(/`[^`]*`/g, " ");
 }
 
 /**
- * Pull `[[Card Name]]` and `[[Card Name|setId]]` out of message text.
- * Duplicates are dropped case-insensitively and the result is capped so one
- * enthusiastic message cannot turn into a wall of embeds.
+ * Extracts up to `limit` card mentions outside code spans and blocks.
+ * Deduplicates by case-insensitive name, retaining the first hint and display mode.
  */
 export function extractMentions(text: string, limit = 3): Mention[] {
   if (!text.includes("[[")) return [];
@@ -27,9 +26,7 @@ export function extractMentions(text: string, limit = 3): Mention[] {
     const inner = (match[1] ?? "").trim();
     if (!inner) continue;
 
-    // A doubled pipe is common (Discord habits, or just a slip). Keep the first
-    // segment as the name and the last non-empty one as the hint, so
-    // "crustle||ptcgp" still reaches Pocket instead of silently dropping it.
+    // Use the first non-empty segment as the name and the last as the hint.
     const parts = inner.split("|").map((part) => part.trim()).filter(Boolean);
     const imageOnly = parts[0]?.startsWith("!") ?? false;
     const name = (parts[0] ?? "").replace(/^!/, "").replace(/\s+/g, " ");
@@ -53,9 +50,8 @@ export function extractMentions(text: string, limit = 3): Mention[] {
 }
 
 /**
- * Read `@bot search <text>` from a message. Returns the query, an empty string
- * when the command was used with no text, and undefined when the message is not
- * a search command aimed at this bot.
+ * Parses a search command that mentions this bot.
+ * Returns an empty string for a missing query, or undefined for unrelated text.
  */
 export function parseSearchCommand(content: string, selfId: string): string | undefined {
   if (!content.includes("<@")) return undefined;
@@ -69,9 +65,7 @@ export function parseSearchCommand(content: string, selfId: string): string | un
 }
 
 /**
- * Read a bare mention or `@bot help`. A bare mention asks what the bot can do,
- * which is what someone types when they have just seen it answer. A mention
- * followed by anything else is a question the bot cannot answer.
+ * Recognises a mention of this bot followed by no text or the word "help".
  */
 export function parseHelpCommand(content: string, selfId: string): boolean {
   if (!content.includes("<@")) return false;

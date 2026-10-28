@@ -104,8 +104,7 @@ describe("handlePrintingsCommand", () => {
     const { interaction: press, replies } = interaction("Charizard ex");
     await handlePrintingsCommand(context(client), press as never);
     const description = descriptionOf(replies[0]);
-    // Real dates put the Pocket sets ahead of the physical printing, which now
-    // sits on the second page of an eleven-row list.
+    // The physical printing follows the newer Pocket records onto the second page.
     expect(description).toContain("A4B 59 · Deluxe Pack: ex 2025");
     expect(titleOf(replies[0])).toBe("11 printings of Charizard ex");
     const pages = replies[0]?.components as { toJSON: () => { components: { custom_id?: string; label?: string } } }[];

@@ -10,7 +10,6 @@ describe("unquoted search", () => {
   });
 
   it("still refuses a word inside a longer one", () => {
-    // Copycat prints hand, not "and"; a card printing only "hand" must not match.
     const hits = searchCardText("hand");
     expect(hits.some((hit) => hit.name === "Copycat")).toBe(true);
     const wholeWord = (hay: string, word: string) => new RegExp(`(^|[^a-z0-9])${word}($|[^a-z0-9])`, "i").test(hay);

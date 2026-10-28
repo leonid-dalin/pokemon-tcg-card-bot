@@ -10,14 +10,14 @@ import { SET_INDEX } from "./data/set-index.js";
 
 export interface CardLookup {
   card: Card;
-  /** Every other printing of the name, which the Other printings field lists. */
+  /** Other same-name printings, capped by `alternateLimit`. */
   alternates: CardSummary[];
-  /** The printings whose wording matches the card, which get buttons. */
+  /** Alternates eligible for printing buttons under the index wording check. */
   matchingPrintings?: CardSummary[];
-  /** Footer credit naming the source that served the card. */
+  /** Source credit for this lookup's embeds. */
   attribution?: string;
   energyEmoji?: Record<string, string>;
-  /** The mention asked for the scan alone. */
+  /** Requests a scan-only embed when the card has an image. */
   imageOnly?: true;
 }
 
@@ -27,12 +27,7 @@ export interface LookupOptions {
   alternateLimit?: number;
 }
 
-/**
- * Order candidates for display. Name exactness comes first, or "Charizard"
- * loses to "Mega Charizard X ex" purely because Mega Evolution is newer. Then
- * artwork, since TCGdex has no scan for a few promos, then the newest series,
- * then the source order.
- */
+// Display order: name score, image availability, set recency, then input order.
 function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
   return [...ranked].sort((a, b) => {
     const score = scoreCandidate(query, b.name) - scoreCandidate(query, a.name);
@@ -43,12 +38,10 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
   });
 }
 
-/**
- * English pricing first, then any locale that has pricing. TCGdex's ja catalogue
- * uses its own ids, so an English id is never found there and ja is left out.
- */
+// Locale fallback order for card responses without displayable prices.
 const PRICE_LOCALES = ["en", "fr", "de", "es", "it", "pt"] as const;
 
+/** Returns the original card or the first locale response with displayable prices. */
 async function withEnglishPricing(client: TcgdexClient, card: Card): Promise<Card> {
   if (priceField(card)) return card;
   for (const lang of PRICE_LOCALES.slice(1)) {
@@ -56,17 +49,13 @@ async function withEnglishPricing(client: TcgdexClient, card: Card): Promise<Car
       const alternate = await client.getCard(card.id, lang);
       if (priceField(alternate)) return alternate;
     } catch {
-      // no such printing in that language
+      // Continue to the next locale after a lookup failure.
     }
   }
   return card;
 }
 
-/**
- * The one rule for "other printings": the same card name, never the card
- * itself. Every lookup path builds its result here, so TCGdex and Pocket
- * answers cannot drift apart.
- */
+// Keep same-name alternates in candidate order, excluding the selected ID.
 function toLookup(
   card: Card,
   candidates: CardSummary[],
@@ -82,12 +71,8 @@ function toLookup(
 }
 
 /**
- * The printings a reply may offer as buttons: those that word the card the
- * same way. Pokémon reprints often change abilities and attacks between sets,
- * so a button to a different wording is a different card wearing the name;
- * those stay in the Other printings field instead. A card the index does not
- * know, and Trainer or Energy wording, never changes, so every printing keeps
- * its button there.
+ * Keeps alternates with the same normalised indexed wording.
+ * If the primary card is absent from the index, keeps all supplied alternates.
  */
 export function printingsForButtons(card: Card, candidates: CardSummary[]): CardSummary[] {
   const alternates = candidates.filter((entry) => entry.id !== card.id);
@@ -96,31 +81,23 @@ export function printingsForButtons(card: Card, candidates: CardSummary[]): Card
   return alternates.filter((entry) => indexedText(entry.id) === primary);
 }
 
-/** A full card id, which pins one exact printing rather than a name. The set
- * part may itself carry hyphens (30th-c), and the local number may be letters
- * or punctuation (GG65, A, !, %3F), so the split happens at the final hyphen
- * and the set side has to be a known set id. A name with a hyphen, like
- * Porygon-Z or Ho-Oh, is not a set and must not match. */
+// Set IDs may contain hyphens; local IDs include letters and punctuation.
 const SET_IDS = new Set(SET_INDEX.map((entry) => normaliseName(entry.id)));
 const LOCAL_ID = /^[a-z0-9.!%]{1,8}$/i;
 export const CARD_ID = /^[a-z0-9.]+(?:-[a-z0-9.]+)*-[a-z0-9.!%]{1,8}$/i;
+/** Recognises IDs from indexed sets or exact records in the Pocket package. */
 export const isCardId = (value: string): boolean => {
   const at = value.lastIndexOf("-");
   if (at <= 0 || at === value.length - 1) return false;
   if (!LOCAL_ID.test(value.slice(at + 1))) return false;
-  // A Pocket set can be missing from the physical index while the bundled
-  // package knows the exact printing, so an exact package record counts too.
+  // The package includes Pocket sets absent from the TCGdex set index.
   return SET_IDS.has(normaliseName(value.slice(0, at))) || getPocketCard(value) !== undefined;
 };
 
-/** Attribution for Pocket cards, which never come from TCGdex. */
+/** Source credit for cards loaded from the Pocket package. */
 export const POCKET_ATTRIBUTION = "Pocket card data from pokemon-tcg-pocket-cards";
 
-/**
- * Pocket lookups read the bundled PocketDecks package, because TCGdex has no
- * Pocket set newer than Paldean Wonders and cards like Crustle ex are simply
- * absent there.
- */
+// Resolve against the package; use the hint's subset when it contains a match.
 function lookupPocket(query: string, setHint: string | undefined, options: LookupOptions): CardLookup | undefined {
   const all = searchPocketByName(query);
   if (all.length === 0) return undefined;
@@ -144,15 +121,15 @@ function lookupPocket(query: string, setHint: string | undefined, options: Looku
 }
 
 /**
- * Pin one printing by its card id, which is what the printing buttons send back.
+ * Resolves an exact ID through TCGdex, then the Pocket package.
+ * Returns undefined for an unknown ID; propagates unresolved upstream failures.
  */
 export async function lookupById(
   client: TcgdexClient,
   id: string,
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
-  // Only a 404 means the id is unknown to TCGdex. Any other failure is an
-  // outage, and answering "no card matched" would blame the asker for it.
+  // Preserve upstream failures while checking whether the package has the card.
   let tcgdexCard: Card | undefined;
   let outage: unknown;
   try {
@@ -167,20 +144,14 @@ export async function lookupById(
     return undefined;
   }
 
-  // A Pocket printing lists other Pocket printings, never the physical cards
-  // TCGdex returns for the same name.
+  // Package cards use package alternates to keep the source catalogue consistent.
   const candidates = pocketCard
     ? searchPocketByName(pinned.name)
     : await client.searchByName(pinned.name).catch(() => []);
   return toLookup(pinned, candidates, pocketCard ? POCKET_ATTRIBUTION : options.attribution, options.energyEmoji, options.alternateLimit);
 }
 
-/**
- * TCGdex matches name searches literally, so `PokeStop` finds nothing while
- * `PokéStop` finds the card. These are the accented spellings to try when the
- * literal search came back empty. Each word is anchored, so `Slowpoke` is left
- * alone; every accented card name the index holds is covered here.
- */
+// Supported accent substitutions for an empty literal name search.
 const ACCENTS: { from: RegExp; to: string }[] = [
   { from: /\bpokemon\b/gi, to: "Pokémon" },
   { from: /\bpoke(?=[A-Z0-9]|\s|$)/gi, to: "Poké" },
@@ -190,6 +161,7 @@ const ACCENTS: { from: RegExp; to: string }[] = [
 
 const HAS_ACCENT = /[éèêëáàâäíìîïóòôöúùûüñç]/i;
 
+/** Generates supported accented spellings unless the query already has an accent. */
 export function accentVariants(query: string): string[] {
   if (HAS_ACCENT.test(query)) return [];
   const variants = new Set<string>();
@@ -200,11 +172,7 @@ export function accentVariants(query: string): string[] {
   return [...variants];
 }
 
-/**
- * Search the literal spelling first, and try the accented ones only when it
- * finds nothing. A name that searches fine, `Slowpoke` being the common case,
- * therefore never pays for a second request.
- */
+/** Searches literally, then returns the first non-empty accented-variant result. */
 export async function searchWithAccents(client: TcgdexClient, query: string): Promise<CardSummary[]> {
   const literal = await client.searchByName(query);
   if (literal.length > 0) return literal;
@@ -216,8 +184,8 @@ export async function searchWithAccents(client: TcgdexClient, query: string): Pr
 }
 
 /**
- * Resolve a name to a printing and render it. Returns undefined when nothing
- * matches, so callers can stay silent instead of posting an error for a typo.
+ * Resolves a name with an optional set hint or exact card ID.
+ * Returns undefined when the name or hint cannot be resolved.
  */
 export async function lookupCard(
   client: TcgdexClient,
@@ -225,33 +193,26 @@ export async function lookupCard(
   setHint?: string,
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
-  // A hint can be a set id (sv07), the printed code players use (SCR) or the set
-  // name (Stellar Crown). All three resolve offline against the set index.
-  // The embed prints card ids in the Other printings field, so a hint that looks
-  // like one pins that exact printing. Without this the id falls through to set
-  // matching, matches nothing, and returns a different printing.
+  // Exact card IDs bypass name and set matching.
   if (setHint && isCardId(setHint.trim())) {
     return lookupById(client, setHint.trim(), options);
   }
 
-  // "pocket" is a group, not a set, so it filters rather than pins one id.
+  // A Pocket alias selects the package catalogue.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
   if (pocketOnly) return lookupPocket(query, setHint, options);
   const resolved = setHint ? resolveSetHint(setHint) : undefined;
 
-  // A hint that names no set is a mistake, and falling back to the bare name
-  // would answer with a printing the asker did not ask for.
+  // Reject unknown set hints before the name search.
   if (setHint && !resolved) return undefined;
   const summaries = await searchWithAccents(client, query);
   const matched = rankPrintings(summaries, query, resolved);
 
-  // A hint that resolved to a real set pins that set exactly. Prefix matching
-  // would let "A1" also match "A1a", and the newer set then wins the ranking.
+  // Enforce the exact resolved set after rankPrintings' partial set matching.
   const ranked = resolved
     ? matched.filter((card) => normaliseName(setIdOf(card.id)) === normaliseName(resolved))
     : matched;
-  // TCGdex stops before the newest Pocket sets, so an empty result falls back
-  // to the bundled Pocket data before giving up.
+  // Try the package when TCGdex has no matching candidates.
   if (ranked.length === 0) return lookupPocket(query, setHint, options);
 
   const ordered = orderForDisplay(ranked, query);
@@ -262,18 +223,12 @@ export async function lookupCard(
   return toLookup(card, ordered, options.attribution, options.energyEmoji, options.alternateLimit);
 }
 
-/**
- * Whether this answer is the scan alone. A card with no scan has nothing to
- * show but its front, so it keeps the normal answer.
- */
+/** Enables scan-only output only when the requested card has an image. */
 export function isImageOnly(lookup: CardLookup): boolean {
   return lookup.imageOnly === true && cardImage(lookup.card) !== undefined;
 }
 
-/**
- * One embed per mention. Other printings ride along as a field rather than a
- * second embed, because two embeds read as two answers to one question.
- */
+/** Builds one embed, adding alternate printing labels to a normal card reply. */
 export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
   const options = {
     ...(lookup.attribution ? { attribution: lookup.attribution } : {}),
@@ -293,14 +248,14 @@ export function lookupEmbeds(lookup: CardLookup): EmbedView[] {
   return [{ ...view, fields: [...view.fields, { name: "Other printings", value: ids }] }];
 }
 
+/** Identifies a TCGdex 404 response. */
 export function isMissing(error: unknown): boolean {
   return error instanceof TcgdexError && error.status === 404;
 }
 
 /**
- * Closest names when a lookup misses. Dropping the last word is what turns
- * "Crustle ex" into "Crustle", which is the common case: people add a suffix
- * that no printing carries.
+ * Searches for candidates after removing the query's final word.
+ * Single-word queries and failed searches return an empty list.
  */
 export async function suggestNames(
   client: TcgdexClient,

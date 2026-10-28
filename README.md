@@ -93,7 +93,7 @@ Run one copy per token. The bot writes `.bot.pid` and refuses to start while the
 | `npm run preview "Dragapult ex" "Charizard\|sv03.5"` | Runs real lookups without Discord, prints the embed JSON and writes an HTML preview to `preview/` |
 | `npm run avatar assets/avatar.jpg` | Sets the bot's profile picture. PNG, JPEG, WebP or GIF, under 8 MB |
 | `npm run rename "Name"` | Renames the bot. Discord allows two changes an hour |
-| `npm run index:sets` | Rebuilds `src/data/set-index.ts` (220 sets) after a set releases |
+| `npm run index:sets` | Fetches `src/data/set-index.json` for review; update the runtime TypeScript index as described in [data maintenance](docs/data-maintenance.md#add-or-update-a-set) |
 | `npm run index:text` | Rebuilds the search index in `src/data/text-index.json`. Several minutes of requests; it keeps the old index if any card fails to load |
 | `npm test`, `npm run typecheck` | The test suite and the type check. Both run offline |
 
@@ -122,8 +122,8 @@ Responses are cached in memory, ten minutes for cards and an hour for sets, up t
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report vulnerabilities by email as described in [SECURITY.md](SECURITY.md), never in a public issue. Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md)
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. The [contributor documentation](docs/README.md) covers architecture, development and data maintenance. Report vulnerabilities by email as described in [SECURITY.md](SECURITY.md), never in a public issue. Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Licence
 
-This project's code is licensed under the Apache License 2.0, see [LICENSE](LICENSE). Card data, the Pocket package and the avatar image keep their own terms, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Pocket package is AGPL-3.0-or-later, so read the notices before you redistribute a build that includes `node_modules`. Credit for the ideas this bot borrows sits in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md), and the [privacy policy](PRIVACY.md) and [terms of service](TERMS.md) cover what using it means
+This project's code is licensed under the Apache License 2.0, see [LICENSE](LICENSE). Card data, the Pocket package and the avatar image keep their own terms, see [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md). The Pocket package is AGPL-3.0-or-later, so read the notices before you redistribute a build that includes `node_modules`. Credit for the ideas this bot borrows sits in [ACKNOWLEDGEMENTS.md](docs/ACKNOWLEDGEMENTS.md), and the [privacy policy](PRIVACY.md) and [terms of service](TERMS.md) cover what using it means

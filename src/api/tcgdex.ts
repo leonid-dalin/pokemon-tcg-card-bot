@@ -8,7 +8,7 @@ export interface ClientOptions {
   retries?: number;
   cardTtlMs?: number;
   setTtlMs?: number;
-  /** Most responses held at once. Autocomplete caches every prefix typed. */
+  /** Maximum cache entries, including remembered 404 responses. */
   maxEntries?: number;
 }
 
@@ -30,9 +30,8 @@ export class TcgdexError extends Error {
 }
 
 /**
- * Thin read-only client for TCGdex. TCGdex needs no API key and serves the
- * catalogue plus Cardmarket and TCGplayer pricing, so the bot has no secrets to
- * rotate and no quota to burn.
+ * Cached TCGdex requests with per-attempt timeouts.
+ * Retries transport/parsing errors, rate limits and server errors.
  */
 export class TcgdexClient {
   private readonly baseUrl: string;
@@ -58,7 +57,7 @@ export class TcgdexClient {
       const now = Date.now();
       for (const [key, held] of this.cache) if (held.expires <= now) this.cache.delete(key);
     }
-    // Map keeps insertion order, so the first key is the oldest entry.
+    // Map iteration follows insertion order, so the first key is the oldest.
     while (this.cache.size >= this.maxEntries) {
       const oldest = this.cache.keys().next().value;
       if (oldest === undefined) break;
@@ -68,11 +67,9 @@ export class TcgdexClient {
   }
 
   private async getJson<T>(path: string, ttlMs: number): Promise<T> {
-    // path already carries the language segment
     const cached = this.cache.get(path);
     if (cached && cached.expires > Date.now()) {
-      // A 404 is remembered too, or every lookup of a card without prices asks
-      // again for the languages that do not carry it.
+      // Re-throw cached misses without another request.
       if (cached.missing) throw new TcgdexError(`not found: ${path}`, 404);
       return cached.value as T;
     }
@@ -108,27 +105,19 @@ export class TcgdexClient {
     throw lastError instanceof Error ? lastError : new TcgdexError(String(lastError));
   }
 
-  /**
-   * Name search is a prefix match upstream, so a common name returns well over a
-   * hundred printings. The cap is deliberately high: filtering by set happens
-   * locally, and the upstream `set` parameter is ignored, so a low cap silently
-   * drops the printing the caller asked for.
-   */
+  /** Searches by name and returns at most `limit` summaries. */
   async searchByName(name: string, limit = 500, lang = "en"): Promise<CardSummary[]> {
     const query = new URLSearchParams({ name });
     const cards = await this.getJson<CardSummary[]>(`/${lang}/cards?${query.toString()}`, this.cardTtlMs);
     return cards.slice(0, limit);
   }
 
-  /** Every card id and name in the set, without text. Used to build the text index. */
+  /** Lists card summaries for a language. */
   async listCards(lang = "en"): Promise<CardSummary[]> {
     return this.getJson<CardSummary[]>(`/${lang}/cards`, this.setTtlMs);
   }
 
-  /**
-   * TCGdex has a ja catalogue, but its ids differ from the English ones, so an
-   * English id asked for under ja always 404s.
-   */
+  /** Fetches a card by ID in the requested language. */
   async getCard(id: string, lang = "en"): Promise<Card> {
     return this.getJson<Card>(`/${lang}/cards/${encodeURIComponent(id)}`, this.cardTtlMs);
   }

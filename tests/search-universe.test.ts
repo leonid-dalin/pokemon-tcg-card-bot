@@ -7,7 +7,7 @@ const group = (index: number, name: string, category: string, text = "does its t
   printings: 1,
 });
 
-/** 260 Pokemon first, then the late categories the global cap would bury. */
+// Later Trainer and Energy entries test category access beyond the all-view cap.
 const universe = [
   ...Array.from({ length: 260 }, (_, i) => group(i, `Battler ${i + 1}`, "Pokemon")),
   ...Array.from({ length: 30 }, (_, i) => group(260 + i, `Tool ${i + 1}`, "Trainer")),

@@ -2,15 +2,8 @@ import { REST } from "discord.js";
 import { loadConfig } from "../src/config.js";
 import { loadDotEnv } from "../src/env.js";
 
-/**
- * Preflight check for the credentials in .env.
- *
- *   npm run doctor
- *
- * It reads the token, calls GET /users/@me and prints which bot it belongs to,
- * then lists the servers the bot has been invited to. A wrong or expired token
- * fails here with Discord's own error instead of failing inside the gateway.
- */
+// Check the configured token and list guilds and registered commands through REST.
+// Usage: npm run doctor
 loadDotEnv();
 
 let config: ReturnType<typeof loadConfig>;
@@ -71,7 +64,6 @@ try {
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`token rejected: ${message}`);
-  // Set the exit code instead of calling process.exit, which trips a libuv
-  // handle assertion while undici is still closing its sockets.
+  // Allow pending REST cleanup to finish before exiting with a failure status.
   process.exitCode = 1;
 }

@@ -6,7 +6,7 @@ export interface SetCard extends CardSummary {
   localId?: string;
 }
 
-/** The set shape a checklist needs: TCGdex lists every card as a stub. */
+/** Set metadata with the card summaries used by a checklist. */
 export interface SetWithCards extends CardSetRef {
   cards?: SetCard[];
 }
@@ -14,8 +14,7 @@ export interface SetWithCards extends CardSetRef {
 const CHECKLIST_PER_PAGE = 15;
 
 /**
- * A set's cards as a paged checklist. The number leads each row so a reader
- * can tick off a binder page by page.
+ * Stores the complete checklist in source order and renders its first page.
  */
 export function setChecklistReply(set: SetWithCards, ownerId: string, attribution: string, pages: PageStore) {
   const cards = set.cards ?? [];
@@ -34,7 +33,7 @@ export function setChecklistReply(set: SetWithCards, ownerId: string, attributio
   return listReply(page, token, 0);
 }
 
-/** The card's number without leading zeros, as the set print shows it. */
+// Prefer the supplied local ID and strip leading zeros only from numeric values.
 function numberOf(card: SetCard): string {
   const raw = card.localId ?? card.id.slice(card.id.lastIndexOf("-") + 1);
   return /^\d+$/.test(raw) ? raw.replace(/^0+(?=\d)/, "") : raw;

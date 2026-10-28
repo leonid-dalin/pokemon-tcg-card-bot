@@ -6,10 +6,10 @@ import { toEmbeds } from "./embeds.js";
 import { listReply, type ListPage, type PageStore } from "./pages.js";
 import { detailsRow, detailsRows, missMenu, printingRows } from "./printing-buttons.js";
 
-/** Most embeds Discord accepts in one message is ten; five keeps a reply readable. */
+/** Maximum embeds included in one mention reply. */
 export const MAX_EMBEDS_PER_MESSAGE = 5;
 
-/** One card with its printing buttons, as `/card` and a printing button show it. */
+/** Builds a card reply with printing buttons that carry the optional owner ID. */
 export function cardReply(lookup: CardLookup, ownerId?: string) {
   const components = isImageOnly(lookup)
     ? []
@@ -20,13 +20,13 @@ export function cardReply(lookup: CardLookup, ownerId?: string) {
   };
 }
 
-/** Discord rejects an embed title over 256 characters, and the count plus quotes take the rest. */
+/** Maximum query excerpt length in a search title. */
 const TITLE_LIMIT = 80;
 
-/** More than this is more than anyone scrolls, and every row costs a search of its own. */
+/** Maximum search results shown in one list view. */
 const MAX_ITEMS = 250;
 
-/** A text search answer, shared by `/search` and `@bot search`. */
+/** Stores bounded search results and renders the first page or a no-match response. */
 export function searchReply(
   query: string,
   groups: TextGroup[],
@@ -62,15 +62,10 @@ export function searchReply(
   return listReply(page, token, 0);
 }
 
-/** The storage cap, which bounds every category view as well as the overall list. */
+/** Maximum results retained per category and for the overall search. */
 const CAP = MAX_ITEMS;
 
-/**
- * What a search stores: the first CAP hits overall, plus the first CAP of each
- * category in original order, deduplicated. Filtering then reaches the late
- * categories instead of losing them to the overall cap, while storage stays
- * bounded (at most four caps for the three categories plus all).
- */
+// Retain the union of the first CAP overall hits and the first CAP per category.
 function shownGroups(groups: TextGroup[]): TextGroup[] {
   const keep = new Set(groups.slice(0, CAP).map((group) => group.representative.id));
   for (const category of ["Pokemon", "Trainer", "Energy"]) {
@@ -85,7 +80,7 @@ function shownGroups(groups: TextGroup[]): TextGroup[] {
   return groups.filter((group) => keep.has(group.representative.id));
 }
 
-/** Category totals over every match, before any cap: what the filter menu promises. */
+// Count the complete result set before applying storage or display caps.
 function universeCounts(groups: TextGroup[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const group of groups) {
@@ -100,11 +95,7 @@ export interface MentionMiss {
   closest: CardSummary[];
 }
 
-/**
- * The reply to a message's `[[...]]` mentions. A name that resolves to nothing
- * still gets a line, because silence after an explicit request reads as a
- * broken bot.
- */
+/** Builds a mention reply with card embeds and feedback for unmatched names. */
 export function mentionReply(found: CardLookup[], misses: MentionMiss[], ownerId?: string) {
   const embeds = found.flatMap((lookup) => toEmbeds(lookupEmbeds(lookup))).slice(0, MAX_EMBEDS_PER_MESSAGE);
   const content = misses

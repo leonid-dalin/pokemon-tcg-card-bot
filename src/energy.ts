@@ -12,6 +12,7 @@ const LETTERS: Record<string, string> = {
   Colorless: "C",
 };
 
+/** Formats costs with configured emoji, falling back to bracketed type codes. */
 export function energyCost(cost: string[] | undefined, emoji: Record<string, string> = {}): string {
   return (cost ?? []).map((type) => emoji[type] ?? `[${LETTERS[type] ?? type}]`).join("");
 }

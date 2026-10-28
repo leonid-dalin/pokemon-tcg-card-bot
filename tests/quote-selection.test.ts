@@ -30,8 +30,7 @@ describe("quoted one-letter names", () => {
   });
 
   it("does not widen an unrelated one-letter query into a name search", () => {
-    // A quoted one-letter phrase is still a wording search, so it may only
-    // match cards that print that word, never a name match alone.
+    // Each result must contain X as a complete text or name word.
     for (const hit of searchCardText('"X"')) {
       expect(new RegExp("(^|[^a-z0-9])x($|[^a-z0-9])", "i").test(hit.text) || /(^|\s)x(\s|$)/i.test(hit.name)).toBe(true);
     }

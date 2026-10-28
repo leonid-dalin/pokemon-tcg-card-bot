@@ -102,7 +102,7 @@ describe("resolveDeckCards", () => {
 });
 
 describe("decklist checks", () => {
-  /** Six distinct lines, so a paste reads as a deck and the count field stays out of the way. */
+  // Six card lines satisfy the decklist parser's row threshold.
   const TRAINERS = [
     "4 Arven SVI 166",
     "4 Iono PAL 185",
