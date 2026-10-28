@@ -1,5 +1,7 @@
 import type { Attack, Card, CardSetRef, Pricing, SetSummary } from "./api/types.js";
 import type { ParsedDeck } from "./decklist.js";
+import type { ResolvedLine } from "./deck-check.js";
+import { isBasicEnergy } from "./deck-check.js";
 import { energyCost } from "./energy.js";
 import { isPocketCard, prizeCount } from "./prizes.js";
 import { printedNumber } from "./printed.js";
@@ -101,6 +103,13 @@ function pickPricing(card: Card): PriceSummary {
     }
   }
   return {};
+}
+
+/** The Cardmarket average for a card, which the price field and the deck price share. */
+export function cardmarketAverage(card: Card): number | undefined {
+  const { cardmarket } = pickPricing(card);
+  const avg = cardmarket?.avg;
+  return typeof avg === "number" && !Number.isNaN(avg) ? avg : undefined;
 }
 
 export function priceField(card: Card): EmbedField | undefined {
@@ -280,7 +289,7 @@ and ${cards.length - 15} more` : ""}`, 4000),
 }
 
 /** A pasted decklist, formatted, with the count checked against 60. */
-export function renderDecklist(deck: ParsedDeck): EmbedView {
+export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[]): EmbedView {
   const body = deck.lines
     .map((line) => {
       const printing = line.setCode ? ` (${line.setCode}${line.number ? ` ${line.number}` : ""})` : "";
@@ -293,6 +302,18 @@ export function renderDecklist(deck: ParsedDeck): EmbedView {
     fields.push({ name: "Count", value: `Decklists are 60 cards, this one lists ${deck.total}`, inline: true });
   }
 
+  if (resolved) {
+    const illegal = resolved.filter((entry) => entry.card && !isBasicEnergy(entry.card) && entry.card.legal?.standard === false);
+    if (illegal.length > 0) {
+      const lines = illegal
+        .map(({ line }) => `${line.count} ${line.name}${line.setCode ? ` (${line.setCode}${line.number ? ` ${line.number}` : ""})` : ""}`)
+        .join("\n");
+      fields.push({ name: "Not Standard legal", value: truncate(lines, FIELD_VALUE_LIMIT) });
+    }
+    const price = deckPrice(deck, resolved);
+    if (price) fields.push({ name: "Deck price", value: price, inline: false });
+  }
+
   return {
     title: "Decklist",
     color: DEFAULT_COLOUR,
@@ -300,6 +321,25 @@ export function renderDecklist(deck: ParsedDeck): EmbedView {
     fields,
     footer: "Parsed from the pasted list",
   };
+}
+
+/**
+ * The deck's cost from the Cardmarket average of each priced line. Lines whose
+ * printing carries no price are left out of the sum and named in the count, so
+ * a reader can see how much of the deck the figure covers.
+ */
+export function deckPrice(deck: ParsedDeck, resolved: ResolvedLine[]): string | undefined {
+  let total = 0;
+  let priced = 0;
+  for (const { line, card } of resolved) {
+    if (!card || isBasicEnergy(card)) continue;
+    const average = cardmarketAverage(card);
+    if (average === undefined) continue;
+    total += average * line.count;
+    priced += line.count;
+  }
+  if (priced === 0) return undefined;
+  return `≈ ${total.toFixed(2)} EUR (Cardmarket average, ${priced} of ${deck.total} cards priced)`;
 }
 
 export function renderSet(set: SetSummary | CardSetRef, attribution = DEFAULT_ATTRIBUTION): EmbedView {

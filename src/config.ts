@@ -5,7 +5,10 @@ export interface Config {
   clientId: string;
   guildId?: string;
   mentionEnabled: boolean;
-  /** Decklist parsing stays off until it can say something the list itself does not. */
+  /**
+   * Decklist parsing stays off by default: a pasted list costs one card lookup
+   * per line, which is a lot of requests for a reply nobody asked for.
+   */
   decklistEnabled: boolean;
   /** 0 disables the throttle entirely. */
   mentionCooldownSeconds: number;

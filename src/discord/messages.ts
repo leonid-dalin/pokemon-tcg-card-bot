@@ -3,6 +3,7 @@ import type { TcgdexClient } from "../api/tcgdex.js";
 import type { Config } from "../config.js";
 import type { MentionBudget } from "../cooldown.js";
 import { parseDecklist } from "../decklist.js";
+import { resolveDeckCards } from "../deck-check.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
 import { extractMentions, parseSearchCommand } from "../mentions.js";
 import { renderDecklist } from "../render.js";
@@ -76,7 +77,8 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     if (deck) {
-      await message.reply({ embeds: toEmbeds([renderDecklist(deck)]) }).catch(() => {});
+      const resolved = config.decklistEnabled ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
+      await message.reply({ embeds: toEmbeds([renderDecklist(deck, resolved)]) }).catch(() => {});
       return;
     }
 
