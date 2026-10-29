@@ -211,15 +211,17 @@ def recover():
         except (ValueError, OSError):
             restorable = False
         if not restorable:
-            progress("Rollback prerequisites are missing or invalid; keeping the switched release")
-        else:
-            was_running = active()
-            if was_running:
-                systemctl("stop", SERVICE)
-            restore(backup)
-            point_to(previous)
-            atomic_text(ROOT / "failed-revision", release.name)
-            progress(f"Interrupted before readiness; restored {previous.name}")
+            raise RuntimeError(
+                f"rollback prerequisites for {previous.name} are missing or invalid; "
+                f"{STATE.name} is kept and the service is left untouched"
+            )
+        was_running = active()
+        if was_running:
+            systemctl("stop", SERVICE)
+        restore(backup)
+        point_to(previous)
+        atomic_text(ROOT / "failed-revision", release.name)
+        progress(f"Interrupted before readiness; restored {previous.name}")
     else:
         progress("Previous release is still selected; keeping its live settings")
     STATE.unlink()

@@ -189,10 +189,11 @@ class DeploymentTests(unittest.TestCase):
         m.atomic_json(m.STATE, {"phase": "switched", "release": release.name,
                                 "previous": OLD, "backup": backup.name})
         with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
-            m.recover()
-        self.assertNotIn(("stop", m.SERVICE), control.call_args_list)
-        self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
-        self.assertFalse(m.STATE.exists())
+            with self.assertRaises(RuntimeError):
+                m.recover()
+        self.assertEqual(control.call_args_list, [])
+        self.assertTrue(m.STATE.exists())
+        self.assertEqual(m.current(), release)
 
     def test_switch_intent_with_previous_selected_keeps_live_settings(self):
         previous, release = self.release(OLD), self.release(NEW)
