@@ -77,21 +77,6 @@ def valid_sha(value):
     return value
 
 
-def installed_version():
-    try:
-        data = json.loads((ROOT / "current" / "BUILD.json").read_text())
-        return data.get("version")
-    except (OSError, ValueError):
-        return None
-
-
-def release_tag(sha):
-    version = installed_version()
-    if version:
-        return f"linux-arm64-v{version}-{sha[:7]}"
-    return f"linux-arm64-{sha[:7]}"
-
-
 def published_head():
     sha = valid_sha(api("commits/master")["sha"])
     tag = published_tag(sha)
@@ -99,25 +84,16 @@ def published_head():
 
 
 def published_tag(sha):
-    version = installed_version()
-    candidates = [f"linux-arm64-v{version}-{sha[:7]}"] if version else []
-    candidates += [f"linux-arm64-{sha[:7]}", f"pi-{sha}"]
-    for tag in candidates:
-        try:
-            release = api(f"releases/tags/{tag}")
-        except urllib.error.HTTPError as error:
-            if error.code == 404:
-                continue
-            raise
+    # Releases are found by their asset pair, never by tag name, so the tag
+    # scheme can change without stranding an installed updater.
+    name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
+    releases = api("releases?per_page=30")
+    for release in releases:
         if release.get("draft"):
             continue
-        target = release.get("target_commitish")
-        if target and target != sha:
-            continue
         names = {asset["name"] for asset in release.get("assets", [])}
-        name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
         if {name, name + ".sha256"} <= names:
-            return tag
+            return release["tag_name"]
     return None
 
 
@@ -350,7 +326,7 @@ def fetch(sha):
         progress(f"Downloading tested revision {sha}")
         stage = Path(temporary)
         name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
-        tag = published_tag(sha) or release_tag(sha)
+        tag = published_tag(sha)
         url = f"https://github.com/{REPO}/releases/download/{tag}/{name}"
         archive, checksum = stage / name, stage / "checksum"
         download(url + ".sha256", checksum, 1024)

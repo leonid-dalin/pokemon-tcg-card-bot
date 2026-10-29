@@ -106,7 +106,8 @@ jobs:
         run: |
           short="${REVISION:0:7}"
           version=$(sed -n "s/.*\"version\": \"\([^\"]*\)\".*/\1/p" package.json | head -1)
-          tag="linux-arm64-v${version}-${short}"
+          stamp=$(date -u +%Y%m%d.%H%M)
+          tag="ptcg-discord-bot-${version}.${stamp}-linux-arm64"
           subject=$(git log -1 --format=%s "$REVISION")
           body=$(git log -1 --format=%b "$REVISION")
           committed=$(git log -1 --format=%cI "$REVISION")
@@ -124,4 +125,10 @@ jobs:
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" --target "$REVISION" --title "$title" --notes-file notes.md --prerelease --latest=false
           fi
+          tarball="pokemon-card-bot-linux-arm64-${REVISION}.tar.gz"
+          sha256=$(sha256sum "bundle/${tarball}" | cut -d" " -f1)
+          size=$(stat -c%s "bundle/${tarball}")
+          release_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          printf 'version: %s\nfiles:\n  - url: %s\n    sha256: %s\n    size: %s\npath: %s\nreleaseDate: %s\n' \
+            "$version" "$tarball" "$sha256" "$size" "$tarball" "$release_date" > bundle/latest.yml
           gh release upload "$tag" bundle/* --clobber
