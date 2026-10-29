@@ -9,7 +9,10 @@ function stubFetch(routes: Record<string, unknown[] | unknown>) {
   vi.stubGlobal("fetch", async (url: string) => {
     calls.push(String(url));
     const route = Object.keys(routes).find((key) => String(url).includes(key));
-    const queued = route ? (routes[route] as unknown[]) : undefined;
+    if (!route) {
+      return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+    }
+    const queued = routes[route] as unknown[] | unknown;
     const entry = Array.isArray(queued) ? queued.shift() : queued;
     if (entry instanceof Error) throw entry;
     const response = entry as { status?: number; body?: unknown };
