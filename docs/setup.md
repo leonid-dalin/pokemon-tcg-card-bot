@@ -30,7 +30,7 @@ DATA_DIR=./data
 
 On the application's Bot page, enable **Message Content Intent** for ordinary-message replies. For a slash-command-only instance, set `MENTION_ENABLED=false` in `.env`; the bot then omits that intent
 
-Create a server invite with the `bot` and `applications.commands` scopes. Grant View Channels, Send Messages, Send Messages in Threads, Embed Links, Read Message History and Use Application Commands. Use permissions integer `277025475584` for that combination
+Create a server invite with the `bot` and `applications.commands` scopes. Grant View Channels, Send Messages, Send Messages in Threads, Embed Links, Read Message History and Use Application Commands, plus Manage Messages to delete the invoking message and Attach Files and Add Reactions for future use. Use permissions integer `4503876652887104` for that combination
 
 ## Register and run
 
