@@ -36,7 +36,7 @@ function fakeMessage(content: string) {
     reference: null,
     channel: { isThread: () => false, parentId: null },
     member: { permissions: { has: () => true } },
-    reply: async (payload: { content?: string; embeds?: unknown[] }) => void replies.push(payload),
+    reply: async (payload: { content?: string; embeds?: unknown[]; components?: unknown[] }) => void replies.push(payload),
   };
   return { message, replies };
 }
@@ -59,18 +59,72 @@ describe("inline command parsing", () => {
 });
 
 describe("inline counterparts answer like their slash commands", () => {
-  it("replies with the version lines", async () => {
+  function embedText(payload: { embeds?: { data: { description?: string; title?: string } }[] }): string {
+    return payload.embeds?.[0]?.data.description ?? "";
+  }
+
+  it("replies with the version embed", async () => {
     const { message, replies } = fakeMessage(`<@${SELF}> version`);
     await handler()(message as never);
-    expect(replies[0]?.content).toContain("Revision:");
-    expect(replies[0]?.content).toContain("Uptime:");
+    const text = embedText(replies[0] as never);
+    expect(text).toContain("Revision:");
+    expect(text).toContain("Uptime:");
   });
 
-  it("replies with the effective settings", async () => {
+  it("replies with the settings embed and its toggle buttons", async () => {
     const { message, replies } = fakeMessage(`<@${SELF}> settings`);
     await handler()(message as never);
-    expect(replies[0]?.content).toContain("Message replies: on");
-    expect(replies[0]?.content).toContain("Card games:");
+    const text = embedText(replies[0] as never);
+    expect(text).toContain("Message replies: on");
+    expect(text).toContain("Card games:");
+    const row = (replies[0] as { components?: { components: { data: { custom_id: string } }[] }[] }).components?.[0];
+    expect(row?.components.map((button) => button.data.custom_id)).toEqual(["iset:messages", "iset:decklists"]);
+  });
+
+  it("applies a settings toggle from its button and re-renders the view", async () => {
+    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
+    const applied: unknown[] = [];
+    const settings = {
+      get: () => ({
+        guildId: "guild-a", messageReplies: true, decklistReplies: false,
+        autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0,
+        cardGames: "both" as const, defaultCardGame: "ptcg" as const, currency: undefined, updatedAt: "",
+      }),
+      update: (guildId: string, patch: Record<string, unknown>) => void applied.push(patch),
+    };
+    const updates: { embeds?: { data: { description?: string } }[]; components?: { components: { data: { label: string } }[] }[] }[] = [];
+    const interaction = {
+      guildId: "guild-a",
+      customId: "iset:messages",
+      inGuild: () => true,
+      memberPermissions: { has: () => true },
+      update: async (payload: never) => void updates.push(payload),
+    };
+
+    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
+
+    expect(applied).toEqual([{ messageReplies: false }]);
+    const text = updates[0]?.embeds?.[0]?.data.description ?? "";
+    expect(text).toContain("Message replies: off");
+    expect(updates[0]?.components?.[0]?.components[0]?.data.label).toBe("Message replies: off");
+  });
+
+  it("refuses a settings toggle from a member without Manage Server", async () => {
+    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
+    const settings = { get: () => ({ messageReplies: true }), update: () => undefined };
+    const replies: { content?: string }[] = [];
+    const interaction = {
+      guildId: "guild-a",
+      customId: "iset:messages",
+      inGuild: () => true,
+      memberPermissions: { has: () => false },
+      reply: async (payload: { content?: string }) => void replies.push(payload),
+      update: async () => undefined,
+    };
+
+    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
+
+    expect(replies[0]?.content).toContain("Manage Server");
   });
 
   it("lists printings for a name", async () => {

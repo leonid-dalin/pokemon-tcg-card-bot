@@ -1,9 +1,14 @@
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
+  EmbedBuilder,
   InteractionContextType,
   MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
+  type ButtonInteraction,
   type ChatInputCommandInteraction,
   type InteractionReplyOptions,
 } from "discord.js";
@@ -422,4 +427,61 @@ export function settingsViewLines(settings: GuildSettings, mentionEnabled: boole
     lines.push("This deployment has mention replies switched off, so nothing here turns them back on.");
   }
   return lines;
+}
+
+
+/** The settings view as an embed, so the inline counterpart matches the card embeds. */
+export function settingsEmbed(lines: string[]): EmbedBuilder {
+  return new EmbedBuilder().setTitle("Server settings").setDescription(lines.join("\n"));
+}
+
+/** Toggle buttons for the two reply switches; changing channels and games stays with /settings. */
+export function settingsComponents(settings: GuildSettings): ActionRowBuilder<ButtonBuilder>[] {
+  const toggle = (name: string, on: boolean) =>
+    new ButtonBuilder()
+      .setCustomId(`iset:${name}`)
+      .setLabel(`${name === "messages" ? "Message replies" : "Decklist replies"}: ${on ? "on" : "off"}`)
+      .setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary);
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      toggle("messages", settings.messageReplies),
+      toggle("decklists", settings.decklistReplies),
+    ),
+  ];
+}
+
+export interface InlineSettingsContext {
+  settings: SettingsStore;
+  mentionEnabled: boolean;
+}
+
+/** Applies a settings toggle pressed on an inline settings message. */
+export async function handleInlineSettingsButton(
+  context: InlineSettingsContext,
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const action = interaction.customId.slice("iset:".length);
+  if (action !== "messages" && action !== "decklists") return;
+  if (!interaction.inGuild() || !interaction.guildId) {
+    await interaction.reply(ephemeral("Settings belong to a server. Run this in one where you manage it."));
+    return;
+  }
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply(ephemeral("Only members with the Manage Server permission can change these settings."));
+    return;
+  }
+  const current = context.settings.get(interaction.guildId);
+  const next = { ...current };
+  if (action === "messages") next.messageReplies = !current.messageReplies;
+  else next.decklistReplies = !current.decklistReplies;
+  try {
+    context.settings.update(interaction.guildId, { [action === "messages" ? "messageReplies" : "decklistReplies"]: next[action === "messages" ? "messageReplies" : "decklistReplies"] });
+  } catch (error) {
+    await interaction.reply(ephemeral(`Could not save that change (${errorCategory(error)}).`));
+    return;
+  }
+  await interaction.update({
+    embeds: [settingsEmbed(settingsViewLines(next, context.mentionEnabled))],
+    components: settingsComponents(next),
+  });
 }

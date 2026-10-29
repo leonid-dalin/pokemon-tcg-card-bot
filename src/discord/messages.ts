@@ -1,4 +1,4 @@
-import type { Message } from "discord.js";
+import { EmbedBuilder, type Message } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import type { Config } from "../config.js";
 import { MentionBudget } from "../cooldown.js";
@@ -7,12 +7,15 @@ import { resolveDeckCards } from "../deck-check.js";
 import { errorCategory } from "../diagnostics.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
 import { extractMentions, parseHelpCommand, parseInlineCommand, parseSearchCommand } from "../mentions.js";
-import { settingsViewLines } from "./settings-command.js";
+import { settingsComponents, settingsEmbed, settingsViewLines } from "./settings-command.js";
 import { listReply, type ListPage } from "./pages.js";
 import { printingsOf, printingItems } from "../printings.js";
 import { renderSet } from "../render.js";
-import { footerFor, versionLines } from "./commands.js";
+import { resolveSetHint } from "../set-index.js";
+import { normaliseName } from "../resolve.js";
+import { footerFor } from "./commands.js";
 import { toEmbed } from "./embeds.js";
+import { versionEmbed, versionLines } from "./version-view.js";
 import { busyMessage, overloadHint } from "./interaction-failure.js";
 import { renderDecklist } from "../render.js";
 import { searchCardGroups } from "../text-search.js";
@@ -63,7 +66,8 @@ export type IncomingMessage = Pick<
 
 interface ReplyPayload {
   content?: string;
-  embeds?: { description?: string; title?: string }[];
+  embeds?: (EmbedBuilder | { description?: string; title?: string })[];
+  components?: unknown[];
 }
 
 function embedText(embed: {
@@ -293,7 +297,7 @@ function admit(context: InlineContext): { allowed: true } | { allowed: false; re
 /** Serves the plain-text counterparts of /version, /settings, /printings and /set. */
 async function runInline(inline: InlineInvocation, context: InlineContext): Promise<void> {
   if (inline.command === "version") {
-    await context.reply({ content: versionLines().join("\n") });
+    await context.reply({ embeds: [versionEmbed()] });
     return;
   }
 
@@ -310,13 +314,23 @@ async function runInline(inline: InlineInvocation, context: InlineContext): Prom
       });
       return;
     }
-    await context.reply({ content: settingsViewLines(context.settings.get(context.guildId), context.mentionEnabled).join("\n") });
+    const settings = context.settings.get(context.guildId);
+    await context.reply({
+      embeds: [settingsEmbed(settingsViewLines(settings, context.mentionEnabled))],
+      components: settingsComponents(settings),
+    });
     return;
   }
 
   if (inline.command === "printings") {
-    if (!inline.argument) {
+    // The image-only bang belongs to card mentions; a printings list is text by nature.
+    const name = inline.argument.replace(/^!/, "").trim();
+    if (!name) {
       await context.reply({ content: "Add a card name, for example: printings Pikachu." });
+      return;
+    }
+    if (normaliseName(name).length < 2) {
+      await context.reply({ content: `No card matched \`${name}\`. A single letter is too little to search on.` });
       return;
     }
     const admission = admit(context);
@@ -326,14 +340,14 @@ async function runInline(inline: InlineInvocation, context: InlineContext): Prom
     }
     let printings: Awaited<ReturnType<typeof printingsOf>>;
     try {
-      printings = await printingsOf(context.api, inline.argument, context.allowedGames);
+      printings = await printingsOf(context.api, name, context.allowedGames);
     } catch (error) {
       const hint = overloadHint(error);
       await context.reply({ content: hint === undefined ? "Card lookup failed, try again in a moment." : busyMessage(hint) });
       return;
     }
     if (printings.length === 0) {
-      await context.reply({ content: `No card matched \`${inline.argument}\`.` });
+      await context.reply({ content: `No card matched \`${name}\`.` });
       return;
     }
     const page: ListPage = {
@@ -358,7 +372,8 @@ async function runInline(inline: InlineInvocation, context: InlineContext): Prom
     return;
   }
   try {
-    const set = await context.api.getSet(inline.argument);
+    const resolved = resolveSetHint(inline.argument);
+    const set = await context.api.getSet(resolved ?? inline.argument);
     await context.reply({ embeds: [toEmbed(renderSet(set, context.attribution))] } as never);
   } catch (error) {
     const hint = overloadHint(error);
