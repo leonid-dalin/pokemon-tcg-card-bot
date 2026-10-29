@@ -20,12 +20,9 @@ import { toEmbed } from "./embeds.js";
 import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
 import { settingsCommand } from "./settings-command.js";
-import { buildIdentity, formatUptime } from "../version.js";
-import { ratesDate } from "../currency.js";
 
 import { busyMessage, overloadHint } from "./interaction-failure.js";
-
-const SOURCE_LABEL = { env: "deployed", build: "bundle", git: "checkout", package: "package version" } as const;
+import { versionEmbed } from "./version-view.js";
 
 const AUTOCOMPLETE_DEADLINE_MS = 2000;
 
@@ -379,25 +376,13 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
   await interaction.reply({ embeds: [toEmbed(helpView())] });
 }
 
-/** The revision, package version, build date, uptime and rate-snapshot age. */
-export function versionLines(startedAt = Date.now() - process.uptime() * 1_000, now = Date.now()): string[] {
-  const identity = buildIdentity();
-  return [
-    `Revision: ${identity.label} (${SOURCE_LABEL[identity.source]})`,
-    identity.packageVersion ? `Version: ${identity.packageVersion}` : undefined,
-    identity.built ? `Last updated: ${identity.built.slice(0, 10)}` : undefined,
-    `Uptime: ${formatUptime(now - startedAt)}`,
-    ratesDate() ? `Exchange rates: ${ratesDate()}` : undefined,
-  ].filter((line): line is string => Boolean(line));
-}
-
 /** Reports the running revision, its build date and how long this process has been up. */
 export async function handleVersionCommand(
   interaction: ChatInputCommandInteraction,
   startedAt = Date.now() - process.uptime() * 1_000,
   now = Date.now(),
 ): Promise<void> {
-  await interaction.reply({ content: versionLines(startedAt, now).join("\n"), flags: MessageFlags.Ephemeral });
+  await interaction.reply({ embeds: [versionEmbed(startedAt, now)], flags: MessageFlags.Ephemeral });
 }
 
 /** Pocket set prefixes, including promo ids, distinguish Pocket cards from physical-card ids. */

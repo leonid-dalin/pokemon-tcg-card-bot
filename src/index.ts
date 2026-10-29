@@ -28,7 +28,7 @@ import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
 import { createShardReadiness } from "./discord/shard-readiness.js";
-import { handleSettingsCommand } from "./discord/settings-command.js";
+import { handleInlineSettingsButton, handleSettingsCommand } from "./discord/settings-command.js";
 import { startRuntimeStatus } from "./runtime-status.js";
 
 loadDotEnv();
@@ -85,7 +85,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isButton()) {
-      if (interaction.customId.startsWith("details:")) {
+      if (interaction.customId.startsWith("iset:")) {
+        await handleInlineSettingsButton({ settings, mentionEnabled: config.mentionEnabled }, interaction);
+      } else if (interaction.customId.startsWith("details:")) {
         await handleDetailsButton(context, interaction);
       } else if (interaction.customId.startsWith("page:")) {
         await handlePageButton(context, interaction);

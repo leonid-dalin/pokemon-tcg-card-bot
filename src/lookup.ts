@@ -6,7 +6,7 @@ import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { isPocketCard, isPocketSet } from "./prizes.js";
-import { isPocketHint, resolveSetHint, setRecency } from "./set-index.js";
+import { isPocketHint, packageSetId, resolveSetHint, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
 
 export interface CardLookup {
@@ -107,20 +107,28 @@ function lookupPocket(
   setHint: string | undefined,
   options: LookupOptions,
   requireSet = false,
+  requiredSetId?: string,
 ): CardLookup | undefined {
   const all = searchPocketByName(query);
   if (all.length === 0) return undefined;
 
   const hint = setHint && !isPocketHint(setHint) ? setHint.trim().toLowerCase() : undefined;
-  const filtered = hint
+  // A resolved Pocket set arrives in set-index form (A1, P-A); the package uses a1, pa.
+  const required = requiredSetId?.toLowerCase().replace(/-/g, "");
+  const filtered = required
     ? all.filter((summary) => {
         const card = getPocketCard(summary.id);
-        const setId = (card?.set?.id ?? "").toLowerCase();
-        const setName = (card?.set?.name ?? "").toLowerCase();
-        return setId === hint || setName.includes(hint);
+        return (card?.set?.id ?? "").toLowerCase() === required;
       })
-    : all;
-  const pool = filtered.length > 0 ? filtered : requireSet && hint ? [] : all;
+    : hint
+      ? all.filter((summary) => {
+          const card = getPocketCard(summary.id);
+          const setId = (card?.set?.id ?? "").toLowerCase();
+          const setName = (card?.set?.name ?? "").toLowerCase();
+          return setId === hint || setName.includes(hint);
+        })
+      : all;
+  const pool = filtered.length > 0 ? filtered : requireSet && (hint || required) ? [] : all;
 
   const [primary] = pool;
   if (!primary) return undefined;
@@ -213,19 +221,21 @@ export async function lookupCard(
 
   // A Pocket alias selects the package catalogue; forcing a game always wins.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
+  const resolved = setHint && !pocketOnly ? resolveSetHint(setHint) : undefined;
+  if (setHint && !pocketOnly && !resolved) return undefined;
+  const requireResolved = resolved !== undefined && isPocketSet(resolved);
+  const requireArg = requireResolved ? packageSetId(resolved) : undefined;
   if (pocketOnly) return lookupPocket(query, setHint, options);
-  const resolved = setHint ? resolveSetHint(setHint) : undefined;
-  if (setHint && !resolved) return undefined;
   // An explicit Pocket set hint is a game choice: it overrides a physical-only
   // preference, while without a preference the TCGdex path and its package
   // fallback keep their existing behaviour.
   const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
   const preference = options.gamePreference;
   if (hintPocketSet && preference && preference.allowed !== "both") {
-    return lookupPocket(query, setHint, options, true);
+    return lookupPocket(query, setHint, options, true, packageSetId(resolved));
   }
   const forcedPhysical = Boolean(setHint) && !hintPocketSet;
-  if (!forcedPhysical && preference?.allowed === "pocket") return lookupPocket(query, setHint, options);
+  if (!forcedPhysical && preference?.allowed === "pocket") return lookupPocket(query, setHint, options, requireResolved, requireArg);
 
   // The preference's default game applies only to unhinted names, and only when the
   // package has the exact requested name; partial package matches must not win.
@@ -244,7 +254,9 @@ export async function lookupCard(
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
     if (preference?.allowed === "ptcg" || forcedPhysical) return undefined;
-    return lookupPocket(query, setHint, options);
+    // A concrete hint stays a requirement here: an empty filtered set must not
+    // widen to every package printing.
+    return lookupPocket(query, setHint, options, requireResolved, requireArg);
   }
 
   // For a shared name, the preferred game wins before artwork or recency comparisons.
