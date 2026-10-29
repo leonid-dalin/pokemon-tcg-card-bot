@@ -181,6 +181,21 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
         self.assertFalse(m.STATE.exists())
 
+    def test_recovery_with_missing_previous_never_stops_the_service(self):
+        release = self.release(NEW)
+        m.point_to(release)
+        backup = self.root / "backups" / "missing-previous"
+        m.snapshot(backup)
+        m.atomic_json(m.STATE, {"phase": "switched", "release": release.name,
+                                "previous": OLD, "backup": backup.name})
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
+            m.recover()
+        # Prerequisite validation happens before any stop; invalid previous stays
+        # selected and the service is restarted without an empty prerequisite.
+        self.assertNotIn(("stop", m.SERVICE), control.call_args_list)
+        self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+        self.assertFalse(m.STATE.exists())
+
     def test_switch_intent_with_previous_selected_keeps_live_settings(self):
         previous, release = self.release(OLD), self.release(NEW)
         m.point_to(previous)
@@ -213,11 +228,11 @@ class DeploymentTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 m.activate(release)
         # The unconfirmed release must not be started; pending state stays for the
-        # next recovery run and re-attempting the same revision is still blocked.
+        # next recovery run and the failed revision is recorded up front.
         self.assertEqual(m.current(), release)
         self.assertEqual(control.call_args_list[-1].args, ("stop", m.SERVICE))
         self.assertTrue(m.STATE.exists())
-        self.assertFalse((self.root / "failed-revision").exists())
+        self.assertEqual((self.root / "failed-revision").read_text(), NEW)
 
     def test_acknowledged_settings_survive_a_failed_activation(self):
         previous, release = self.release(OLD), self.release(NEW)

@@ -34,14 +34,16 @@ describe("deployment readiness", () => {
 
   it("logs a failed write and keeps the timer alive instead of throwing", () => {
     vi.useFakeTimers();
+    const directory = mkdtempSync(join(tmpdir(), "bot-status-fail-"));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const stop = startRuntimeStatus(() => true, join(tmpdir(), "missing-dir", "status.json"));
     try {
+      const stop = startRuntimeStatus(() => true, join(directory, "missing", "status.json"));
       expect(() => vi.advanceTimersByTime(10_000)).not.toThrow();
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("status write failed"));
-    } finally {
       stop();
+    } finally {
       errorSpy.mockRestore();
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 });

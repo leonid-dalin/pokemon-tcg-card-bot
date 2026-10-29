@@ -213,16 +213,20 @@ def recover():
         return
     if phase == "switched" and selected == release:
         # Readiness was never confirmed, so restore the previous code and settings.
-        was_running = active()
-        if was_running:
-            systemctl("stop", SERVICE)
-        if backup.is_dir() and manifest(previous, previous.name):
+        try:
+            restorable = backup.is_dir() and bool(manifest(previous, previous.name))
+        except (ValueError, OSError):
+            restorable = False
+        if not restorable:
+            progress("Rollback prerequisites are missing or invalid; keeping the switched release")
+        else:
+            was_running = active()
+            if was_running:
+                systemctl("stop", SERVICE)
             restore(backup)
             point_to(previous)
             atomic_text(ROOT / "failed-revision", release.name)
             progress(f"Interrupted before readiness; restored {previous.name}")
-        else:
-            progress("Rollback prerequisites are missing; keeping the switched release")
     else:
         # Switch intent was persisted but the new release was never selected, or
         # activation never got past preparation/checkpointing: the previous release
@@ -280,10 +284,12 @@ def activate(release):
             systemctl("start", SERVICE)
             raise
         try:
+            # Record the failed release before attempting recovery, so a failed
+            # restoration cannot lead to immediate re-attempts of the same revision.
+            atomic_text(ROOT / "failed-revision", release.name)
             if backup.is_dir():
                 restore(backup)
             point_to(previous)
-            atomic_text(ROOT / "failed-revision", release.name)
             STATE.unlink()
         except Exception:
             # Restoration failed: keep the pending state so a later recovery retries
@@ -427,6 +433,9 @@ def rollback():
             raise ValueError("checkpoint database is missing")
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise RuntimeError(f"rollback checkpoint is unusable ({type(error).__name__})") from error
+    # Record the failed release before attempting recovery: a failed restoration
+    # must not allow immediate re-attempts of the same revision.
+    atomic_text(ROOT / "failed-revision", info["from"])
     systemctl("stop", SERVICE)
     try:
         restore(backup)
@@ -440,7 +449,6 @@ def rollback():
         with contextlib.suppress(Exception):
             systemctl("start", SERVICE)
         raise
-    atomic_text(ROOT / "failed-revision", info["from"])
     (ROOT / "rollback.json").unlink()
     print(f"Restored {previous_name} and its settings checkpoint")
 

@@ -2,29 +2,29 @@
 
 Use the native systemd service on Raspberry Pi OS 64-bit Bookworm. GitHub builds a Linux ARM64 bundle containing the pinned Node runtime, production dependencies, compiled bot and local card data. The Pi downloads the bundle and runs an offline check before stopping the installed bot
 
-The service starts at boot and retries after a crash or a failed login. Keep the Pi's existing Sunday reboot schedule. The bot needs outbound HTTPS and Discord Gateway access; it opens no listening port
+The service starts at boot and retries after a crash or a failed login. The bot needs outbound HTTPS and Discord Gateway access; it opens no listening port
 
 ## Prepare the migration
 
-The operator needs SSH access with sudo, Python 3, CA certificates and systemd on the Pi. Confirm `uname -m` prints `aarch64`, check free disk space and keep the gateway and Pi-hole services running. Install missing prerequisites with `sudo apt-get install python3 ca-certificates git`
+The host needs root access, Python 3 and systemd. Confirm `uname -m` prints `aarch64` and there is enough free disk space. Install missing prerequisites with `sudo apt-get install python3 ca-certificates git`
 
-Wait for this deployment PR and any application changes to merge into `master`, then check that the CI run for the current master commit has published its `pi-<commit>` prerelease. Pull requests build and test bundles but do not publish them
+Wait for the deployment and application changes to merge into `master`, then check that the CI run for the current master commit has published its `pi-<commit>` prerelease. Pull requests build and test bundles but do not publish them
 
-On the PC, locate the working `.env` and the directory named by `DATA_DIR`. If `DATA_DIR` is unset, existing server settings live in memory and cannot be copied. Stop the PC bot before copying SQLite files or starting the Pi bot. Copy `settings.db` and any `settings.db-wal` or `settings.db-shm` files together after the process exits
+On the machine that currently runs the bot, locate the working `.env` and the directory named by `DATA_DIR`. If `DATA_DIR` is unset, existing server settings live in memory and cannot be copied. Stop the source bot before copying SQLite files or starting the new one. Copy `settings.db` and any `settings.db-wal` or `settings.db-shm` files together after the process exits
 
-Transfer secrets through SSH into a private directory. In PowerShell, substitute your existing SSH alias and the actual local paths:
+Transfer secrets through SSH into a private directory. In PowerShell, substitute the SSH alias and the actual local paths:
 
 ```powershell
-$piTarget = 'your-pi-alias'
+$piTarget = 'your-host-alias'
 ssh $piTarget 'umask 077; mkdir -p ~/card-bot-migration; chmod 700 ~/card-bot-migration'
 scp 'C:\path\to\bot\.env' "${piTarget}:card-bot-migration/bot.env"
-# Run these only when the files exist in the stopped PC bot's DATA_DIR.
+# Run these only when the files exist in the stopped source bot's DATA_DIR.
 scp 'C:\path\to\bot\data\settings.db' "${piTarget}:card-bot-migration/settings.db"
 ```
 
-Transfer any SQLite sidecar files with the same `scp` pattern if they remain. Keep the source files until the Pi passes the acceptance checks. Never copy the PC's `node_modules`, PID file or build directory
+Transfer any SQLite sidecar files with the same `scp` pattern if they remain. Keep the source files until the new host passes the acceptance checks. Never copy the source machine's `node_modules`, PID file or build directory
 
-## Install on the Pi
+## Install on the host
 
 Run these commands in the SSH session. The checkout contains installation tooling only; the service runs a tested release under `/opt`
 
@@ -53,7 +53,7 @@ sudo journalctl -u pokemon-card-bot.service -n 30 --no-pager
 
 For a new installation without a database, skip the `install` command and enable the service directly. Run the application's command registration once if its slash command definitions have changed; [development](development.md) describes registration. Deployment never registers commands automatically
 
-Once the acceptance checks pass, delete the temporary secret copy from the migration directory and keep an independent backup of the private environment file. Restrict any retained PC copy to your account
+Once the acceptance checks pass, delete the temporary secret copy from the migration directory and keep an independent backup of the private environment file. Restrict any retained copy to the account that owns it
 
 ## Acceptance checks
 
@@ -62,9 +62,9 @@ Once the acceptance checks pass, delete the temporary secret copy from the migra
 - Try `/card`, `/search` and an enabled message reply in a test server
 - Check that migrated per-server settings survive `sudo systemctl restart pokemon-card-bot.service`
 - Reboot during a maintenance window and repeat the readiness and command checks
-- Confirm gateway and Pi-hole still work, then inspect `systemctl show pokemon-card-bot.service -p MemoryCurrent -p MemoryPeak -p NRestarts` and the Pi's temperature and throttling status
+- Confirm other services on the host still work, then inspect `systemctl show pokemon-card-bot.service -p MemoryCurrent -p MemoryPeak -p NRestarts` and the hardware's temperature and throttling status
 
-The service allows one CPU core, sets V8's old-space limit to 192 MiB and applies systemd memory thresholds of 256 MiB and 384 MiB. These defaults need observation on the actual Pi under its usual traffic. Inspect the journal for memory pressure before changing limits with `sudo systemctl edit pokemon-card-bot.service`
+The service allows one CPU core, sets V8's old-space limit to 192 MiB and applies systemd memory thresholds of 256 MiB and 384 MiB. These defaults need observation on the actual hardware under its usual traffic. Inspect the journal for memory pressure before changing limits with `sudo systemctl edit pokemon-card-bot.service`
 
 ## Updates and rollback
 
@@ -77,7 +77,7 @@ systemctl list-timers pokemon-card-bot-update.timer
 sudo pokemon-card-bot update
 ```
 
-The timer checks about every 30-35 minutes, starting 10-15 minutes after boot. It reads the exact `master` commit through the public GitHub API and requires the matching published bundle and checksum. A missing bundle, failed download or checksum mismatch leaves the installed code running. No GitHub token is needed on the Pi
+The timer checks about every 30-35 minutes, starting 10-15 minutes after boot. It reads the exact `master` commit through the public GitHub API and requires the matching published bundle and checksum. A missing bundle, failed download or checksum mismatch leaves the installed code running. No GitHub token is needed on the host
 
 Before activation, the updater stops the bot and then takes the authoritative settings checkpoint, so every setting the old process acknowledged is included; downloads and the bundle preflight already ran by that point. It switches the release link and waits up to 180 seconds for a fresh status file from the new process confirming Discord readiness. Failed startup restores the previous code and settings snapshot, then restarts the previous release. Network outages during activation can therefore cause a rollback
 
@@ -114,7 +114,7 @@ SHA-256 checks detect transfer corruption. The release and checksum share GitHub
 
 Use `sudo pokemon-card-bot backup` for an online SQLite snapshot. Copy that snapshot and the environment file to secure storage off the SD card. Back up invocation logs separately if enabled. The updater's snapshots protect upgrades; they share the same SD card as the live database
 
-The service logs to journald and leaves the Pi's global journal policy unchanged. Invocation logs can contain complete messages and replies, so enable them only when needed and monitor their disk usage
+The service logs to journald and leaves the host's global journal policy unchanged. Invocation logs can contain complete messages and replies, so enable them only when needed and monitor their disk usage
 
 For a failed boot, check `systemctl status pokemon-card-bot.service`, the service journal, DNS and outbound connectivity. `status` distinguishes an active process from a Discord connection. systemd keeps retrying startup every 30 seconds, including when the network comes up late after a reboot
 
@@ -122,7 +122,7 @@ The installer can be rerun to update the management script and unit files. Stop 
 
 ## Optional Docker deployment
 
-Prefer the native service on a 1 GB Pi already running DNS and gateway services. The Dockerfile and Compose file support operators who already run Docker. [Docker supports Debian Bookworm and ARM64](https://docs.docker.com/engine/install/debian/); installing its daemon and network rules needs a separate decision on a shared gateway
+The native service suits a small single-board computer that also runs DNS or gateway services. The Dockerfile and Compose file support installations that already use Docker. [Docker supports Debian Bookworm and ARM64](https://docs.docker.com/engine/install/debian/); installing its daemon and network rules needs a separate decision on a shared gateway
 
 Place a private `.env` beside `compose.yaml`, set `INVOCATION_LOG_DIR=/data/invocations` if logging is wanted, then run:
 
@@ -133,7 +133,7 @@ docker compose ps
 docker compose logs --tail=30
 ```
 
-Build on another ARM64 machine and transfer the image with `docker save` and `docker load` if the Pi cannot spare the build resources. Use the same image tag as the Compose file. The build context excludes `.env`, databases and local logs. The runtime uses a persistent named volume, a read-only filesystem and the same memory limit as the native service
+Build on another ARM64 machine and transfer the image with `docker save` and `docker load` if the host cannot spare the build resources. Use the same image tag as the Compose file. The build context excludes `.env`, databases and local logs. The runtime uses a persistent named volume, a read-only filesystem and the same memory limit as the native service
 
 Keep Docker enabled at boot. Compose restarts an exited container after a crash or reboot through `unless-stopped`; an unhealthy status alone does not restart it. Check the status and logs when Discord is unavailable. Docker updates and volume backups are manual; the systemd updater manages native bundles only. Run one deployment at a time
 
@@ -148,4 +148,4 @@ python3 -m unittest discover -s deploy/tests -v
 shellcheck deploy/*.sh
 ```
 
-Offline checks cannot verify the real bot token, the Pi's reboot policy or its workload. Complete the acceptance checks on the target machine before relying on unattended operation
+Offline checks cannot verify the real bot token, the host's reboot policy or its workload. Complete the acceptance checks on the target machine before relying on unattended operation
