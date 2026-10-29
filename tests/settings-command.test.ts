@@ -31,6 +31,12 @@ function fakeStore(row: Partial<GuildSettings> = {}, failUpdate = false): Store 
     delete: () => {
       store.deleted = true;
     },
+    setCurrency: (userId: string, currency: string) => {
+      (store as unknown as { userCurrency?: string }).userCurrency = `${userId}:${currency}`;
+    },
+    clearCurrency: (userId: string) => {
+      (store as unknown as { userCurrency?: string }).userCurrency = `${userId}:cleared`;
+    },
   };
   return store as unknown as Store;
 }
@@ -46,6 +52,7 @@ function fakeInteraction(
   const interaction = {
     inGuild: () => inGuild,
     guildId: inGuild ? "g1" : null,
+    user: { id: "u1" },
     memberPermissions: {
       has: (flag: unknown) =>
         (overrides.permissions ?? ["ManageGuild"]).some((name) => flag === name || flag === PermissionFlagsBits[name as keyof typeof PermissionFlagsBits]),
@@ -109,6 +116,31 @@ describe("settings command", () => {
     await run(store, interaction);
     expect(store.updates).toEqual([{ messageReplies: false }]);
     expect(replies[0]?.content).toContain("Message replies are now off");
+  });
+
+  it("sets the server currency from the currency group", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["currency", "server"], { code: "GBP" });
+    await run(store, interaction);
+    expect(store.updates).toEqual([{ currency: "GBP" }]);
+    expect(replies[0]?.content).toContain("default currency is now pounds");
+  });
+
+  it("clears a user currency so the server default applies again", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["currency", "user"], { code: "default" });
+    await run(store, interaction);
+    expect((store as unknown as { userCurrency?: string }).userCurrency).toBe("u1:cleared");
+    expect(replies[0]?.content).toContain("follow this server's currency");
+  });
+
+  it("stores a user currency without touching the server row", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["currency", "user"], { code: "CNY" });
+    await run(store, interaction);
+    expect(store.updates).toEqual([]);
+    expect((store as unknown as { userCurrency?: string }).userCurrency).toBe("u1:CNY");
+    expect(replies[0]?.content).toContain("yuan");
   });
 
   it("reports a failed save without a success confirmation", async () => {

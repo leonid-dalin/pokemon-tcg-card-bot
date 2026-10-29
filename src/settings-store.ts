@@ -69,7 +69,9 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
 /** Formats an amount with the currency's symbol; JPY has no minor unit. */
 export function formatMoney(amount: number, currency: Currency): string {
   const digits = currency === "JPY" ? 0 : 2;
-  return `${CURRENCY_SYMBOLS[currency]}${amount.toFixed(digits)}`;
+  // CNY shares the yen sign with JPY, so it carries the RMB suffix to stay unambiguous.
+  const suffix = currency === "CNY" ? " RMB" : "";
+  return `${CURRENCY_SYMBOLS[currency]}${amount.toFixed(digits)}${suffix}`;
 }
 
 interface SettingsRow {
@@ -345,6 +347,11 @@ export class SettingsStore {
       )
       .run(userId, currency, updatedAt);
     return { userId, currency, updatedAt };
+  }
+
+  /** Drops a user's choice so their prices follow the server again. */
+  clearCurrency(userId: string): void {
+    this.db.prepare("DELETE FROM user_settings WHERE user_id = ?").run(userId);
   }
 
   /** Resolves the currency for a lookup: the user's choice, then the server default, then EUR. */

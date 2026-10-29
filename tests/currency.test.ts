@@ -14,7 +14,12 @@ describe("currency conversion", () => {
     expect(formatPrice(1.49, "USD")).toMatch(/^\$\d+\.\d{2}$/);
     expect(formatPrice(1.49, "GBP")).toMatch(/^£\d+\.\d{2}$/);
     expect(formatPrice(1.49, "JPY")).toMatch(/^¥\d+$/);
-    expect(formatPrice(1.49, "CNY")).toMatch(/^¥\d+\.\d{2}$/);
+    expect(formatPrice(1.49, "CNY")).toMatch(/^¥\d+\.\d{2} RMB$/);
+  });
+
+  it("distinguishes renminbi from yen, which share a sign", () => {
+    expect(formatPrice(1.49, "CNY")).toContain("RMB");
+    expect(formatPrice(1.49, "JPY")).not.toContain("RMB");
   });
 
   it("drops the minor unit for yen", () => {
@@ -34,6 +39,15 @@ describe("currency resolution", () => {
     const store = new SettingsStore(undefined, DEFAULTS);
     store.update("g1", { currency: "GBP" });
     expect(store.resolveCurrency("u2", "g1")).toBe("GBP");
+  });
+
+  it("returns a user to the server default after clearing their choice", () => {
+    const store = new SettingsStore(undefined, DEFAULTS);
+    store.update("g1", { currency: "GBP" });
+    store.setCurrency("u5", "CNY");
+    expect(store.resolveCurrency("u5", "g1")).toBe("CNY");
+    store.clearCurrency("u5");
+    expect(store.resolveCurrency("u5", "g1")).toBe("GBP");
   });
 
   it("falls back to euros when neither has chosen", () => {

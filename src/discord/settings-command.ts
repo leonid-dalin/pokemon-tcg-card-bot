@@ -119,22 +119,46 @@ export const settingsCommand = new SlashCommandBuilder()
         option.setName("seconds").setDescription("0 to 86400").setMinValue(0).setMaxValue(86_400).setRequired(true),
       ),
   )
-  .addSubcommand((sub) =>
-    sub
+  .addSubcommandGroup((group) =>
+    group
       .setName("currency")
-      .setDescription("Your price currency; overrides this server's default")
-      .addStringOption((option) =>
-        option
-          .setName("code")
-          .setDescription("currency for your prices")
-          .addChoices(
-            { name: "Euro (€)", value: "EUR" },
-            { name: "US dollar ($)", value: "USD" },
-            { name: "Pound (£)", value: "GBP" },
-            { name: "Yen (¥)", value: "JPY" },
-            { name: "Yuan (¥)", value: "CNY" },
-          )
-          .setRequired(true),
+      .setDescription("Prices for you, or the default this server starts from")
+      .addSubcommand((sub) =>
+        sub
+          .setName("user")
+          .setDescription("Your price currency; overrides this server's default")
+          .addStringOption((option) =>
+            option
+              .setName("code")
+              .setDescription("currency for your prices")
+              .addChoices(
+                { name: "Default (follow this server)", value: "default" },
+                { name: "Euro (€)", value: "EUR" },
+                { name: "US dollar ($)", value: "USD" },
+                { name: "Pound (£)", value: "GBP" },
+                { name: "Yen (¥)", value: "JPY" },
+                { name: "Yuan (¥ RMB)", value: "CNY" },
+              )
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("server")
+          .setDescription("Default price currency for this server")
+          .addStringOption((option) =>
+            option
+              .setName("code")
+              .setDescription("currency for the server default")
+              .addChoices(
+                { name: "Euro (€)", value: "EUR" },
+                { name: "US dollar ($)", value: "USD" },
+                { name: "Pound (£)", value: "GBP" },
+                { name: "Yen (¥)", value: "JPY" },
+                { name: "Yuan (¥ RMB)", value: "CNY" },
+              )
+              .setRequired(true),
+          ),
       ),
   )
   .addSubcommand((sub) => sub.setName("reset").setDescription("Back to the deployment defaults"));
@@ -308,10 +332,21 @@ export async function handleSettingsCommand(
     return;
   }
 
-  if (sub === "currency") {
+  if (sub === "currency:user") {
+    const code = interaction.options.getString("code", true);
+    if (code === "default") {
+      context.settings.clearCurrency(interaction.user.id);
+      await reply("Your prices now follow this server's currency.");
+      return;
+    }
+    context.settings.setCurrency(interaction.user.id, code as Currency);
+    await reply(`Your prices now show in ${CURRENCY_LABELS[code as Currency]}.`);
+    return;
+  }
+
+  if (sub === "currency:server") {
     const code = interaction.options.getString("code", true) as Currency;
-    context.settings.setCurrency(interaction.user.id, code);
-    await reply(`Your prices now show in ${CURRENCY_LABELS[code]}.`);
+    await apply({ currency: code }, `This server's default currency is now ${CURRENCY_LABELS[code]}.`);
     return;
   }
 
