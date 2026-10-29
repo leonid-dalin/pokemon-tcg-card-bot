@@ -1,12 +1,7 @@
-import type { SetSummary } from "../../src/api/types.js";
+import type { CardSetDetail, SetSummary } from "../../src/api/types.js";
 import type { SetIndexEntry } from "../../src/data/set-index.js";
 
-export interface SetDetail {
-  id: string;
-  name: string;
-  abbreviation?: { official?: string; shortened?: string };
-  releaseDate?: string;
-}
+export type SetDetail = CardSetDetail;
 
 export interface SetDetailResult {
   summary: SetSummary;

@@ -18,7 +18,7 @@ let failed = 0;
 
 for (const [position, summary] of sets.entries()) {
   try {
-    results.push({ summary, detail: (await client.getSet(summary.id)) as SetDetailResult["detail"], failed: false });
+    results.push({ summary, detail: await client.getSet(summary.id), failed: false });
   } catch {
     failed += 1;
     results.push({ summary, failed: true });

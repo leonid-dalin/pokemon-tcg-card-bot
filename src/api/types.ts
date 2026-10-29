@@ -8,6 +8,11 @@ export interface CardSetRef {
   releaseDate?: string;
 }
 
+/** A set-detail response; only the detail endpoint carries the abbreviation block. */
+export interface CardSetDetail extends CardSetRef {
+  abbreviation?: { official?: string; shortened?: string };
+}
+
 export interface Attack {
   cost?: string[];
   name: string;

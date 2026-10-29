@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { entryFor, manifestFor, readManifest, sha256, upsertEntry, writeAtomic } from "../scripts/lib/publish.js";
@@ -82,6 +82,13 @@ describe("set index rendering", () => {
     const source = readFileSync(TARGET, "utf8");
     const parsed = splitModule(source);
     expect(renderModule(parsed.entries, parsed.header)).toBe(source);
+  });
+
+  it("ships unique ids in the declared sort order", () => {
+    const parsed = splitModule(readFileSync(TARGET, "utf8"));
+    const ids = parsed.entries.map((entry) => entry.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(parsed.entries).toEqual(sortEntries(parsed.entries));
   });
 
   it("parses every entry in the shipped index", () => {
@@ -168,7 +175,6 @@ describe("atomic publication", () => {
       writeFileSync(target, "original", "utf8");
       writeAtomic(target, "replacement");
       expect(readFileSync(target, "utf8")).toBe("replacement");
-      const { readdirSync } = require("node:fs") as typeof import("node:fs");
       expect(readdirSync(dir)).toEqual(["data.ts"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
