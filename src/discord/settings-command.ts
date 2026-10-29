@@ -470,6 +470,8 @@ export async function handleInlineSettingsButton(
     await interaction.reply(ephemeral("Only members with the Manage Server permission can change these settings."));
     return;
   }
+  // Acknowledge before touching storage: the store may wait up to five seconds on a lock.
+  await interaction.deferUpdate();
   const current = context.settings.get(interaction.guildId);
   const next = { ...current };
   if (action === "messages") next.messageReplies = !current.messageReplies;
@@ -477,10 +479,10 @@ export async function handleInlineSettingsButton(
   try {
     context.settings.update(interaction.guildId, { [action === "messages" ? "messageReplies" : "decklistReplies"]: next[action === "messages" ? "messageReplies" : "decklistReplies"] });
   } catch (error) {
-    await interaction.reply(ephemeral(`Could not save that change (${errorCategory(error)}).`));
+    await interaction.followUp({ content: `Could not save that change (${errorCategory(error)}).`, flags: MessageFlags.Ephemeral }).catch(() => {});
     return;
   }
-  await interaction.update({
+  await interaction.editReply({
     embeds: [settingsEmbed(settingsViewLines(next, context.mentionEnabled))],
     components: settingsComponents(next),
   });

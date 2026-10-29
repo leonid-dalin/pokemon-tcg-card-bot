@@ -98,7 +98,9 @@ describe("inline counterparts answer like their slash commands", () => {
       customId: "iset:messages",
       inGuild: () => true,
       memberPermissions: { has: () => true },
-      update: async (payload: never) => void updates.push(payload),
+      deferUpdate: async () => undefined,
+      editReply: async (payload: never) => void updates.push(payload),
+      followUp: async () => undefined,
     };
 
     await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
@@ -107,6 +109,30 @@ describe("inline counterparts answer like their slash commands", () => {
     const text = updates[0]?.embeds?.[0]?.data.description ?? "";
     expect(text).toContain("Message replies: off");
     expect(updates[0]?.components?.[0]?.components[0]?.data.label).toBe("Message replies: off");
+  });
+
+  it("reports a failed save without re-rendering the view", async () => {
+    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
+    const settings = {
+      get: () => ({ messageReplies: true, decklistReplies: false }),
+      update: () => { throw new Error("database is locked"); },
+    };
+    const updates: unknown[] = [];
+    const followUps: { content?: string; flags?: number }[] = [];
+    const interaction = {
+      guildId: "guild-a",
+      customId: "iset:messages",
+      inGuild: () => true,
+      memberPermissions: { has: () => true },
+      deferUpdate: async () => undefined,
+      editReply: async (payload: never) => void updates.push(payload),
+      followUp: async (payload: never) => void followUps.push(payload),
+    };
+
+    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
+
+    expect(updates).toEqual([]);
+    expect(followUps[0]?.content).toContain("Could not save that change");
   });
 
   it("refuses a settings toggle from a member without Manage Server", async () => {
@@ -172,7 +198,7 @@ describe("inline printings guards short and bang-prefixed names", () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {
       calls.push(String(url));
-      return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+      return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
     });
     const { message, replies } = fakeMessage(`<@${SELF}> ${content}`);
     await handler()(message as never);
