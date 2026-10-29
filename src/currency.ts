@@ -5,7 +5,14 @@ import { type Currency, formatMoney } from "./settings-store.js";
 
 const requireModule = createRequire(import.meta.url);
 
+let SNAPSHOT_DATE: string | undefined;
+
 const RATES: Record<Currency, number> = loadRates();
+
+/** The bundled snapshot's date, so callers can show how old the rates are. */
+export function ratesDate(): string | undefined {
+  return SNAPSHOT_DATE;
+}
 
 /** Reads the bundled EUR rates once; the package ships a dated snapshot and makes no network call. */
 function loadRates(): Record<Currency, number> {
@@ -22,6 +29,7 @@ function loadRates(): Record<Currency, number> {
     }
     return value;
   };
+  SNAPSHOT_DATE = payload.date;
   return { EUR: 1, USD: read("usd"), GBP: read("gbp"), JPY: read("jpy"), CNY: read("cny") };
 }
 

@@ -21,6 +21,7 @@ import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFro
 import { cardReply, searchReply } from "./replies.js";
 import { settingsCommand } from "./settings-command.js";
 import { buildIdentity, formatUptime } from "../version.js";
+import { ratesDate } from "../currency.js";
 
 const SOURCE_LABEL = { env: "deployed", build: "bundle", git: "checkout", package: "package version" } as const;
 
@@ -313,6 +314,7 @@ export async function handleVersionCommand(
     identity.packageVersion ? `Version: ${identity.packageVersion}` : undefined,
     identity.built ? `Last updated: ${identity.built.slice(0, 10)}` : undefined,
     `Uptime: ${formatUptime(now - startedAt)}`,
+    ratesDate() ? `Exchange rates: ${ratesDate()}` : undefined,
   ].filter((line): line is string => Boolean(line));
   await interaction.reply({ content: lines.join("\n"), ephemeral: true });
 }
