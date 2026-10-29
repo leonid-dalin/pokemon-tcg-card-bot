@@ -291,7 +291,7 @@ const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
 function footerFor(printings: { id: string }[], attribution: string): string {
   const pocket = printings.some((printing) => POCKET_ID.test(printing.id));
   const physical = printings.some((printing) => !POCKET_ID.test(printing.id));
-  if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards`;
+  if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards · github.com/PocketDecks/pokemon-tcg-pocket-cards`;
   return pocket ? POCKET_ATTRIBUTION : attribution;
 }
 

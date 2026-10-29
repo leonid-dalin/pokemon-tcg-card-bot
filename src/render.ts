@@ -44,7 +44,7 @@ const TYPE_COLOURS: Record<string, number> = {
 const DEFAULT_COLOUR = 0x5865f2;
 
 /** Default source credit for embeds. */
-export const DEFAULT_ATTRIBUTION = "Card data from TCGdex";
+export const DEFAULT_ATTRIBUTION = "Card data from TCGdex · tcgdex.com";
 const FIELD_VALUE_LIMIT = 1024;
 
 /** Returns a complete image URL, or undefined when the card has no image. */
