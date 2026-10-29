@@ -43,7 +43,8 @@ def run(*args, **kwargs):
 
 def preflight(unpacked):
     """Run the bundle smoke test as the service user without operator secrets."""
-    # Debian installs runuser in /sbin, which a bare PATH does not search.
+    # The executable must be resolved from a trusted search path that includes the
+    # administrative directories; a bare PATH would miss /sbin runuser on Bookworm.
     runuser = shutil.which("runuser", path="/usr/sbin:/sbin:/usr/bin:/bin")
     if not runuser:
         raise RuntimeError("runuser is required for the service-user preflight")
@@ -198,18 +199,20 @@ def recover():
         raise SystemExit(1)
     progress("Recovering an interrupted update")
     selected = current()
-    # The link wins when it and the recorded intent disagree after a crash.
+    # The selected release decides the actual phase when the link and the
+    # recorded intent disagree after a crash.
     if phase in ("prepared", "checkpointed") and selected == release:
         phase = "switched"
     if phase == "ready":
-        # Always refresh the success record, or a stale checkpoint becomes the rollback target.
+        # The new release reached readiness; always refresh the success record so a
+        # stale checkpoint from an older update can never be rolled back into.
         atomic_json(ROOT / "rollback.json", {"backup": state["backup"], "from": release.name})
         STATE.unlink()
         if not active():
             systemctl("start", SERVICE)
         return
     if phase == "switched" and selected == release:
-        # Readiness was never confirmed, so the switch must be undone.
+        # Readiness was never confirmed, so restore the previous code and settings.
         try:
             restorable = backup.is_dir() and bool(manifest(previous, previous.name))
         except (ValueError, OSError):
@@ -217,18 +220,21 @@ def recover():
         if not restorable:
             progress("Rollback prerequisites are missing or invalid; keeping the switched release")
         else:
-            if active():
+            was_running = active()
+            if was_running:
                 systemctl("stop", SERVICE)
             restore(backup)
             point_to(previous)
             atomic_text(ROOT / "failed-revision", release.name)
             progress(f"Interrupted before readiness; restored {previous.name}")
     else:
-        # The new release never ran, so the live database (which may hold settings
-        # accepted since the reboot) outranks the pre-reboot checkpoint.
+        # Switch intent was persisted but the new release was never selected, or
+        # activation never got past preparation/checkpointing: the previous release
+        # is live and may have accepted settings since the reboot, so its live
+        # database stays in place instead of the pre-reboot checkpoint.
         progress("Previous release is still selected; keeping its live settings")
     STATE.unlink()
-    # Recovery can run while the unit is failed; availability comes first.
+    # The service must not stay down because recovery happened while it was failed.
     systemctl("start", SERVICE)
 
 
@@ -243,18 +249,21 @@ def activate(release):
         print("Bot is stopped; update skipped")
         return
     backup = ROOT / "backups" / f"{int(time.time_ns())}-{previous.name}"
-    # A crash after the stop but before this record left a stopped bot with no reason on file.
+    # Persist the stop intent before touching the service, so a killed updater can
+    # be recovered instead of leaving a stopped bot with no record of why.
     atomic_json(STATE, {"phase": "prepared", "release": release.name,
                         "previous": previous.name, "backup": backup.name})
     try:
-        # The checkpoint must follow the stop to capture settings the old process acknowledged.
+        # Stop first so the checkpoint captures every setting the old process
+        # acknowledged; downloads and the preflight already ran before this point.
         progress("Stopping the bot and taking the authoritative settings checkpoint")
         systemctl("stop", SERVICE)
         snapshot(backup)
         (backup / "previous").write_text(previous.name)
         atomic_json(STATE, {"phase": "checkpointed", "release": release.name,
                             "previous": previous.name, "backup": backup.name})
-        # Intent precedes the link change, so a crash in the gap still recovers as a switch.
+        # Persist the switch intent before replacing the link, so a crash in the
+        # gap is recovered as a switch rather than left on the old phase.
         atomic_json(STATE, {"phase": "switched", "release": release.name,
                             "previous": previous.name, "backup": backup.name})
         point_to(release)
@@ -268,21 +277,23 @@ def activate(release):
         with contextlib.suppress(Exception):
             systemctl("stop", SERVICE)
         if current() == previous:
-            # Nothing was selected, so the old release and its settings are intact.
+            # No selection happened; the old release and its live settings are
+            # intact, so restart it and drop the pending transaction.
             with contextlib.suppress(Exception):
                 STATE.unlink()
             systemctl("start", SERVICE)
             raise
         try:
-            # Recorded first: a failed restoration must not retry the same revision at once.
+            # Record the failed release before attempting recovery, so a failed
+            # restoration cannot lead to immediate re-attempts of the same revision.
             atomic_text(ROOT / "failed-revision", release.name)
             if backup.is_dir():
                 restore(backup)
             point_to(previous)
             STATE.unlink()
         except Exception:
-            # Keep the pending state for a later retry, and never start a release
-            # that failed readiness.
+            # Restoration failed: keep the pending state so a later recovery retries
+            # it, and never start the release that just failed its readiness check.
             progress("Automatic restoration failed; the new release stays selected and recovery is pending")
             raise
         systemctl("start", SERVICE)
@@ -321,7 +332,8 @@ def fetch(sha):
         extract(archive, unpacked)
         os.chmod(unpacked, 0o755)
         manifest(unpacked, sha)
-        # Runs before the live bot stops, so a broken bundle cannot interrupt service.
+        # Run without credentials and as the service user before stopping the live bot.
+        os.chmod(stage, 0o755)
         preflight(unpacked)
         unpacked.rename(target)
     return target
@@ -394,7 +406,7 @@ def prune():
     for release in (ROOT / "releases").iterdir():
         if SHA.fullmatch(release.name) and release not in keep and not release.is_symlink():
             shutil.rmtree(release)
-    # Manual backups carry no expiry; only upgrade checkpoints do.
+    # Manual operator backups are never pruned; only upgrade checkpoints expire.
     checkpoints = [path for path in (ROOT / "backups").iterdir()
                    if path.is_dir() and not path.name.endswith("-manual")]
     for backup in sorted(checkpoints, key=lambda path: path.name, reverse=True)[3:]:
@@ -421,7 +433,8 @@ def rollback():
             raise ValueError("checkpoint database is missing")
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise RuntimeError(f"rollback checkpoint is unusable ({type(error).__name__})") from error
-    # Recorded before the restore: a failed one must not retry the same revision at once.
+    # Record the failed release before attempting recovery: a failed restoration
+    # must not allow immediate re-attempts of the same revision.
     atomic_text(ROOT / "failed-revision", info["from"])
     systemctl("stop", SERVICE)
     try:
@@ -430,8 +443,8 @@ def rollback():
         systemctl("start", SERVICE)
         wait_ready()
     except Exception:
-        # restore() swaps the live database only after a complete copy, so the
-        # installed release can keep running unchanged.
+        # restore() only replaces the live database after a complete copy, so the
+        # installed release and its database are unchanged and can keep running.
         progress("Rollback did not reach readiness; restarting the installed release")
         with contextlib.suppress(Exception):
             systemctl("start", SERVICE)
@@ -524,6 +537,6 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as error:
-        # Subprocess output can carry credentials, so only the failure category is reported.
+        # Subprocess output may contain credentials; report only the failure category.
         print(f"Deployment failed ({type(error).__name__}); the update service journal has the last completed step", file=__import__("sys").stderr)
         raise SystemExit(1)
