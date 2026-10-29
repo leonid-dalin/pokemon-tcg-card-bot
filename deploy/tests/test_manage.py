@@ -7,6 +7,7 @@ import tarfile
 import tempfile
 import unittest
 from types import SimpleNamespace
+from subprocess import CalledProcessError
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("manage", Path(__file__).parents[1] / "manage.py")
@@ -30,6 +31,7 @@ class DeploymentTests(unittest.TestCase):
         self.patches = [patch.object(m, "ROOT", self.root), patch.object(m, "DATA", self.data),
                         patch.object(m, "ENV", self.env),
                         patch.object(m, "STATE", self.root / "update-state.json"),
+                        patch.object(m, "wait_ready", return_value=None),
                         patch.object(m.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=1000, pw_gid=1000))]
         for item in self.patches:
             item.start()
@@ -181,6 +183,67 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
         self.assertFalse(m.STATE.exists())
 
+    def test_recovery_stops_an_auto_restart_unit_before_restoring(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(release)
+        self.database("original")
+        backup = self.root / "backups" / "activating"
+        m.snapshot(backup)
+        (backup / "previous").write_text(previous.name)
+        m.atomic_json(m.STATE, {"phase": "switched", "release": release.name,
+                                "previous": previous.name, "backup": backup.name})
+        with patch.object(m, "active", return_value=False), patch.object(m, "systemctl") as control, \
+                patch.object(m.os, "chown"):
+            m.recover()
+        self.assertEqual(control.call_args_list[0].args, ("stop", m.SERVICE))
+        self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+        self.assertEqual(m.current(), previous)
+
+    def test_failed_recovery_start_keeps_transaction_for_retry(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(release)
+        self.database("original")
+        backup = self.root / "backups" / "pending"
+        m.snapshot(backup)
+        (backup / "previous").write_text(previous.name)
+        m.atomic_json(m.STATE, {"phase": "switched", "release": release.name,
+                                "previous": previous.name, "backup": backup.name})
+        with patch.object(m, "active", return_value=False), patch.object(m.os, "chown"), \
+                patch.object(m, "systemctl", side_effect=[None, CalledProcessError(1, "start")]):
+            with self.assertRaises(CalledProcessError):
+                m.recover()
+        self.assertTrue(m.STATE.exists())
+        self.assertEqual(m.current(), previous)
+        with patch.object(m, "active", return_value=False), patch.object(m, "systemctl") as control, \
+                patch.object(m.os, "chown"):
+            m.recover()
+        self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+        self.assertFalse(m.STATE.exists())
+        self.assertEqual(self.value(), "original")
+
+    def test_interrupted_manual_rollback_completes_on_the_next_run(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("original")
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                patch.object(m, "wait_ready"), patch.object(m.os, "chown"):
+            m.activate(release)
+        self.database("newer")
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                patch.object(m, "finish_recovery", side_effect=RuntimeError("killed")):
+            with self.assertRaises(RuntimeError):
+                m.rollback()
+        self.assertTrue(m.STATE.exists())
+        self.assertEqual(json.loads(m.STATE.read_text())["phase"], "manual")
+        self.assertEqual(m.current(), previous)
+        with patch.object(m, "active", return_value=False), patch.object(m, "systemctl") as control, \
+                patch.object(m.os, "chown"):
+            m.recover()
+        self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+        self.assertFalse(m.STATE.exists())
+        self.assertEqual(m.current(), previous)
+        self.assertEqual(self.value(), "original")
+
     def test_recovery_with_missing_previous_never_stops_the_service(self):
         release = self.release(NEW)
         m.point_to(release)
@@ -298,14 +361,15 @@ class DeploymentTests(unittest.TestCase):
         with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
                 patch.object(m, "wait_ready"), patch.object(m.os, "chown"):
             m.activate(release)
-            self.database("newer")
-            with patch.object(m.shutil, "copyfileobj", side_effect=OSError("disk full")), \
-                    patch.object(m, "systemctl") as control:
-                with self.assertRaises(OSError):
-                    m.rollback()
-                self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
-            self.assertEqual(m.current(), release)
-            self.assertEqual(self.value(), "newer")
+        self.database("newer")
+        with patch.object(m.shutil, "copyfileobj", side_effect=OSError("disk full")), \
+                patch.object(m, "systemctl") as control:
+            with self.assertRaises(OSError):
+                m.rollback()
+            self.assertNotIn(("start", m.SERVICE), control.call_args_list)
+        self.assertEqual(m.current(), release)
+        self.assertEqual(self.value(), "newer")
+        self.assertTrue(m.STATE.exists())
 
     def test_prune_keeps_manual_backups_and_referenced_checkpoint(self):
         previous, release = self.release(OLD), self.release(NEW)

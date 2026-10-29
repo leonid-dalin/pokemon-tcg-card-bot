@@ -197,14 +197,26 @@ def recover():
         raise SystemExit(1)
     progress("Recovering an interrupted update")
     selected = current()
+    if phase == "manual":
+        systemctl("stop", SERVICE)
+        if selected != previous or not backup.is_dir() or not manifest(previous, previous.name):
+            raise RuntimeError(
+                f"rollback prerequisites for {previous.name} are missing or invalid; "
+                f"{STATE.name} is kept and the service is left untouched"
+            )
+        restore(backup)
+        point_to(previous)
+        finish_recovery()
+        progress(f"Completed an interrupted rollback to {previous.name}")
+        return
     if phase in ("prepared", "checkpointed") and selected == release:
         phase = "switched"
     if phase == "ready":
         atomic_json(ROOT / "rollback.json", {"backup": state["backup"], "from": release.name})
-        STATE.unlink()
-        if not active():
-            systemctl("start", SERVICE)
-        return
+        if active():
+            STATE.unlink()
+            return
+        finish_recovery()
     if phase == "switched" and selected == release:
         try:
             restorable = backup.is_dir() and bool(manifest(previous, previous.name))
@@ -215,17 +227,22 @@ def recover():
                 f"rollback prerequisites for {previous.name} are missing or invalid; "
                 f"{STATE.name} is kept and the service is left untouched"
             )
-        was_running = active()
-        if was_running:
-            systemctl("stop", SERVICE)
+        systemctl("stop", SERVICE)
         restore(backup)
         point_to(previous)
         atomic_text(ROOT / "failed-revision", release.name)
         progress(f"Interrupted before readiness; restored {previous.name}")
+        finish_recovery()
     else:
         progress("Previous release is still selected; keeping its live settings")
-    STATE.unlink()
+        finish_recovery()
+
+
+def finish_recovery(confirm=False):
     systemctl("start", SERVICE)
+    if confirm:
+        wait_ready()
+    STATE.unlink()
 
 
 def activate(release):
@@ -261,20 +278,17 @@ def activate(release):
         with contextlib.suppress(Exception):
             systemctl("stop", SERVICE)
         if current() == previous:
-            with contextlib.suppress(Exception):
-                STATE.unlink()
-            systemctl("start", SERVICE)
+            finish_recovery()
             raise
         try:
             atomic_text(ROOT / "failed-revision", release.name)
             if backup.is_dir():
                 restore(backup)
             point_to(previous)
-            STATE.unlink()
         except Exception:
             progress("Automatic restoration failed; the new release stays selected and recovery is pending")
             raise
-        systemctl("start", SERVICE)
+        finish_recovery()
         raise
     atomic_json(ROOT / "rollback.json", {"backup": backup.name, "from": release.name})
     STATE.unlink()
@@ -408,17 +422,16 @@ def rollback():
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise RuntimeError(f"rollback checkpoint is unusable ({type(error).__name__})") from error
     atomic_text(ROOT / "failed-revision", info["from"])
+    atomic_json(STATE, {"phase": "manual", "release": info["from"], "previous": previous_name,
+                        "backup": info["backup"]})
     systemctl("stop", SERVICE)
     try:
         restore(backup)
         point_to(target)
-        systemctl("start", SERVICE)
-        wait_ready()
     except Exception:
-        progress("Rollback did not reach readiness; restarting the installed release")
-        with contextlib.suppress(Exception):
-            systemctl("start", SERVICE)
+        progress("Rollback failed before the release switched; the installed release stays selected")
         raise
+    finish_recovery()
     (ROOT / "rollback.json").unlink()
     print(f"Restored {previous_name} and its settings checkpoint")
 
