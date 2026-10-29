@@ -88,8 +88,6 @@ def published_head():
 
 
 def published_tag(sha):
-    # New tags are short, so the release's target commit decides whether it matches.
-    # pi-<full sha> is the earlier scheme, kept so existing releases still resolve.
     for tag in (release_tag(sha), f"pi-{sha}"):
         try:
             release = api(f"releases/tags/{tag}")
