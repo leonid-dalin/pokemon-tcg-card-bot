@@ -1,17 +1,20 @@
-import { Client, Events } from "discord.js";
+import { Client, Status } from "discord.js";
 
 /**
- * Per-shard gateway readiness. Manager-level isReady() latches after the first
- * ready event, so a shard that drops and reconnects would keep reporting ready;
- * this tracks each shard's connection state from the shard lifecycle events.
+ * Gateway readiness from the live shard set. Manager-level isReady() latches
+ * after the first ready event and the manager status stays Ready while a shard
+ * reconnects, and the client only emits shardDisconnect for unrecoverable codes,
+ * so a normal socket close would keep publishing ready. Reading each shard's
+ * current status catches a shard in Connecting or Disconnected; an empty shard
+ * set is never ready.
  */
 export function createShardReadiness(client: Client): () => boolean {
-  const connected = new Set<number>();
-  client.on(Events.ShardReady, (shardId) => connected.add(shardId));
-  client.on(Events.ShardResume, (shardId) => connected.add(shardId));
-  client.on(Events.ShardDisconnect, (_closeEvent, shardId) => {
-    connected.delete(shardId);
-  });
-  return () =>
-    client.isReady() && client.ws.shards.size > 0 && connected.size === client.ws.shards.size;
+  return () => {
+    const shards = [...client.ws.shards.values()];
+    return (
+      client.isReady() &&
+      shards.length > 0 &&
+      shards.every((shard) => shard.status === Status.Ready)
+    );
+  };
 }
