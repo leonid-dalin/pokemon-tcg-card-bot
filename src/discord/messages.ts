@@ -88,7 +88,6 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     if (!config.mentionEnabled) return;
     if (message.author.bot || message.webhookId) return;
     if (message.system) return;
-    if (context.settings?.messageRepliesFor?.(message.author.id) === false) return;
 
     // Warn once when plain text is missing without attachments, embeds or stickers.
     // Discord may strip the text when the Message Content intent is disabled.
@@ -115,7 +114,9 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
     const decklistOn = guild ? guild.decklistReplies : config.decklistEnabled;
     const gamePreference = guild ? { allowed: guild.cardGames, default: guild.defaultCardGame } : undefined;
-    const messageRepliesOn = guild ? guild.messageReplies : true;
+    const serverReplies = guild ? guild.messageReplies : true;
+    // A member's own choice overrides the server switch, as the command advertises.
+    const messageRepliesOn = context.settings?.messageRepliesFor?.(message.author.id) ?? serverReplies;
 
     const deck = decklistOn ? parseDecklist(message.content) : undefined;
     const selfId = context.selfId();
