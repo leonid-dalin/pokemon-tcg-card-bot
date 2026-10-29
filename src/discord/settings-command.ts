@@ -8,7 +8,7 @@ import {
   type InteractionReplyOptions,
 } from "discord.js";
 import { errorCategory } from "../diagnostics.js";
-import type { Currency, GuildSettingsPatch, SettingsStore } from "../settings-store.js";
+import type { Currency, GuildSettings, GuildSettingsPatch, SettingsStore } from "../settings-store.js";
 
 const CURRENCY_LABELS: Record<Currency, string> = {
   EUR: "euros (€)",
@@ -223,31 +223,7 @@ export async function handleSettingsCommand(
   }
 
   if (sub === "view") {
-    const settings = context.settings.get(guildId);
-    const channels =
-      settings.autoReplyChannelMode === "all"
-        ? "every channel"
-        : settings.selectedChannelIds.length
-          ? settings.selectedChannelIds.length > 10
-            ? `${settings.selectedChannelIds.slice(0, 10).map((id) => `<#${id}>`).join(", ")} and ${settings.selectedChannelIds.length - 10} more`
-            : settings.selectedChannelIds.map((id) => `<#${id}>`).join(", ")
-          : "none selected, so automatic replies are off everywhere";
-    const games = settings.cardGames === "both" ? "both games" : settings.cardGames === "ptcg" ? "the physical game only" : "Pocket only";
-    const preferred =
-      settings.cardGames === "both"
-        ? ` When a name exists in both, ${settings.defaultCardGame === "ptcg" ? "the physical card" : "the Pocket card"} wins.`
-        : "";
-    const lines = [
-      `Message replies: ${settings.messageReplies ? "on" : "off"}`,
-      `Decklist replies: ${settings.decklistReplies ? "on" : "off"}`,
-      `Automatic-reply channels: ${channels}`,
-      `Cooldown between replies per member: ${settings.cooldownSeconds === 0 ? "off" : `${settings.cooldownSeconds}s`}`,
-      `Card games: ${games}.${preferred} A hint like [[name|pocket]] still forces its game.`,
-    ];
-    if (!context.mentionEnabled) {
-      lines.push("This deployment has mention replies switched off, so nothing here turns them back on.");
-    }
-    await reply(lines.join("\n"));
+    await reply(settingsViewLines(context.settings.get(guildId), context.mentionEnabled).join("\n"));
     return;
   }
 
@@ -388,4 +364,33 @@ export async function handleSettingsCommand(
     }
     await reply("Settings reset to the deployment defaults.").catch(() => {});
   }
+}
+
+
+/** The effective settings as the member sees them in `/settings view` or `@bot settings`. */
+export function settingsViewLines(settings: GuildSettings, mentionEnabled: boolean): string[] {
+  const channels =
+    settings.autoReplyChannelMode === "all"
+      ? "every channel"
+      : settings.selectedChannelIds.length
+        ? settings.selectedChannelIds.length > 10
+          ? `${settings.selectedChannelIds.slice(0, 10).map((id) => `<#${id}>`).join(", ")} and ${settings.selectedChannelIds.length - 10} more`
+          : settings.selectedChannelIds.map((id) => `<#${id}>`).join(", ")
+        : "none selected, so automatic replies are off everywhere";
+  const games = settings.cardGames === "both" ? "both games" : settings.cardGames === "ptcg" ? "the physical game only" : "Pocket only";
+  const preferred =
+    settings.cardGames === "both"
+      ? ` When a name exists in both, ${settings.defaultCardGame === "ptcg" ? "the physical card" : "the Pocket card"} wins.`
+      : "";
+  const lines = [
+    `Message replies: ${settings.messageReplies ? "on" : "off"}`,
+    `Decklist replies: ${settings.decklistReplies ? "on" : "off"}`,
+    `Automatic-reply channels: ${channels}`,
+    `Cooldown between replies per member: ${settings.cooldownSeconds === 0 ? "off" : `${settings.cooldownSeconds}s`}`,
+    `Card games: ${games}.${preferred} A hint like [[name|pocket]] still forces its game.`,
+  ];
+  if (!mentionEnabled) {
+    lines.push("This deployment has mention replies switched off, so nothing here turns them back on.");
+  }
+  return lines;
 }
