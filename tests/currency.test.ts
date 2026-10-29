@@ -41,6 +41,24 @@ describe("currency resolution", () => {
     expect(store.resolveCurrency("u2", "g1")).toBe("GBP");
   });
 
+  it("resolves a currency when the row exists only for a reply preference", () => {
+    const store = new SettingsStore(undefined, DEFAULTS);
+    store.update("g1", { currency: "GBP" });
+    store.setMessageReplies("u6", false);
+    expect(store.currencyFor("u6")).toBeUndefined();
+    expect(store.resolveCurrency("u6", "g1")).toBe("GBP");
+    expect(store.resolveCurrency("u6", null)).toBe("EUR");
+  });
+
+  it("keeps a reply preference when the currency is cleared", () => {
+    const store = new SettingsStore(undefined, DEFAULTS);
+    store.setCurrency("u7", "USD");
+    store.setMessageReplies("u7", false);
+    store.clearCurrency("u7");
+    expect(store.messageRepliesFor("u7")).toBe(false);
+    expect(store.currencyFor("u7")).toBeUndefined();
+  });
+
   it("returns a user to the server default after clearing their choice", () => {
     const store = new SettingsStore(undefined, DEFAULTS);
     store.update("g1", { currency: "GBP" });

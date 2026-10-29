@@ -340,9 +340,9 @@ export class SettingsStore {
   /** Returns the user's stored currency, or undefined when they have not chosen one. */
   currencyFor(userId: string): Currency | undefined {
     const row = this.db.prepare("SELECT currency FROM user_settings WHERE user_id = ?").get(userId) as
-      | { currency: string }
+      | { currency: string | null }
       | undefined;
-    if (!row) return undefined;
+    if (!row || row.currency === null || row.currency === undefined) return undefined;
     if (!CURRENCIES.includes(row.currency as Currency)) {
       throw new Error(`stored currency for user ${userId} is not a supported currency`);
     }
