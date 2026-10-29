@@ -182,6 +182,22 @@ def begin_activation(release, previous, backup):
                         "previous": previous.name, "backup": backup.name})
 
 
+def require_restorable(backup, previous):
+    try:
+        if not backup.is_dir() or not manifest(previous, previous.name):
+            raise ValueError("release or checkpoint is missing")
+        info = json.loads((backup / "snapshot.json").read_text())
+        if not isinstance(info, dict) or "settingsExisted" not in info:
+            raise ValueError("checkpoint shape is invalid")
+        if info["settingsExisted"] and not (backup / "settings.db").is_file():
+            raise ValueError("checkpoint database is missing")
+    except (OSError, ValueError, KeyError, TypeError):
+        raise RuntimeError(
+            f"rollback prerequisites for {previous.name} are missing or invalid; "
+            f"{STATE.name} is kept and the service is left untouched"
+        ) from None
+
+
 def recover():
     """Finish or undo an activation interrupted by cancellation or power loss."""
     if not STATE.exists():
@@ -202,15 +218,7 @@ def recover():
             finish_recovery()
             progress(f"Interrupted rollback already selected {previous.name}; kept its live settings")
             return
-        try:
-            restorable = backup.is_dir() and bool(manifest(previous, previous.name))
-        except (ValueError, OSError):
-            restorable = False
-        if not restorable:
-            raise RuntimeError(
-                f"rollback prerequisites for {previous.name} are missing or invalid; "
-                f"{STATE.name} is kept and the service is left untouched"
-            )
+        require_restorable(backup, previous)
         systemctl("stop", SERVICE)
         restore(backup)
         point_to(previous)
@@ -227,15 +235,7 @@ def recover():
         finish_recovery()
         return
     if phase == "switched" and selected == release:
-        try:
-            restorable = backup.is_dir() and bool(manifest(previous, previous.name))
-        except (ValueError, OSError):
-            restorable = False
-        if not restorable:
-            raise RuntimeError(
-                f"rollback prerequisites for {previous.name} are missing or invalid; "
-                f"{STATE.name} is kept and the service is left untouched"
-            )
+        require_restorable(backup, previous)
         systemctl("stop", SERVICE)
         restore(backup)
         point_to(previous)
@@ -287,7 +287,10 @@ def activate(release):
         with contextlib.suppress(Exception):
             systemctl("stop", SERVICE)
         if current() == previous:
-            finish_recovery()
+            try:
+                finish_recovery()
+            except Exception as error:
+                progress(f"Recovery restart failed ({type(error).__name__}); the pending state stays for the next run")
             raise
         try:
             atomic_text(ROOT / "failed-revision", release.name)
@@ -297,7 +300,10 @@ def activate(release):
         except Exception:
             progress("Automatic restoration failed; the new release stays selected and recovery is pending")
             raise
-        finish_recovery()
+        try:
+            finish_recovery()
+        except Exception as error:
+            progress(f"Recovery restart failed ({type(error).__name__}); the pending state stays for the next run")
         raise
     atomic_json(ROOT / "rollback.json", {"backup": backup.name, "from": release.name})
     STATE.unlink()
@@ -438,7 +444,7 @@ def rollback():
         restore(backup)
         point_to(target)
     except Exception:
-        progress("Rollback failed before the release switched; the installed release stays selected")
+        progress("Rollback failed before the release switched; the service is stopped, the installed release stays selected and recovery is pending")
         raise
     finish_recovery()
     (ROOT / "rollback.json").unlink()

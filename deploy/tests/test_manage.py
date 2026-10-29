@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 from subprocess import CalledProcessError
+from time import time_ns
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("manage", Path(__file__).parents[1] / "manage.py")
@@ -200,6 +201,39 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(m.current(), release)
         self.assertEqual(self.value(), "accepted-by-new-release")
         self.assertFalse(m.STATE.exists())
+
+    def test_recovery_rejects_an_unusable_checkpoint_before_stopping(self):
+        release = self.release(NEW)
+        previous = self.release(OLD)
+        m.point_to(release)
+        for prepare in (lambda b: (b / "snapshot.json").write_text("not json"),
+                       lambda b: (b / "snapshot.json").write_text('{"settingsExisted": true}'),
+                       lambda b: (b / "snapshot.json").write_text("[]")):
+            backup = self.root / "backups" / f"bad-{time_ns()}"
+            m.snapshot(backup)
+            (backup / "previous").write_text(OLD)
+            prepare(backup)
+            (backup / "settings.db").unlink(missing_ok=True)
+            m.atomic_json(m.STATE, {"phase": "switched", "release": release.name,
+                                    "previous": OLD, "backup": backup.name})
+            with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
+                with self.assertRaisesRegex(RuntimeError, "missing or invalid"):
+                    m.recover()
+            self.assertEqual(control.call_args_list, [])
+
+    def test_activation_failure_keeps_the_original_error_when_recovery_start_fails(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("original")
+        def fail():
+            raise RuntimeError("readiness timeout")
+        with patch.object(m, "active", return_value=True), patch.object(m.os, "chown"), \
+                patch.object(m, "wait_ready", side_effect=fail), \
+                patch.object(m, "finish_recovery", side_effect=CalledProcessError(1, "start")), \
+                patch.object(m, "systemctl"):
+            with self.assertRaisesRegex(RuntimeError, "readiness timeout"):
+                m.activate(release)
+        self.assertTrue(m.STATE.exists())
 
     def test_recovery_keeps_settings_accepted_after_the_rollback_switched(self):
         previous, release = self.release(OLD), self.release(NEW)
