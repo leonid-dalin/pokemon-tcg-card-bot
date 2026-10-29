@@ -84,7 +84,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  publish-pi:
+  publish-arm64:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: [test, arm64]
     runs-on: ubuntu-latest
