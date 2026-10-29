@@ -126,7 +126,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(
   Events.MessageCreate,
-  createMessageHandler({ api, config, budget, invocations, settings, pages: context.pages, selfId: () => client.user?.id }),
+  createMessageHandler({ api, config, budget, requests: memberBudget, invocations, settings, pages: context.pages, selfId: () => client.user?.id }),
 );
 
 client.on(Events.GuildDelete, (guild) => {
