@@ -44,7 +44,6 @@ const api = new TcgdexClient();
 const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore(), settings };
 
 const client = new Client(clientOptions(config));
-// The gateway status alone misses a single reconnecting shard; track each shard.
 startRuntimeStatus(createShardReadiness(client));
 const budget =
   config.mentionCooldownSeconds > 0
