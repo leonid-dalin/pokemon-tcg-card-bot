@@ -97,23 +97,27 @@ export class TcgdexClient {
     let lastError: unknown;
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
       try {
-        const response = await this.limiter.run(() =>
-          fetch(`${this.baseUrl}${path}`, {
+        // The slot covers the body too: headers arrive long before the payload, so
+        // releasing on fetch() alone would bound only the wait for headers.
+        const value = await this.limiter.run(async () => {
+          const response = await fetch(`${this.baseUrl}${path}`, {
             signal: AbortSignal.timeout(this.timeoutMs),
             headers: { accept: "application/json" },
-          }),
-        );
-        if (response.status === 404) {
-          this.remember(path, { expires: Date.now() + ttlMs, missing: true });
-          throw new TcgdexError(`not found: ${path}`, 404);
-        }
-        if (!response.ok) {
-          if (response.status === 429 || response.status >= 500) {
-            throw new TcgdexError(`upstream ${response.status}`, response.status);
+          });
+          if (response.status === 404) {
+            await response.body?.cancel().catch(() => undefined);
+            this.remember(path, { expires: Date.now() + ttlMs, missing: true });
+            throw new TcgdexError(`not found: ${path}`, 404);
           }
-          throw new TcgdexError(`request failed: ${response.status}`, response.status);
-        }
-        const value = (await response.json()) as T;
+          if (!response.ok) {
+            await response.body?.cancel().catch(() => undefined);
+            if (response.status === 429 || response.status >= 500) {
+              throw new TcgdexError(`upstream ${response.status}`, response.status);
+            }
+            throw new TcgdexError(`request failed: ${response.status}`, response.status);
+          }
+          return (await response.json()) as T;
+        });
         this.remember(path, { expires: Date.now() + ttlMs, value });
         return value;
       } catch (error) {
