@@ -23,6 +23,7 @@ export const MENTIONS_VALUE = [
   "`[[Card name|pocket]]` picks the Pocket version",
   "`[[!Card name]]` answers with the scan alone",
   "`@bot search <words>` runs the same search from the message box",
+  "`@bot printings <name>`, `@bot set <id>`, `@bot version` and `@bot settings` mirror those commands",
 ].join("\n");
 
 export const NOTES_VALUE = [

@@ -379,28 +379,32 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
   await interaction.reply({ embeds: [toEmbed(helpView())] });
 }
 
-/** Reports the running revision, its build date and how long this process has been up. */
-export async function handleVersionCommand(
-  interaction: ChatInputCommandInteraction,
-  startedAt = Date.now() - process.uptime() * 1_000,
-  now = Date.now(),
-): Promise<void> {
+/** The revision, package version, build date, uptime and rate-snapshot age. */
+export function versionLines(startedAt = Date.now() - process.uptime() * 1_000, now = Date.now()): string[] {
   const identity = buildIdentity();
-  const lines = [
+  return [
     `Revision: ${identity.label} (${SOURCE_LABEL[identity.source]})`,
     identity.packageVersion ? `Version: ${identity.packageVersion}` : undefined,
     identity.built ? `Last updated: ${identity.built.slice(0, 10)}` : undefined,
     `Uptime: ${formatUptime(now - startedAt)}`,
     ratesDate() ? `Exchange rates: ${ratesDate()}` : undefined,
   ].filter((line): line is string => Boolean(line));
-  await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral });
+}
+
+/** Reports the running revision, its build date and how long this process has been up. */
+export async function handleVersionCommand(
+  interaction: ChatInputCommandInteraction,
+  startedAt = Date.now() - process.uptime() * 1_000,
+  now = Date.now(),
+): Promise<void> {
+  await interaction.reply({ content: versionLines(startedAt, now).join("\n"), flags: MessageFlags.Ephemeral });
 }
 
 /** Pocket set prefixes, including promo ids, distinguish Pocket cards from physical-card ids. */
 const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
 
 /** Include Pocket attribution when any listed printing uses a Pocket id. */
-function footerFor(printings: { id: string }[], attribution: string): string {
+export function footerFor(printings: { id: string }[], attribution: string): string {
   const pocket = printings.some((printing) => POCKET_ID.test(printing.id));
   const physical = printings.some((printing) => !POCKET_ID.test(printing.id));
   if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards · github.com/PocketDecks/pokemon-tcg-pocket-cards`;
