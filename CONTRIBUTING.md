@@ -14,11 +14,11 @@ npm test        # offline
 npm run typecheck
 ```
 
-To run it against a real server, copy `.env.example` to `.env`, fill in the token and client id as described in the [README](README.md), then:
+To run it against a real server, copy `.env.example` to `.env`, fill in the token and client id as described in [setup](docs/setup.md), then:
 
 ```bash
 npm run doctor      # validates the token before anything touches the gateway
-npm run register    # publishes /card, /printings, /set, /search and /help
+npm run register
 npm run dev         # runs from source
 ```
 

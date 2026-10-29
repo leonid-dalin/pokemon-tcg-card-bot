@@ -48,7 +48,7 @@ Keep preview output out of commits. Use the Discord development bot to check but
 
 ## Run a development bot
 
-Follow the [quick start](../README.md#quick-start) to create and invite a Discord application. Copy `.env.example` to `.env`, set the token and client ID, and set `DISCORD_GUILD_ID` to your test server
+Follow the [setup guide](setup.md) to create and invite a Discord application. Copy `.env.example` to `.env`, set the token and client ID, and set `DISCORD_GUILD_ID` to your test server
 
 ```sh
 npm run doctor
@@ -60,7 +60,7 @@ npm run dev
 
 `/settings` is guild-only and restricted to members with the Manage Server permission, both in the command definition and in the handler. Its `view` subcommand also reports deployment-wide switches such as `MENTION_ENABLED=false`. The environment values remain the defaults for servers that have not changed anything
 
-Enable Message Content in the developer portal for ordinary-message replies. See the [configuration table](../README.md#configuration) for the switches that control mentions, decklists and throttling
+Enable Message Content in the developer portal for ordinary-message replies. See the [configuration reference](configuration.md) for the switches that control mentions, decklists and throttling
 
 ## Run the compiled bot
 
