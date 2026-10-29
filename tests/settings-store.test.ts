@@ -99,7 +99,7 @@ describe("SettingsStore", () => {
   it("refuses a database marked current without its table", () => {
     const path = tempPath();
     const raw = new DatabaseSync(path);
-    raw.exec("PRAGMA user_version = 2");
+    raw.exec("PRAGMA user_version = 3");
     raw.close();
     expect(() => new SettingsStore(path, DEFAULTS)).toThrow("guild_settings table is missing");
   });
