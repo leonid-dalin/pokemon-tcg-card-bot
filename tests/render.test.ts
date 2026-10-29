@@ -82,6 +82,30 @@ describe("renderCard", () => {
     expect(field?.name).not.toContain("Cardmarket");
   });
 
+  it("converts both marketplaces into a non-euro currency", () => {
+    const card = { ...dragapult, variants_detailed: [] } as Card;
+    (card as { pricing?: unknown }).pricing = {
+      cardmarket: { unit: "EUR", avg: 2, low: 1, updated: "2026-10-01T00:00:00Z" },
+      tcgplayer: { unit: "USD", normal: { marketPrice: 4 } },
+    };
+    const usd = priceField(card, "USD")!;
+    expect(usd.value).toContain("$");
+    const jpy = priceField(card, "JPY")!;
+    expect(jpy.value).not.toMatch(/\.\d/);
+    const cny = priceField(card, "CNY")!;
+    expect(cny.value).toContain("RMB");
+  });
+
+  it("does not lead a priceless attack name with a separator", () => {
+    const card = {
+      ...dragapult,
+      abilities: [],
+      attacks: [{ name: "Free Strike", damage: 10, effect: "Draw a card." }],
+    } as Card;
+    const field = renderCard(card).fields.find((entry) => entry.name.includes("Free Strike"));
+    expect(field?.name).toBe("Free Strike  10");
+  });
+
   it("renders an image-only card with the scan and nothing else", () => {
     const view = renderCardImage(dragapult);
     expect(view.fields).toEqual([]);

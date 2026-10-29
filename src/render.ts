@@ -79,7 +79,7 @@ function attackName(attack: Attack, emoji: Record<string, string>): string {
   const budget = Math.max(0, ATTACK_NAME_LIMIT - label.length - 2);
   const styled = energyCost(attack.cost, emoji);
   const cost = styled.length <= budget ? styled : energyCost(attack.cost);
-  const withCost = cost.length <= budget ? `${cost}  ${label}` : label;
+  const withCost = cost.length > 0 && cost.length <= budget ? `${cost}  ${label}` : label;
   return truncate(withCost, ATTACK_NAME_LIMIT);
 }
 
