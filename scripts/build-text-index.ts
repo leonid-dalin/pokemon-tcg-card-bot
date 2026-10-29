@@ -1,11 +1,11 @@
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { TcgdexClient, TcgdexError } from "../src/api/tcgdex.js";
 import type { Card } from "../src/api/types.js";
+import { entryFor, manifestFor, writeAtomic } from "./lib/publish.js";
 
-// Build src/data/text-index.json from card effects, abilities and attacks.
-// Store named parts for excerpts and categories for search filters.
-// Usage: npm run index:text
 const CONCURRENCY = 6;
+const TARGET = "src/data/text-index.json";
+const MANIFEST = "src/data/data-manifest.json";
 
 interface IndexedPart {
   kind: "ability" | "attack" | "effect";
@@ -83,7 +83,17 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   entries.sort((a, b) => a.id.localeCompare(b.id));
-  writeFileSync("src/data/text-index.json", `${JSON.stringify(entries)}\n`, "utf8");
-  const bytes = Buffer.byteLength(JSON.stringify(entries));
-  console.log(`wrote src/data/text-index.json: ${entries.length} cards with text, ${(bytes / 1024 / 1024).toFixed(1)} MB`);
+  const rendered = `${JSON.stringify(entries)}\n`;
+  writeAtomic(TARGET, rendered);
+  const generatedAt = new Date().toISOString();
+  const previous = (existsSync(MANIFEST)
+    ? JSON.parse(readFileSync(MANIFEST, "utf8")) as { entries?: unknown[] }
+    : {}) as { entries?: unknown[] };
+  const kept = (previous.entries ?? []).filter((entry) => (entry as { path?: string }).path !== TARGET);
+  writeAtomic(MANIFEST, manifestFor("https://api.tcgdex.net/v2", [
+    ...(kept as ReturnType<typeof entryFor>[]),
+    entryFor(TARGET, rendered, entries.length, generatedAt),
+  ]));
+  const bytes = Buffer.byteLength(rendered);
+  console.log(`wrote ${TARGET}: ${entries.length} cards with text, ${(bytes / 1024 / 1024).toFixed(1)} MB`);
 }

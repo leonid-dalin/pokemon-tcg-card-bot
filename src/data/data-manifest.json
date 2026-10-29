@@ -1,0 +1,12 @@
+{
+ "version": 1,
+ "source": "https://api.tcgdex.net/v2",
+ "entries": [
+  {
+   "path": "src/data/set-index.ts",
+   "records": 220,
+   "sha256": "fff4be0870fa9f423bc879ef5bd7c5bb64c6c807f99ac506c873f72c0e5a5305",
+   "generatedAt": "2026-10-29T13:10:34.564Z"
+  }
+ ]
+}
