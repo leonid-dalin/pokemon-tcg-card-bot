@@ -144,6 +144,13 @@ export async function handleAutocomplete(
     return;
   }
 
+  // Typing shares one small allowance so a long name cannot spend the command's budget.
+  const typing = admitTyping(context, interaction.guildId, interaction.user.id);
+  if (!typing) {
+    await interaction.respond([]);
+    return;
+  }
+
   if (focused.name === "id") {
     const sets = await context.client.listSets();
     const matches = sets
@@ -151,13 +158,6 @@ export async function handleAutocomplete(
       .slice(0, 25)
       .map((set) => ({ name: `${set.name} (${set.id})`.slice(0, 100), value: set.id }));
     await interaction.respond(matches);
-    return;
-  }
-
-  // Typing shares one small allowance so a long name cannot spend the command's budget.
-  const typing = admitTyping(context, interaction.guildId, interaction.user.id);
-  if (!typing) {
-    await interaction.respond([]);
     return;
   }
 
@@ -208,6 +208,11 @@ export async function handlePrintingButton(
     return;
   }
   await interaction.deferUpdate();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.followUp({ content: busyMessage(admission.retryAfterSeconds), flags: MessageFlags.Ephemeral });
+    return;
+  }
   const lookup = await lookupById(context.client, parsed.cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.followUp({ content: `No card matched \`${parsed.cardId}\`.`, flags: MessageFlags.Ephemeral });
