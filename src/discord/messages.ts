@@ -11,7 +11,7 @@ import { settingsViewLines } from "./settings-command.js";
 import { listReply, type ListPage } from "./pages.js";
 import { printingsOf, printingItems } from "../printings.js";
 import { renderSet } from "../render.js";
-import { versionLines } from "./commands.js";
+import { footerFor, versionLines } from "./commands.js";
 import { toEmbed } from "./embeds.js";
 import { busyMessage, overloadHint } from "./interaction-failure.js";
 import { renderDecklist } from "../render.js";
@@ -201,6 +201,8 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         mentionEnabled: config.mentionEnabled,
         guildId: message.guildId,
         authorId: message.author.id,
+        allowedGames: guild ? guild.cardGames : "both",
+        requests: context.requests,
         messageRepliesFor: context.settings
           ? (userId: string) => context.settings!.messageRepliesFor!(userId)
           : undefined,
@@ -277,8 +279,15 @@ interface InlineContext {
   mentionEnabled: boolean;
   guildId: string | null;
   authorId: string;
+  allowedGames: "ptcg" | "pocket" | "both";
+  requests?: { take: (key: string) => { allowed: true } | { allowed: false; retryAfterSeconds: number } } | undefined;
   messageRepliesFor?: (userId: string) => boolean | undefined;
   reply: (payload: ReplyPayload) => Promise<void>;
+}
+
+function admit(context: InlineContext): { allowed: true } | { allowed: false; retryAfterSeconds: number } {
+  if (!context.requests) return { allowed: true };
+  return context.requests.take(context.guildId ? `${context.guildId}:${context.authorId}` : `dm:${context.authorId}`);
 }
 
 /** Serves the plain-text counterparts of /version, /settings, /printings and /set. */
@@ -310,9 +319,14 @@ async function runInline(inline: InlineInvocation, context: InlineContext): Prom
       await context.reply({ content: "Add a card name, for example: printings Pikachu." });
       return;
     }
+    const admission = admit(context);
+    if (!admission.allowed) {
+      await context.reply({ content: busyMessage(admission.retryAfterSeconds) });
+      return;
+    }
     let printings: Awaited<ReturnType<typeof printingsOf>>;
     try {
-      printings = await printingsOf(context.api, inline.argument, "both");
+      printings = await printingsOf(context.api, inline.argument, context.allowedGames);
     } catch (error) {
       const hint = overloadHint(error);
       await context.reply({ content: hint === undefined ? "Card lookup failed, try again in a moment." : busyMessage(hint) });
@@ -326,10 +340,8 @@ async function runInline(inline: InlineInvocation, context: InlineContext): Prom
       title: `${printings.length} ${printings.length === 1 ? "printing" : "printings"} of ${printings[0]!.name}`,
       items: printingItems(printings),
       perPage: 10,
-      ownerId: "inline",
-      footer: printings.some((printing) => /^p[ab]?-/i.test(printing.id))
-        ? `${context.attribution} · Pocket cards from pokemon-tcg-pocket-cards`
-        : context.attribution,
+      ownerId: context.authorId,
+      footer: footerFor(printings, context.attribution),
     };
     const token = context.pages.put(page);
     await context.reply(listReply(page, token, 0) as ReplyPayload);
@@ -338,6 +350,11 @@ async function runInline(inline: InlineInvocation, context: InlineContext): Prom
 
   if (!inline.argument) {
     await context.reply({ content: "Add a set id, for example: set sv01." });
+    return;
+  }
+  const admission = admit(context);
+  if (!admission.allowed) {
+    await context.reply({ content: busyMessage(admission.retryAfterSeconds) });
     return;
   }
   try {

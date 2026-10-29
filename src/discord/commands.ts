@@ -404,7 +404,7 @@ export async function handleVersionCommand(
 const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
 
 /** Include Pocket attribution when any listed printing uses a Pocket id. */
-function footerFor(printings: { id: string }[], attribution: string): string {
+export function footerFor(printings: { id: string }[], attribution: string): string {
   const pocket = printings.some((printing) => POCKET_ID.test(printing.id));
   const physical = printings.some((printing) => !POCKET_ID.test(printing.id));
   if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards · github.com/PocketDecks/pokemon-tcg-pocket-cards`;

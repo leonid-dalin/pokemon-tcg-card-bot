@@ -74,22 +74,28 @@ describe("inline counterparts answer like their slash commands", () => {
   });
 
   it("lists printings for a name", async () => {
-    vi.stubGlobal("fetch", async () => ({
-      ok: true,
-      status: 200,
-      json: async () => [{ id: "sv01-025", name: "Pikachu" }],
-    }) as unknown as Response);
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (!String(url).includes("/cards?name=")) {
+        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => [{ id: "sv01-025", name: "Pikachu" }] } as unknown as Response;
+    });
     const { message, replies } = fakeMessage(`<@${SELF}> printings Pikachu`);
     await handler()(message as never);
     expect(replies[0]?.embeds?.length ?? 0).toBeGreaterThan(0);
   });
 
   it("shows a set", async () => {
-    vi.stubGlobal("fetch", async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ id: "sv01", name: "Scarlet & Violet", releaseDate: "2023-03-31", cards: [] }),
-    }) as unknown as Response);
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (!String(url).includes("/sets/sv01")) {
+        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: "sv01", name: "Scarlet & Violet", releaseDate: "2023-03-31", cards: [] }),
+      } as unknown as Response;
+    });
     const { message, replies } = fakeMessage(`<@${SELF}> set sv01`);
     await handler()(message as never);
     expect(replies[0]?.embeds?.length ?? 0).toBeGreaterThan(0);
@@ -100,5 +106,30 @@ describe("inline counterparts answer like their slash commands", () => {
     const { message, replies } = fakeMessage(`<@${SELF}> set nope-9`);
     await handler()(message as never);
     expect(replies[0]?.content).toContain("No set matched");
+  });
+});
+
+describe("inline printings and set spend the member allowance", () => {
+  it("answers busy without fetching when the member is spent", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+    });
+    const { message, replies } = fakeMessage(`<@${SELF}> printings Pikachu`);
+    await handler({
+      requests: { take: () => ({ allowed: false as const, retryAfterSeconds: 3 }) },
+    })(message as never);
+    expect(calls).toEqual([]);
+    expect(replies[0]?.content).toBe("The card service is busy. Try again in 3 seconds.");
+  });
+
+  it("keeps a DM key separate from the guild key", async () => {
+    const keys: string[] = [];
+    const { message } = fakeMessage(`<@${SELF}> set sv01`);
+    await handler({
+      requests: { take: (key: string) => { keys.push(key); return { allowed: true as const }; } },
+    })(message as never);
+    expect(keys[0]).toBe("guild-a:member-1");
   });
 });
