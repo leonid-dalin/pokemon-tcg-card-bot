@@ -68,8 +68,16 @@ function readGit(): { sha?: string; date?: string } {
   }
 }
 
-/** Resolves the running revision once: env, then BUILD.json, then git, then package.json. */
-export function buildIdentity(env: NodeJS.ProcessEnv = process.env): BuildIdentity {
+/** Resolved once at module load, so a checkout that moves under a running process cannot rewrite history. */
+const IDENTITY = resolveIdentity();
+
+/** The identity captured at startup; later checkout changes cannot alter it. */
+export function buildIdentity(): BuildIdentity {
+  return IDENTITY;
+}
+
+/** Resolves the identity from a given environment. Exported for tests and for callers that pass their own. */
+export function resolveIdentity(env: NodeJS.ProcessEnv = process.env): BuildIdentity {
   const packageVersion = readPackageVersion();
   const fromEnv = env.BUILD_SHA?.trim();
   if (fromEnv) return { label: fromEnv, source: "env", built: env.BUILD_DATE?.trim(), packageVersion };

@@ -1,17 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { buildIdentity, formatUptime } from "../src/version.js";
+import { buildIdentity, formatUptime, resolveIdentity } from "../src/version.js";
 
 describe("buildIdentity", () => {
   it("trusts an explicit BUILD_SHA over everything else", () => {
-    const identity = buildIdentity({ BUILD_SHA: "abc1234", BUILD_DATE: "2026-10-29T05:00:00Z" });
+    const identity = resolveIdentity({ BUILD_SHA: "abc1234", BUILD_DATE: "2026-10-29T05:00:00Z" });
     expect(identity).toMatchObject({ label: "abc1234", source: "env", built: "2026-10-29T05:00:00Z" });
   });
 
   it("falls back to the checkout when no env or bundle is present", () => {
-    const identity = buildIdentity({});
+    const identity = resolveIdentity({});
     expect(identity.source).not.toBe("env");
     expect(identity.label).toBeTruthy();
     expect(identity.packageVersion).toMatch(/^\d+\.\d+\.\d+/);
+  });
+});
+
+describe("startup identity", () => {
+  it("keeps reporting the identity captured at startup", () => {
+    const first = buildIdentity();
+    const second = buildIdentity();
+    expect(second).toEqual(first);
+    expect(second.label).toBe(first.label);
   });
 });
 
