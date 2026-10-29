@@ -145,8 +145,13 @@ export function priceField(card: Card, currency: Currency = "EUR"): EmbedField |
     const avg = cardmarket.avg ?? cardmarket.trend;
     if (avg !== null && avg !== undefined && !Number.isNaN(avg)) rows.push(show(avg, "Market"));
     if (cardmarket.low !== null && cardmarket.low !== undefined) rows.push(show(cardmarket.low, "Low"));
-    const trend = cardmarket.avg7 ?? cardmarket.avg30;
-    if (trend !== null && trend !== undefined) rows.push(show(trend, "7d"));
+    const trend =
+      cardmarket.avg7 !== null && cardmarket.avg7 !== undefined
+        ? { label: "7d", amount: cardmarket.avg7 }
+        : cardmarket.avg30 !== null && cardmarket.avg30 !== undefined
+          ? { label: "30d", amount: cardmarket.avg30 }
+          : undefined;
+    if (trend) rows.push(show(trend.amount, trend.label));
   }
   if (tcgplayer) {
     const market = tcgplayer.avg ?? tcgplayer.trend;
