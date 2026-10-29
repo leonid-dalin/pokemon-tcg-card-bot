@@ -71,10 +71,18 @@ export function formatStage(stage: string | undefined): string | undefined {
   return stage.replace(/^Stage(\d+)$/, "Stage $1");
 }
 
+const ATTACK_NAME_LIMIT = 250;
+
 function attackName(attack: Attack, emoji: Record<string, string>): string {
-  const cost = energyCost(attack.cost, emoji);
   const damage = attack.damage !== undefined && attack.damage !== null ? `  ${attack.damage}` : "";
-  return truncate([cost, `${attack.name}${damage}`].filter(Boolean).join("  "), 250);
+  const label = `${attack.name}${damage}`;
+  const budget = Math.max(0, ATTACK_NAME_LIMIT - label.length - 2);
+  // Configured emoji can be long enough to erase the name entirely, so fall back
+  // to the compact codes when the styled cost cannot fit beside the label.
+  const styled = energyCost(attack.cost, emoji);
+  const cost = styled.length <= budget ? styled : energyCost(attack.cost);
+  const withCost = cost.length <= budget ? `${cost}  ${label}` : label;
+  return truncate(withCost, ATTACK_NAME_LIMIT);
 }
 
 function attackValue(attack: Attack): string {
