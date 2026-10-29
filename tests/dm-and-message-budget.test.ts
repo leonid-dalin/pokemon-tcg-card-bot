@@ -169,3 +169,54 @@ describe("set autocomplete answers inside Discord's window", () => {
     expect(responses[0]).toEqual([{ name: "Scarlet & Violet (sv01)", value: "sv01" }]);
   });
 });
+
+describe("a stored off preference mutes a direct message too", () => {
+  function dmHandler(settings: Record<string, unknown>) {
+    return createMessageHandler({
+      api: new TcgdexClient({ retries: 0 }),
+      config: { mentionEnabled: true, decklistEnabled: false, mentionCooldownSeconds: 0, attribution: "x", energyEmoji: {} },
+      pages: { put: () => "t", get: () => undefined, set: () => undefined, delete: () => undefined } as never,
+      settings,
+      selfId: () => "bot",
+    });
+  }
+
+  function dmMessage() {
+    const replies: { content?: string }[] = [];
+    const message = {
+      guildId: null,
+      author: { id: "member-1", bot: false },
+      webhookId: null,
+      system: false,
+      content: "[[Pikachu]]",
+      mentions: { has: () => false, users: { has: () => false } },
+      reference: null,
+      reply: async (payload: { content?: string }) => void replies.push(payload),
+    };
+    return { message, replies };
+  }
+
+  it("stays silent when the member stored off", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+    });
+    const { message, replies } = dmMessage();
+
+    await dmHandler({ messageRepliesFor: () => false })(message as never);
+
+    expect(calls).toEqual([]);
+    expect(replies).toEqual([]);
+  });
+
+  it("answers when the member stored on or has no preference", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, json: async () => [] }) as unknown as Response);
+    const on = dmMessage();
+    await dmHandler({ messageRepliesFor: () => true })(on.message as never);
+    const none = dmMessage();
+    await dmHandler({})(none.message as never);
+    expect(on.replies.length).toBe(1);
+    expect(none.replies.length).toBe(1);
+  });
+});

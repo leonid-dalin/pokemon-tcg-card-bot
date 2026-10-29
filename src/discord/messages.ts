@@ -113,9 +113,9 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
 
     let guild: EffectiveGuildSettings | undefined;
     let personalReplies: boolean | undefined;
-    if (message.guildId && context.settings) {
+    if (context.settings) {
       try {
-        guild = context.settings.get(message.guildId);
+        if (message.guildId) guild = context.settings.get(message.guildId);
         personalReplies = context.settings.messageRepliesFor?.(message.author.id);
       } catch (error) {
         console.error(`settings read failed (${errorCategory(error)})`);
@@ -201,7 +201,9 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         mentionEnabled: config.mentionEnabled,
         guildId: message.guildId,
         authorId: message.author.id,
-        messageRepliesFor: context.settings?.messageRepliesFor,
+        messageRepliesFor: context.settings
+          ? (userId: string) => context.settings!.messageRepliesFor!(userId)
+          : undefined,
         reply: logReply,
       });
       return;
