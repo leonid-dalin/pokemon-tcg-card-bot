@@ -482,8 +482,19 @@ export async function handleInlineSettingsButton(
     await interaction.followUp({ content: `Could not save that change (${errorCategory(error)}).`, flags: MessageFlags.Ephemeral }).catch(() => {});
     return;
   }
-  await interaction.editReply({
-    embeds: [settingsEmbed(settingsViewLines(next, context.mentionEnabled))],
-    components: settingsComponents(next),
-  });
+  // The change is committed; a failed refresh must not read as a failed save,
+  // or a retry presses the stale toggle and reverses it.
+  try {
+    await interaction.editReply({
+      embeds: [settingsEmbed(settingsViewLines(next, context.mentionEnabled))],
+      components: settingsComponents(next),
+    });
+  } catch (error) {
+    console.error(`settings view refresh failed (${errorCategory(error)})`);
+    const label = action === "messages" ? "Message replies" : "Decklist replies";
+    await interaction.followUp({
+      content: `Saved: ${label} is now ${next[action === "messages" ? "messageReplies" : "decklistReplies"] ? "on" : "off"}. The view above is stale; /settings view shows the current settings.`,
+      flags: MessageFlags.Ephemeral,
+    }).catch(() => {});
+  }
 }
