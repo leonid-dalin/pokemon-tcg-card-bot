@@ -230,7 +230,8 @@ class DeploymentTests(unittest.TestCase):
             m.activate(release)
         self.database("newer")
         with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
-                patch.object(m, "finish_recovery", side_effect=RuntimeError("killed")):
+                patch.object(m, "finish_recovery", side_effect=RuntimeError("killed")), \
+                patch.object(m.os, "chown"):
             with self.assertRaises(RuntimeError):
                 m.rollback()
         self.assertTrue(m.STATE.exists())
