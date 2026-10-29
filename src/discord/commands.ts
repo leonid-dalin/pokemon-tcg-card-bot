@@ -23,7 +23,7 @@ import { settingsCommand } from "./settings-command.js";
 import { buildIdentity, formatUptime } from "../version.js";
 import { ratesDate } from "../currency.js";
 
-import { busyMessage } from "./interaction-failure.js";
+import { busyMessage, overloadHint } from "./interaction-failure.js";
 
 const SOURCE_LABEL = { env: "deployed", build: "bundle", git: "checkout", package: "package version" } as const;
 
@@ -345,7 +345,12 @@ export async function handleSetCommand(
       return;
     }
     await interaction.editReply({ embeds: [toEmbed(renderSet(set, context.attribution))] });
-  } catch {
+  } catch (error) {
+    const hint = overloadHint(error);
+    if (hint !== undefined) {
+      await interaction.editReply({ content: busyMessage(hint) });
+      return;
+    }
     await interaction.editReply({ content: `No set matched \`${id}\`.` });
   }
 }
