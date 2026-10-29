@@ -53,6 +53,8 @@ const memberBudget = new MentionBudget({
   refillSeconds: config.memberLookupRefillSeconds,
   maxKeys: 10_000,
 });
+// Autocomplete fires on each keystroke, so it gets a wider but separate allowance.
+const typingBudget = new MentionBudget({ capacity: 40, refillSeconds: 2, maxKeys: 10_000 });
 const context: CommandContext = {
   client: api,
   attribution: config.attribution,
@@ -60,6 +62,7 @@ const context: CommandContext = {
   pages: new PageStore(),
   settings,
   requests: memberBudget,
+  typing: typingBudget,
 };
 
 const client = new Client(clientOptions(config));

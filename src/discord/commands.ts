@@ -40,8 +40,13 @@ export interface CommandContext {
   requests?: {
     take: (key: string) => { allowed: true } | { allowed: false; retryAfterSeconds: number };
   } | undefined;
+  /** Separate, smaller allowance for autocomplete so typing cannot spend the command budget. */
+  typing?: {
+    take: (key: string) => { allowed: true } | { allowed: false; retryAfterSeconds: number };
+  } | undefined;
 }
 
+/** Admits an expensive lookup, or reports the wait so the caller can answer before starting work. */
 function admitRequest(
   context: CommandContext,
   guildId: string | null,
@@ -49,6 +54,11 @@ function admitRequest(
 ): { allowed: true } | { allowed: false; retryAfterSeconds: number } {
   if (!guildId || !context.requests) return { allowed: true };
   return context.requests.take(`${guildId}:${userId}`);
+}
+
+function admitTyping(context: CommandContext, guildId: string | null, userId: string): boolean {
+  if (!guildId || !context.typing) return true;
+  return context.typing.take(`${guildId}:${userId}`).allowed;
 }
 
 /** Reads the per-server game preference; explicit hints and exact IDs bypass it. */
@@ -144,6 +154,13 @@ export async function handleAutocomplete(
     return;
   }
 
+  // Typing shares one small allowance so a long name cannot spend the command's budget.
+  const typing = admitTyping(context, interaction.guildId, interaction.user.id);
+  if (!typing) {
+    await interaction.respond([]);
+    return;
+  }
+
   const summaries = await context.client.searchByName(query);
   const ranked = rankPrintings(summaries, query).slice(0, 25);
   await interaction.respond(
@@ -207,6 +224,11 @@ export async function handleDetailsButton(
   const id = detailsIdFrom(interaction.customId);
   if (!id) return;
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   const lookup = await lookupById(context.client, id, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.editReply({ content: `No card matched \`${id}\`.` });
@@ -311,6 +333,11 @@ export async function handleSetCommand(
   const checklist = interaction.options.getBoolean("checklist") ?? false;
 
   await interaction.deferReply();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   try {
     const set = await context.client.getSet(id);
     if (checklist) {
@@ -361,6 +388,11 @@ export async function handlePrintingsCommand(
 ): Promise<void> {
   const query = interaction.options.getString("name", true).trim();
   await interaction.deferReply();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   const allowed = gamePreference(context, interaction.guildId)?.allowed ?? "both";
 
   // Autocomplete values are card ids; use the resolved name for the listing.
