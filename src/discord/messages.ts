@@ -18,6 +18,7 @@ export interface MessageContext {
   config: Pick<Config, "mentionEnabled" | "decklistEnabled" | "mentionCooldownSeconds" | "attribution" | "energyEmoji">;
   pages: import("./pages.js").PageStore;
   budget?: MentionBudget | undefined;
+  requests?: MentionBudget | undefined;
   invocations?: { record: (entry: import("../invocation-log.js").InvocationEntry) => void } | undefined;
   settings?: {
     get: (guildId: string) => import("../settings-store.js").GuildSettings;
@@ -79,7 +80,7 @@ function replyText(payload: ReplyPayload): string {
 
 /** Routes eligible messages to help, decklist, search or card replies. */
 export function createMessageHandler(context: MessageContext): (message: IncomingMessage) => Promise<void> {
-  const { api, config, budget } = context;
+  const { api, config, budget, requests } = context;
   let warnedAboutContent = false;
   const guildBudgets = new Map<string, { refillSeconds: number; budget: MentionBudget | undefined }>();
   const MAX_GUILD_BUDGETS = 1000;
@@ -198,6 +199,14 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         await logReply({ content: "Card search failed, try again in a moment." });
       }
       return;
+    }
+
+    if (requests) {
+      const admission = requests.take(message.guildId ? `${message.guildId}:${message.author.id}` : `dm:${message.author.id}`);
+      if (!admission.allowed) {
+        await logReply({ content: `The card service is busy. Try again in ${admission.retryAfterSeconds} second${admission.retryAfterSeconds === 1 ? "" : "s"}.` });
+        return;
+      }
     }
 
     try {

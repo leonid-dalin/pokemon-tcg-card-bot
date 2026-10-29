@@ -1,4 +1,5 @@
 import type { Card, CardSummary, CardSetRef, SetSummary } from "./types.js";
+import { OverloadedError, RequestLimiter, type LimiterOptions } from "./limiter.js";
 
 const BASE = "https://api.tcgdex.net/v2";
 
@@ -10,6 +11,7 @@ export interface ClientOptions {
   setTtlMs?: number;
   /** Maximum cache entries, including remembered 404 responses. */
   maxEntries?: number;
+  limiter?: LimiterOptions;
 }
 
 interface CacheEntry {
@@ -41,6 +43,8 @@ export class TcgdexClient {
   private readonly setTtlMs: number;
   private readonly maxEntries: number;
   private readonly cache = new Map<string, CacheEntry>();
+  private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly limiter: RequestLimiter;
 
   constructor(options: ClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? BASE;
@@ -49,6 +53,11 @@ export class TcgdexClient {
     this.cardTtlMs = options.cardTtlMs ?? 10 * 60_000;
     this.setTtlMs = options.setTtlMs ?? 60 * 60_000;
     this.maxEntries = Math.max(1, options.maxEntries ?? 1000);
+    this.limiter = new RequestLimiter(options.limiter);
+  }
+
+  get queue(): { running: number; queued: number } {
+    return { running: this.limiter.running, queued: this.limiter.queued };
   }
 
   private remember(path: string, entry: CacheEntry): void {
@@ -74,28 +83,46 @@ export class TcgdexClient {
       return cached.value as T;
     }
 
+    const shared = this.inFlight.get(path);
+    if (shared) return shared as Promise<T>;
+
+    const request = this.request<T>(path, ttlMs).finally(() => {
+      this.inFlight.delete(path);
+    });
+    this.inFlight.set(path, request);
+    return request;
+  }
+
+  private async request<T>(path: string, ttlMs: number): Promise<T> {
     let lastError: unknown;
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
       try {
-        const response = await fetch(`${this.baseUrl}${path}`, {
-          signal: AbortSignal.timeout(this.timeoutMs),
-          headers: { accept: "application/json" },
-        });
-        if (response.status === 404) {
-          this.remember(path, { expires: Date.now() + ttlMs, missing: true });
-          throw new TcgdexError(`not found: ${path}`, 404);
-        }
-        if (!response.ok) {
-          if (response.status === 429 || response.status >= 500) {
-            throw new TcgdexError(`upstream ${response.status}`, response.status);
+        // The slot covers the body too: headers arrive long before the payload, so
+        // releasing on fetch() alone would bound only the wait for headers.
+        const value = await this.limiter.run(async () => {
+          const response = await fetch(`${this.baseUrl}${path}`, {
+            signal: AbortSignal.timeout(this.timeoutMs),
+            headers: { accept: "application/json" },
+          });
+          if (response.status === 404) {
+            await response.body?.cancel().catch(() => undefined);
+            this.remember(path, { expires: Date.now() + ttlMs, missing: true });
+            throw new TcgdexError(`not found: ${path}`, 404);
           }
-          throw new TcgdexError(`request failed: ${response.status}`, response.status);
-        }
-        const value = (await response.json()) as T;
+          if (!response.ok) {
+            await response.body?.cancel().catch(() => undefined);
+            if (response.status === 429 || response.status >= 500) {
+              throw new TcgdexError(`upstream ${response.status}`, response.status);
+            }
+            throw new TcgdexError(`request failed: ${response.status}`, response.status);
+          }
+          return (await response.json()) as T;
+        });
         this.remember(path, { expires: Date.now() + ttlMs, value });
         return value;
       } catch (error) {
         lastError = error;
+        if (error instanceof OverloadedError) break;
         const retryable =
           !(error instanceof TcgdexError) || error.status === 429 || (error.status ?? 0) >= 500;
         if (!retryable || attempt === this.retries) break;

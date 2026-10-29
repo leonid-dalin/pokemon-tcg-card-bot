@@ -9,6 +9,11 @@ export interface Config {
   decklistEnabled: boolean;
   /** 0 disables the throttle entirely. */
   mentionCooldownSeconds: number;
+  upstreamConcurrency: number;
+  upstreamQueueLimit: number;
+  upstreamQueueWaitMs: number;
+  memberLookupBurst: number;
+  memberLookupRefillSeconds: number;
   attribution: string;
   energyEmoji: Record<string, string>;
   invocationLogDir?: string;
@@ -21,7 +26,7 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-function parsePositiveInt(value: string | undefined, fallback: number): number {
+function parseNonNegativeInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
@@ -56,11 +61,16 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     ...(env.DISCORD_GUILD_ID?.trim() ? { guildId: env.DISCORD_GUILD_ID.trim() } : {}),
     mentionEnabled: parseBoolean(env.MENTION_ENABLED, true),
     decklistEnabled: parseBoolean(env.DECKLIST_ENABLED, false),
-    mentionCooldownSeconds: parsePositiveInt(env.MENTION_COOLDOWN_SECONDS, 0),
+    mentionCooldownSeconds: parseNonNegativeInt(env.MENTION_COOLDOWN_SECONDS, 0),
+    upstreamConcurrency: parseNonNegativeInt(env.UPSTREAM_CONCURRENCY, 8),
+    upstreamQueueLimit: parseNonNegativeInt(env.UPSTREAM_QUEUE_LIMIT, 32),
+    upstreamQueueWaitMs: parseNonNegativeInt(env.UPSTREAM_QUEUE_WAIT_MS, 5000),
+    memberLookupBurst: parseNonNegativeInt(env.MEMBER_LOOKUP_BURST, 5),
+    memberLookupRefillSeconds: parseNonNegativeInt(env.MEMBER_LOOKUP_REFILL_SECONDS, 2),
     attribution: env.ATTRIBUTION?.trim() || DEFAULT_ATTRIBUTION,
     energyEmoji: parseEnergyEmoji(env.ENERGY_EMOJI),
     ...(env.INVOCATION_LOG_DIR?.trim() ? { invocationLogDir: env.INVOCATION_LOG_DIR.trim() } : {}),
-    invocationLogRetentionDays: Math.min(parsePositiveInt(env.INVOCATION_LOG_RETENTION_DAYS, 60), 60),
+    invocationLogRetentionDays: Math.min(parseNonNegativeInt(env.INVOCATION_LOG_RETENTION_DAYS, 60), 60),
     ...(env.DATA_DIR?.trim() ? { dataDir: env.DATA_DIR.trim() } : {}),
   };
 }
