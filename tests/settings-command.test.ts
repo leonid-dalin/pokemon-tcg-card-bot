@@ -195,6 +195,7 @@ describe("settings command", () => {
     await run(store, interaction);
     expect(replies[0]?.content).toContain("Your automatic replies are now on.");
     expect(store.updates).toEqual([]);
+    expect((store as unknown as { userReplies?: string }).userReplies).toBe("u1:true");
   });
 
   it("lets a direct message set the personal currency", async () => {
@@ -202,6 +203,7 @@ describe("settings command", () => {
     const { interaction, replies } = fakeInteraction(["currency", "user"], { code: "USD" }, { guild: false });
     await run(store, interaction);
     expect(replies[0]?.content).toContain("US dollars");
+    expect((store as unknown as { userCurrency?: string }).userCurrency).toBe("u1:USD");
   });
 
   it("refuses a member without Manage Server", async () => {
