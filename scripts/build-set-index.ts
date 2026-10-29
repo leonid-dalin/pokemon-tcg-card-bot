@@ -4,13 +4,16 @@ import type { SetIndexEntry } from "../src/data/set-index.js";
 import { entryFor, manifestFor, readManifest, upsertEntry, writeAtomic } from "./lib/publish.js";
 import { describeChanges, mergeEntry, renderModule, setIndexOutcome, sortEntries, splitModule, type SetDetailResult } from "./lib/set-index.js";
 
-const TARGET = "src/data/set-index.ts";
-const MANIFEST = "src/data/data-manifest.json";
+const TARGET = process.env.SET_INDEX_TARGET ?? "src/data/set-index.ts";
+const MANIFEST = process.env.SET_INDEX_MANIFEST ?? "src/data/data-manifest.json";
 const SOURCE = "https://api.tcgdex.net/v2";
 
 const client = new TcgdexClient({ timeoutMs: 20_000, retries: 3 });
 const sets = await client.listSets();
 const previous = splitModule(readFileSync(TARGET, "utf8"));
+// Validate existing metadata before any write, so a rejected manifest cannot
+// leave a replaced dataset behind.
+const existingManifest = readManifest(MANIFEST);
 const known = new Map(previous.entries.map((entry) => [entry.id, entry]));
 
 const results: SetDetailResult[] = [];
@@ -34,4 +37,8 @@ if (outcome.status === "failed") {
   const entries: SetIndexEntry[] = sortEntries(results.map((result) => mergeEntry(result, known.get(result.summary.id))));
   const changes = describeChanges(entries, known);
   for (const line of changes) console.log(line);
+  const rendered = renderModule(entries, previous.header);
+  writeAtomic(TARGET, rendered);
+  const updated = upsertEntry(existingManifest, SOURCE, entryFor(TARGET, rendered, entries.length, new Date().toISOString()));
+  writeAtomic(MANIFEST, manifestFor(updated.source, updated.entries));
 }

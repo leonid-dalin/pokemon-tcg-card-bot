@@ -68,13 +68,17 @@ export function readManifest(path: string): Manifest | undefined {
  * regeneration leaves the manifest byte-identical.
  */
 export function upsertEntry(manifest: Manifest | undefined, source: string, entry: ManifestEntry): Manifest {
-  const previous = manifest?.entries.filter((existing) => existing.path !== entry.path) ?? [];
-  const unchanged = manifest?.entries.find(
-    (existing) => existing.path === entry.path && existing.sha256 === entry.sha256 && existing.records === entry.records,
+  const existing = manifest?.entries ?? [];
+  const unchanged = existing.find(
+    (held) => held.path === entry.path && held.sha256 === entry.sha256 && held.records === entry.records,
   );
-  const entries = [
-    ...previous.filter((existing) => existing.path !== entry.path),
-    unchanged ? { ...entry, generatedAt: unchanged.generatedAt } : entry,
-  ];
-  return { version: 1, source, entries };
+  const stored = unchanged ? { ...entry, generatedAt: unchanged.generatedAt } : entry;
+  // Replace in place so an unchanged update rewrites no bytes at all.
+  const replaced = existing.some((held, index) => {
+    if (held.path !== entry.path) return false;
+    existing[index] = stored;
+    return true;
+  });
+  const entries = replaced ? existing : [...existing, stored];
+  return { version: 1, source: manifest?.source ?? source, entries };
 }

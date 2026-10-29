@@ -1,8 +1,8 @@
 import { TcgdexClient } from "../src/api/tcgdex.js";
 import { entryFor, manifestFor, readManifest, upsertEntry, writeAtomic } from "./lib/publish.js";
 import { buildTextIndex } from "./lib/text-index.js";
-const TARGET = "src/data/text-index.json";
-const MANIFEST = "src/data/data-manifest.json";
+const TARGET = process.env.TEXT_INDEX_TARGET ?? "src/data/text-index.json";
+const MANIFEST = process.env.TEXT_INDEX_MANIFEST ?? "src/data/data-manifest.json";
 const SOURCE = "https://api.tcgdex.net/v2";
 
 const client = new TcgdexClient({ timeoutMs: 20_000, retries: 4 });
@@ -10,6 +10,9 @@ const client = new TcgdexClient({ timeoutMs: 20_000, retries: 4 });
 const summaries = await client.listCards();
 console.log(`cards to inspect: ${summaries.length}`);
 
+// Validate existing metadata before any write, so a rejected manifest cannot
+// leave a replaced dataset behind.
+const existingManifest = readManifest(MANIFEST);
 const outcome = await buildTextIndex(summaries, (id) => client.getCard(id));
 
 if (outcome.status === "failed") {
@@ -21,7 +24,7 @@ if (outcome.status === "failed") {
   const rendered = `${JSON.stringify(entries)}\n`;
   writeAtomic(TARGET, rendered);
   const generatedAt = new Date().toISOString();
-  const manifest = upsertEntry(readManifest(MANIFEST), SOURCE, entryFor(TARGET, rendered, entries.length, generatedAt));
+  const manifest = upsertEntry(existingManifest, SOURCE, entryFor(TARGET, rendered, entries.length, generatedAt));
   writeAtomic(MANIFEST, manifestFor(manifest.source, manifest.entries));
   const bytes = Buffer.byteLength(rendered);
   console.log(`wrote ${TARGET}: ${entries.length} cards with text, ${(bytes / 1024 / 1024).toFixed(1)} MB`);
