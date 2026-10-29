@@ -11,6 +11,11 @@ The bot reads process environment variables and a local `.env`. The user-facing 
 | `MENTION_ENABLED` | Enables ordinary-message handling and its gateway intent; `true` |
 | `DECKLIST_ENABLED` | Initial server default for pasted decklists; `false` |
 | `MENTION_COOLDOWN_SECONDS` | Initial reply cooldown; `0` in code, `30` in the example file |
+| `UPSTREAM_CONCURRENCY` | Card-service requests allowed at once; `8` |
+| `UPSTREAM_QUEUE_LIMIT` | Requests allowed to wait for a free slot; `32` |
+| `UPSTREAM_QUEUE_WAIT_MS` | Longest a request may wait for a slot; `5000` |
+| `MEMBER_LOOKUP_BURST` | Lookups one member may spend at once; `5` |
+| `MEMBER_LOOKUP_REFILL_SECONDS` | Seconds to refill one member lookup; `2` |
 | `ATTRIBUTION` | Physical-card footer; `Card data from TCGdex` |
 | `ENERGY_EMOJI` | JSON mapping of energy types to Discord emoji markup; `{}` |
 | `INVOCATION_LOG_DIR` | Optional directory for full triggering-message and reply logs; disabled when unset |

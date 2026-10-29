@@ -41,8 +41,26 @@ const settings = new SettingsStore(
   config.dataDir ? join(config.dataDir, "settings.db") : undefined,
   { messageReplies: config.mentionEnabled, decklistReplies: config.decklistEnabled, cooldownSeconds: config.mentionCooldownSeconds },
 );
-const api = new TcgdexClient();
-const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore(), settings };
+const api = new TcgdexClient({
+  limiter: {
+    concurrency: config.upstreamConcurrency,
+    queueLimit: config.upstreamQueueLimit,
+    queueWaitMs: config.upstreamQueueWaitMs,
+  },
+});
+const memberBudget = new MentionBudget({
+  capacity: config.memberLookupBurst,
+  refillSeconds: config.memberLookupRefillSeconds,
+  maxKeys: 10_000,
+});
+const context: CommandContext = {
+  client: api,
+  attribution: config.attribution,
+  energyEmoji: config.energyEmoji,
+  pages: new PageStore(),
+  settings,
+  requests: memberBudget,
+};
 
 const client = new Client(clientOptions(config));
 startRuntimeStatus(createShardReadiness(client));
