@@ -519,6 +519,21 @@ class DeploymentTests(unittest.TestCase):
             with patch.object(m, "api", side_effect=[{"sha": NEW}, release, release]):
                 self.assertIsNone(m.published_head())
 
+    def test_published_tag_prefers_the_installed_version_scheme(self):
+        assets = [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"},
+                  {"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz.sha256"}]
+        versioned = f"linux-arm64-v0.1.0-{NEW[:7]}"
+        with patch.object(m, "installed_version", return_value="0.1.0"), \
+             patch.object(m, "api", side_effect=[{"assets": assets, "target_commitish": NEW}]):
+            self.assertEqual(m.published_tag(NEW), versioned)
+
+    def test_published_tag_falls_back_without_an_installed_version(self):
+        assets = [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"},
+                  {"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz.sha256"}]
+        with patch.object(m, "installed_version", return_value=None), \
+             patch.object(m, "api", side_effect=[{"assets": assets, "target_commitish": NEW}]):
+            self.assertEqual(m.published_tag(NEW), f"linux-arm64-{NEW[:7]}")
+
     def test_release_lookup_accepts_the_short_tag_and_the_old_one(self):
         assets = [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"},
                   {"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz.sha256"}]

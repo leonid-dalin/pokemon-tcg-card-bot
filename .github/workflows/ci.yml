@@ -105,7 +105,8 @@ jobs:
           REVISION: ${{ github.sha }}
         run: |
           short="${REVISION:0:7}"
-          tag="linux-arm64-$short"
+          version=$(sed -n "s/.*\"version\": \"\([^\"]*\)\".*/\1/p" package.json | head -1)
+          tag="linux-arm64-v${version}-${short}"
           subject=$(git log -1 --format=%s "$REVISION")
           body=$(git log -1 --format=%b "$REVISION")
           committed=$(git log -1 --format=%cI "$REVISION")

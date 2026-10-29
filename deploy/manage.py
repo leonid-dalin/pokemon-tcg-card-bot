@@ -77,7 +77,18 @@ def valid_sha(value):
     return value
 
 
+def installed_version():
+    try:
+        data = json.loads((ROOT / "current" / "BUILD.json").read_text())
+        return data.get("version")
+    except (OSError, ValueError):
+        return None
+
+
 def release_tag(sha):
+    version = installed_version()
+    if version:
+        return f"linux-arm64-v{version}-{sha[:7]}"
     return f"linux-arm64-{sha[:7]}"
 
 
@@ -88,7 +99,10 @@ def published_head():
 
 
 def published_tag(sha):
-    for tag in (release_tag(sha), f"pi-{sha}"):
+    version = installed_version()
+    candidates = [f"linux-arm64-v{version}-{sha[:7]}"] if version else []
+    candidates += [f"linux-arm64-{sha[:7]}", f"pi-{sha}"]
+    for tag in candidates:
         try:
             release = api(f"releases/tags/{tag}")
         except urllib.error.HTTPError as error:
