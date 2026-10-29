@@ -209,7 +209,7 @@ export async function lookupCard(
 
   // A one-character name cannot be resolved by upstream search: TCGdex treats it
   // as a substring filter and returns thousands of unrelated cards.
-  if (query.trim().length < 2 && !getPocketCard(query.trim())) return undefined;
+  if (normaliseName(query).length < 2 && !getPocketCard(query.trim())) return undefined;
 
   // A Pocket alias selects the package catalogue; forcing a game always wins.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
