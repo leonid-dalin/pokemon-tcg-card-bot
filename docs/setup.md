@@ -40,7 +40,7 @@ npm run register
 npm run dev
 ```
 
-`doctor` checks the credentials and lists servers and registered commands. `register` publishes all six commands, replacing the application's command definitions in the test server. Leave `DISCORD_GUILD_ID` unset for global registration. Register again after changing command definitions
+`doctor` checks the credentials and lists servers and registered commands. `register` publishes every command in the bot's command definitions, replacing the application's definitions in the test server. Leave `DISCORD_GUILD_ID` unset for global registration. Register again after changing command definitions
 
 Try `/card name:Dragapult ex` in the server. With message replies enabled, `[[Dragapult ex]]` should also answer
 
