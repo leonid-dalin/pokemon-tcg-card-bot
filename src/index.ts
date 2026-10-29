@@ -41,8 +41,29 @@ const settings = new SettingsStore(
   config.dataDir ? join(config.dataDir, "settings.db") : undefined,
   { messageReplies: config.mentionEnabled, decklistReplies: config.decklistEnabled, cooldownSeconds: config.mentionCooldownSeconds },
 );
-const api = new TcgdexClient();
-const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore(), settings };
+const api = new TcgdexClient({
+  limiter: {
+    concurrency: config.upstreamConcurrency,
+    queueLimit: config.upstreamQueueLimit,
+    queueWaitMs: config.upstreamQueueWaitMs,
+  },
+});
+const memberBudget = new MentionBudget({
+  capacity: config.memberLookupBurst,
+  refillSeconds: config.memberLookupRefillSeconds,
+  maxKeys: 10_000,
+});
+// Autocomplete fires on each keystroke, so it gets a wider but separate allowance.
+const typingBudget = new MentionBudget({ capacity: 40, refillSeconds: 2, maxKeys: 10_000 });
+const context: CommandContext = {
+  client: api,
+  attribution: config.attribution,
+  energyEmoji: config.energyEmoji,
+  pages: new PageStore(),
+  settings,
+  requests: memberBudget,
+  typing: typingBudget,
+};
 
 const client = new Client(clientOptions(config));
 startRuntimeStatus(createShardReadiness(client));
@@ -99,13 +120,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   } catch (error) {
     console.error(`interaction failed (${errorCategory(error)})`);
-    await reportInteractionFailure(interaction).catch(() => {});
+    await reportInteractionFailure(interaction, error).catch(() => {});
   }
 });
 
 client.on(
   Events.MessageCreate,
-  createMessageHandler({ api, config, budget, invocations, settings, pages: context.pages, selfId: () => client.user?.id }),
+  createMessageHandler({ api, config, budget, requests: memberBudget, invocations, settings, pages: context.pages, selfId: () => client.user?.id }),
 );
 
 client.on(Events.GuildDelete, (guild) => {

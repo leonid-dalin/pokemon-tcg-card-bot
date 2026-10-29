@@ -73,3 +73,28 @@ export function parseHelpCommand(content: string, selfId: string): boolean {
   const withoutMention = content.replace(/<@!?\d+>/g, " ").trim();
   return withoutMention === "" || /^help[.!]?$/i.test(withoutMention);
 }
+
+export type InlineCommand =
+  | { command: "version"; argument: "" }
+  | { command: "settings"; argument: "" }
+  | { command: "printings"; argument: string }
+  | { command: "set"; argument: string };
+
+/**
+ * Recognises a mention of this bot followed by one of the plain-text commands.
+ * Returns undefined for unrelated text.
+ */
+export function parseInlineCommand(content: string, selfId: string): InlineCommand | undefined {
+  if (!content.includes("<@")) return undefined;
+  if (!new RegExp(`<@!?${selfId}>`).test(content)) return undefined;
+  const withoutMention = content.replace(/<@!?\d+>/g, " ").trim();
+  let match = withoutMention.match(/^version[.!]?$/i);
+  if (match) return { command: "version", argument: "" };
+  match = withoutMention.match(/^settings[.!]?$/i);
+  if (match) return { command: "settings", argument: "" };
+  match = withoutMention.match(/^printings\b[:\s]*(.+)$/i);
+  if (match) return { command: "printings", argument: (match[1] ?? "").trim() };
+  match = withoutMention.match(/^set\b[:\s]*(.+)$/i);
+  if (match) return { command: "set", argument: (match[1] ?? "").trim() };
+  return undefined;
+}

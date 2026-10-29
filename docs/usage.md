@@ -21,7 +21,7 @@ Use `pocket`, `ptcgp` or `tcgp` as the hint for Pocket cards, or `[[!Card name]]
 
 ## Help and message search
 
-Mention the bot's actual account for the `@bot` examples. A bare mention or `@bot help` opens help; `@bot search <words>` runs wording search
+Mention the bot's actual account for the `@bot` examples. A bare mention or `@bot help` opens help; `@bot search <words>` runs wording search, and `@bot printings <name>`, `@bot set <id>`, `@bot version` and `@bot settings` mirror their slash commands
 
 ## Decklists
 

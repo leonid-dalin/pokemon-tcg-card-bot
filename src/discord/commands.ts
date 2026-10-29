@@ -23,7 +23,11 @@ import { settingsCommand } from "./settings-command.js";
 import { buildIdentity, formatUptime } from "../version.js";
 import { ratesDate } from "../currency.js";
 
+import { busyMessage, overloadHint } from "./interaction-failure.js";
+
 const SOURCE_LABEL = { env: "deployed", build: "bundle", git: "checkout", package: "package version" } as const;
+
+const AUTOCOMPLETE_DEADLINE_MS = 2000;
 
 export interface CommandContext {
   client: TcgdexClient;
@@ -34,6 +38,34 @@ export interface CommandContext {
     get: (guildId: string) => import("../settings-store.js").GuildSettings;
     resolveCurrency: (userId: string, guildId: string | null) => import("../settings-store.js").Currency;
   } | undefined;
+  /** Guild-scoped member budget for expensive lookups; absent means unmetered. */
+  requests?: {
+    take: (key: string) => { allowed: true } | { allowed: false; retryAfterSeconds: number };
+  } | undefined;
+  /** Separate, smaller allowance for autocomplete so typing cannot spend the command budget. */
+  typing?: {
+    take: (key: string) => { allowed: true } | { allowed: false; retryAfterSeconds: number };
+  } | undefined;
+}
+
+/** Admits an expensive lookup, or reports the wait so the caller can answer before starting work. */
+function admitRequest(
+  context: CommandContext,
+  guildId: string | null,
+  userId: string,
+): { allowed: true } | { allowed: false; retryAfterSeconds: number } {
+  if (!context.requests) return { allowed: true };
+  return context.requests.take(budgetKey(guildId, userId));
+}
+
+function admitTyping(context: CommandContext, guildId: string | null, userId: string): boolean {
+  if (!context.typing) return true;
+  return context.typing.take(budgetKey(guildId, userId)).allowed;
+}
+
+/** A direct message has no guild, so its allowance is keyed per member instead of skipping the budget. */
+function budgetKey(guildId: string | null, userId: string): string {
+  return guildId ? `${guildId}:${userId}` : `dm:${userId}`;
 }
 
 /** Reads the per-server game preference; explicit hints and exact IDs bypass it. */
@@ -119,8 +151,23 @@ export async function handleAutocomplete(
     return;
   }
 
+  // Typing shares one small allowance so a long name cannot spend the command's budget.
+  const typing = admitTyping(context, interaction.guildId, interaction.user.id);
+  if (!typing) {
+    await interaction.respond([]);
+    return;
+  }
+
   if (focused.name === "id") {
-    const sets = await context.client.listSets();
+    // Discord wants an autocomplete answer within three seconds, so do not wait the full queue deadline.
+    const sets = await Promise.race([
+      context.client.listSets(),
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), AUTOCOMPLETE_DEADLINE_MS)),
+    ]);
+    if (!sets) {
+      await interaction.respond([]);
+      return;
+    }
     const matches = sets
       .filter((set) => set.id.toLowerCase().includes(query.toLowerCase()) || set.name.toLowerCase().includes(query.toLowerCase()))
       .slice(0, 25)
@@ -144,6 +191,11 @@ export async function handleCardCommand(
   const setHint = interaction.options.getString("set")?.trim() || undefined;
 
   await interaction.deferReply();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   // Look up autocomplete values by card id.
   const preference = gamePreference(context, interaction.guildId);
   const lookup = isCardId(query)
@@ -171,6 +223,11 @@ export async function handlePrintingButton(
     return;
   }
   await interaction.deferUpdate();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.followUp({ content: busyMessage(admission.retryAfterSeconds), flags: MessageFlags.Ephemeral });
+    return;
+  }
   const lookup = await lookupById(context.client, parsed.cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.followUp({ content: `No card matched \`${parsed.cardId}\`.`, flags: MessageFlags.Ephemeral });
@@ -187,6 +244,11 @@ export async function handleDetailsButton(
   const id = detailsIdFrom(interaction.customId);
   if (!id) return;
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   const lookup = await lookupById(context.client, id, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.editReply({ content: `No card matched \`${id}\`.` });
@@ -261,6 +323,11 @@ export async function handleOpenCardMenu(
   }
   // A card lookup may exceed Discord's three-second interaction response window.
   await interaction.deferReply();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   const lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.editReply({ content: `No card matched \`${cardId}\`.` });
@@ -286,6 +353,11 @@ export async function handleSetCommand(
   const checklist = interaction.options.getBoolean("checklist") ?? false;
 
   await interaction.deferReply();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   try {
     const set = await context.client.getSet(id);
     if (checklist) {
@@ -293,7 +365,12 @@ export async function handleSetCommand(
       return;
     }
     await interaction.editReply({ embeds: [toEmbed(renderSet(set, context.attribution))] });
-  } catch {
+  } catch (error) {
+    const hint = overloadHint(error);
+    if (hint !== undefined) {
+      await interaction.editReply({ content: busyMessage(hint) });
+      return;
+    }
     await interaction.editReply({ content: `No set matched \`${id}\`.` });
   }
 }
@@ -302,28 +379,32 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
   await interaction.reply({ embeds: [toEmbed(helpView())] });
 }
 
-/** Reports the running revision, its build date and how long this process has been up. */
-export async function handleVersionCommand(
-  interaction: ChatInputCommandInteraction,
-  startedAt = Date.now() - process.uptime() * 1_000,
-  now = Date.now(),
-): Promise<void> {
+/** The revision, package version, build date, uptime and rate-snapshot age. */
+export function versionLines(startedAt = Date.now() - process.uptime() * 1_000, now = Date.now()): string[] {
   const identity = buildIdentity();
-  const lines = [
+  return [
     `Revision: ${identity.label} (${SOURCE_LABEL[identity.source]})`,
     identity.packageVersion ? `Version: ${identity.packageVersion}` : undefined,
     identity.built ? `Last updated: ${identity.built.slice(0, 10)}` : undefined,
     `Uptime: ${formatUptime(now - startedAt)}`,
     ratesDate() ? `Exchange rates: ${ratesDate()}` : undefined,
   ].filter((line): line is string => Boolean(line));
-  await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral });
+}
+
+/** Reports the running revision, its build date and how long this process has been up. */
+export async function handleVersionCommand(
+  interaction: ChatInputCommandInteraction,
+  startedAt = Date.now() - process.uptime() * 1_000,
+  now = Date.now(),
+): Promise<void> {
+  await interaction.reply({ content: versionLines(startedAt, now).join("\n"), flags: MessageFlags.Ephemeral });
 }
 
 /** Pocket set prefixes, including promo ids, distinguish Pocket cards from physical-card ids. */
 const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
 
 /** Include Pocket attribution when any listed printing uses a Pocket id. */
-function footerFor(printings: { id: string }[], attribution: string): string {
+export function footerFor(printings: { id: string }[], attribution: string): string {
   const pocket = printings.some((printing) => POCKET_ID.test(printing.id));
   const physical = printings.some((printing) => !POCKET_ID.test(printing.id));
   if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards · github.com/PocketDecks/pokemon-tcg-pocket-cards`;
@@ -336,11 +417,24 @@ export async function handlePrintingsCommand(
 ): Promise<void> {
   const query = interaction.options.getString("name", true).trim();
   await interaction.deferReply();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   const allowed = gamePreference(context, interaction.guildId)?.allowed ?? "both";
 
   // Autocomplete values are card ids; use the resolved name for the listing.
-  const pinned = isCardId(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
-  const printings = await printingsOf(context.client, pinned?.card.name ?? query, allowed);
+  let printings: Awaited<ReturnType<typeof printingsOf>>;
+  try {
+    const pinned = isCardId(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
+    printings = await printingsOf(context.client, pinned?.card.name ?? query, allowed);
+  } catch (error) {
+    const hint = overloadHint(error);
+    if (hint === undefined) throw error;
+    await interaction.editReply({ content: busyMessage(hint) });
+    return;
+  }
   if (printings.length === 0) {
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;

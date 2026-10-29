@@ -7,6 +7,8 @@ try {
     'DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'DISCORD_GUILD_ID', 'MENTION_ENABLED',
     'DECKLIST_ENABLED', 'MENTION_COOLDOWN_SECONDS', 'ATTRIBUTION', 'ENERGY_EMOJI',
     'INVOCATION_LOG_RETENTION_DAYS', 'INVOCATION_LOG_DIR',
+    'UPSTREAM_CONCURRENCY', 'UPSTREAM_QUEUE_LIMIT', 'UPSTREAM_QUEUE_WAIT_MS',
+    'MEMBER_LOOKUP_BURST', 'MEMBER_LOOKUP_REFILL_SECONDS',
   ];
   process.stdout.write(JSON.stringify(Object.fromEntries(
     keys.filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]),
