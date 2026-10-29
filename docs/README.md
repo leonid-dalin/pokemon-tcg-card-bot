@@ -6,7 +6,7 @@ For installation, command examples and environment variables, start with the [pr
 | --- | --- |
 | Trace a request or find the code to change | [Architecture](architecture.md) |
 | Test a change, preview a card or run a development bot | [Development](development.md) |
-| Move the bot to a Raspberry Pi, update it or restore a release | [Deployment](deployment.md) |
+| Run the bot unattended, update it or restore a release | [Deployment](deployment.md) |
 | Add a set, refresh searchable wording or update Pocket data | [Data maintenance](data-maintenance.md) |
 | Find dependency, data and image terms | [Third-party notices](THIRD_PARTY_NOTICES.md) |
 | See which projects inspired the bot | [Acknowledgements](ACKNOWLEDGEMENTS.md) |

@@ -122,7 +122,7 @@ Responses are cached in memory, ten minutes for cards and an hour for sets, up t
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. The [contributor documentation](docs/README.md) covers architecture, development and data maintenance. For unattended operation on a Raspberry Pi, follow the [deployment guide](docs/deployment.md). Report vulnerabilities by email as described in [SECURITY.md](SECURITY.md), never in a public issue. Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md)
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. The [contributor documentation](docs/README.md) covers architecture, development and data maintenance. For unattended operation on a dedicated host, follow the [deployment guide](docs/deployment.md). Report vulnerabilities by email as described in [SECURITY.md](SECURITY.md), never in a public issue. Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Licence
 

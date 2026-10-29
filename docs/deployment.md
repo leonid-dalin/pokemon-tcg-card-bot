@@ -1,6 +1,6 @@
-# Raspberry Pi deployment
+# Deployment
 
-Use the native systemd service on Raspberry Pi OS 64-bit Bookworm. GitHub builds a Linux ARM64 bundle containing the pinned Node runtime, production dependencies, compiled bot and local card data. The Pi downloads the bundle and runs an offline check before stopping the installed bot
+Use the native systemd service on a 64-bit Debian 12 host. GitHub builds a Linux ARM64 bundle containing the pinned Node runtime, production dependencies, compiled bot and local card data. The host downloads the bundle and runs an offline check before stopping the installed bot
 
 The service starts at boot and retries after a crash or a failed login. The bot needs outbound HTTPS and Discord Gateway access; it opens no listening port
 
@@ -141,7 +141,7 @@ Keep Docker enabled at boot. Compose restarts an exited container after a crash 
 
 CI runs the application tests on x64 and ARM64, exercises updater failure and rollback cases, checks shell and systemd syntax, and tests both the native bundle and Docker image on ARM64. The bundle's offline smoke test also runs inside Debian 12 with a 384 MiB memory limit. [GitHub's public ARM64 runner](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) performs the build
 
-To run the Python checks on Linux without a Pi:
+To run the Python checks on Linux without target hardware:
 
 ```bash
 python3 -m unittest discover -s deploy/tests -v
