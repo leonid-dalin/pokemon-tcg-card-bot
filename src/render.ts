@@ -135,6 +135,8 @@ export function cardmarketAverage(card: Card): number | undefined {
 export function priceField(card: Card, currency: Currency = "EUR"): EmbedField | undefined {
   const { cardmarket, tcgplayer } = pickPricing(card);
   const rows: string[] = [];
+  let usedCardmarket = false;
+  let usedTcgplayer = false;
   const show = (amount: number | null | undefined, source: string): string =>
     `\`${source.padEnd(10)}\` ${amount === null || amount === undefined ? "" : formatPrice(amount, currency)}`.trimEnd();
   // TCGplayer quotes in USD, so its rows convert from USD rather than from EUR.
@@ -143,24 +145,40 @@ export function priceField(card: Card, currency: Currency = "EUR"): EmbedField |
 
   if (cardmarket) {
     const avg = cardmarket.avg ?? cardmarket.trend;
-    if (avg !== null && avg !== undefined && !Number.isNaN(avg)) rows.push(show(avg, "Market"));
-    if (cardmarket.low !== null && cardmarket.low !== undefined) rows.push(show(cardmarket.low, "Low"));
+    if (avg !== null && avg !== undefined && !Number.isNaN(avg)) {
+      rows.push(show(avg, "Market"));
+      usedCardmarket = true;
+    }
+    if (cardmarket.low !== null && cardmarket.low !== undefined) {
+      rows.push(show(cardmarket.low, "Low"));
+      usedCardmarket = true;
+    }
     const trend =
       cardmarket.avg7 !== null && cardmarket.avg7 !== undefined
         ? { label: "7d", amount: cardmarket.avg7 }
         : cardmarket.avg30 !== null && cardmarket.avg30 !== undefined
           ? { label: "30d", amount: cardmarket.avg30 }
           : undefined;
-    if (trend) rows.push(show(trend.amount, trend.label));
+    if (trend) {
+      rows.push(show(trend.amount, trend.label));
+      usedCardmarket = true;
+    }
   }
   if (tcgplayer) {
     const market = tcgplayer.avg ?? tcgplayer.trend;
-    if (market !== null && market !== undefined && !Number.isNaN(market)) rows.push(showUsd(market, "TCGplayer"));
+    if (market !== null && market !== undefined && !Number.isNaN(market)) {
+      rows.push(showUsd(market, "TCGplayer"));
+      usedTcgplayer = true;
+    }
   }
   if (!rows.length) return undefined;
 
-  const source = cardmarket ? "Cardmarket" : "TCGplayer";
-  const updated = formatDate(cardmarket?.updated ?? tcgplayer?.updated);
+  // Name only the sources that produced a row, so an empty object cannot claim
+  // credit for another marketplace's price.
+  const used = [usedCardmarket ? "Cardmarket" : undefined, usedTcgplayer ? "TCGplayer" : undefined]
+    .filter((name): name is string => Boolean(name));
+  const source = used.length > 1 ? "Cardmarket and TCGplayer" : used[0] ?? "market";
+  const updated = formatDate(usedTcgplayer && !usedCardmarket ? tcgplayer?.updated : cardmarket?.updated ?? tcgplayer?.updated);
   return {
     name: `Prices (${source})`,
     value: truncate(`${rows.join("\n")}${updated ? `\nUpdated ${updated}` : ""}`),
