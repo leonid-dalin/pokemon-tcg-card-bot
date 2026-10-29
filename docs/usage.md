@@ -11,7 +11,7 @@ Use these commands in a Discord server where the bot is installed. Ordinary-mess
 | `/set id:<set id>` | Set summary; add `checklist:true` for its card list |
 | `/search text:<words>` | Search indexed card names and rules text; quote a phrase to match adjacent words |
 | `/help` | Command and message examples |
-| `/settings` | Server reply preferences, channels, cooldown and card game choices |
+| `/settings view` | Server reply preferences, channels, cooldown and card game choices; other subcommands change them |
 
 ## Card mentions
 

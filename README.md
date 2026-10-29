@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-<a href="https://discord.com/oauth2/authorize?client_id=1564749707740192818"><strong>Add to Discord</strong></a> · <a href="docs/usage.md">Use the bot</a> · <a href="docs/setup.md">Host your own</a> · <a href="docs/development.md">Develop</a>
+<a href="https://discord.com/oauth2/authorize?client_id=1564749707740192818&scope=bot+applications.commands&permissions=4503876652887104"><strong>Add to Discord</strong></a> · <a href="docs/usage.md">Use the bot</a> · <a href="docs/setup.md">Host your own</a> · <a href="docs/development.md">Develop</a>
 </p>
 
 ## Card lookup
