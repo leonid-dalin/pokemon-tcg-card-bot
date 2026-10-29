@@ -7,6 +7,8 @@ import { isPocketCard, prizeCount } from "./prizes.js";
 import { printedNumber } from "./printed.js";
 import { normaliseName } from "./resolve.js";
 import { SET_INDEX } from "./data/set-index.js";
+import { convertFromEur, formatPrice } from "./currency.js";
+import type { Currency } from "./settings-store.js";
 
 const setById = new Map(SET_INDEX.map((entry) => [normaliseName(entry.id), entry]));
 
@@ -69,13 +71,14 @@ export function formatStage(stage: string | undefined): string | undefined {
   return stage.replace(/^Stage(\d+)$/, "Stage $1");
 }
 
-function attackName(attack: Attack): string {
-  return truncate(`${attack.name}${attack.damage !== undefined && attack.damage !== null ? `  ${attack.damage}` : ""}`, 250);
+function attackName(attack: Attack, emoji: Record<string, string>): string {
+  const cost = energyCost(attack.cost, emoji);
+  const damage = attack.damage !== undefined && attack.damage !== null ? `  ${attack.damage}` : "";
+  return truncate([cost, `${attack.name}${damage}`].filter(Boolean).join("  "), 250);
 }
 
-function attackValue(attack: Attack, emoji: Record<string, string>): string {
-  const cost = energyCost(attack.cost, emoji);
-  return truncate([cost, attack.effect].filter(Boolean).join("\n"));
+function attackValue(attack: Attack): string {
+  return truncate(attack.effect ?? "");
 }
 
 function formatDate(iso?: string): string | undefined {
@@ -128,34 +131,34 @@ export function cardmarketAverage(card: Card): number | undefined {
   return typeof avg === "number" && !Number.isNaN(avg) ? avg : undefined;
 }
 
-/** Formats available price and trend data, or returns undefined when none can be shown. */
-export function priceField(card: Card): EmbedField | undefined {
+/** Formats available price and trend data as a small table, or returns undefined when none can be shown. */
+export function priceField(card: Card, currency: Currency = "EUR"): EmbedField | undefined {
   const { cardmarket, tcgplayer } = pickPricing(card);
-  const lines: string[] = [];
+  const rows: string[] = [];
+  const show = (amount: number | null | undefined, source: string): string =>
+    `\`${source.padEnd(10)}\` ${amount === null || amount === undefined ? "" : formatPrice(amount, currency)}`.trimEnd();
+  // TCGplayer quotes in USD, so its rows convert from USD rather than from EUR.
+  const showUsd = (amountUsd: number, source: string): string =>
+    `\`${source.padEnd(10)}\` ${formatPrice(amountUsd / convertFromEur(1, "USD"), currency)}`;
 
   if (cardmarket) {
-    const unit = cardmarket.unit ?? "EUR";
-    const avg = money(cardmarket.avg ?? cardmarket.trend, unit);
-    const low = money(cardmarket.low, unit);
-    if (avg) lines.push(`Cardmarket ${avg}${low ? ` (low ${low})` : ""}`);
-    const trend = [
-      cardmarket.avg1 !== null && cardmarket.avg1 !== undefined ? `1d ${money(cardmarket.avg1, unit)}` : undefined,
-      cardmarket.avg7 !== null && cardmarket.avg7 !== undefined ? `7d ${money(cardmarket.avg7, unit)}` : undefined,
-      cardmarket.avg30 !== null && cardmarket.avg30 !== undefined ? `30d ${money(cardmarket.avg30, unit)}` : undefined,
-    ].filter((entry): entry is string => Boolean(entry));
-    if (trend.length > 0) lines.push(`Trend ${trend.join(" · ")}`);
+    const avg = cardmarket.avg ?? cardmarket.trend;
+    if (avg !== null && avg !== undefined && !Number.isNaN(avg)) rows.push(show(avg, "Market"));
+    if (cardmarket.low !== null && cardmarket.low !== undefined) rows.push(show(cardmarket.low, "Low"));
+    const trend = cardmarket.avg7 ?? cardmarket.avg30;
+    if (trend !== null && trend !== undefined) rows.push(show(trend, "7d"));
   }
   if (tcgplayer) {
-    const market = money(tcgplayer.avg ?? tcgplayer.trend, tcgplayer.unit ?? "USD");
-    const low = money(tcgplayer.low, tcgplayer.unit ?? "USD");
-    if (market) lines.push(`TCGplayer ${market}${low ? ` (low ${low})` : ""}`);
+    const market = tcgplayer.avg ?? tcgplayer.trend;
+    if (market !== null && market !== undefined && !Number.isNaN(market)) rows.push(showUsd(market, "TCGplayer"));
   }
-  if (!lines.length) return undefined;
+  if (!rows.length) return undefined;
 
+  const source = cardmarket ? "Cardmarket" : "TCGplayer";
   const updated = formatDate(cardmarket?.updated ?? tcgplayer?.updated);
   return {
-    name: "Prices",
-    value: truncate(`${lines.join("\n")}${updated ? `\nUpdated ${updated}` : ""}`),
+    name: `Prices (${source})`,
+    value: truncate(`${rows.join("\n")}${updated ? `\nUpdated ${updated}` : ""}`),
     inline: false,
   };
 }
@@ -174,6 +177,7 @@ function legalityLine(card: Card): string | undefined {
 export interface RenderOptions {
   attribution?: string;
   energyEmoji?: Record<string, string>;
+  currency?: Currency;
 }
 
 function cardProfile(card: Card): string | undefined {
@@ -226,7 +230,7 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
     fields.push({ name: `Ability: ${ability.name}`, value: truncate(ability.effect ?? "", FIELD_VALUE_LIMIT) });
   }
   for (const attack of card.attacks ?? []) {
-    fields.push({ name: attackName(attack), value: attackValue(attack, options.energyEmoji ?? {}), inline: false });
+    fields.push({ name: attackName(attack, options.energyEmoji ?? {}), value: attackValue(attack) || "\u200b", inline: false });
   }
   for (const weakness of card.weaknesses ?? []) {
     fields.push({ name: "Weakness", value: `${weakness.type} ${weakness.value}`, inline: true });
@@ -275,7 +279,7 @@ export function renderCardDetails(
   if (card.illustrator) fields.push({ name: "Illustrator", value: truncate(card.illustrator), inline: true });
   const legal = legalityLine(card);
   if (legal) fields.push({ name: "Legal", value: truncate(legal), inline: true });
-  const prices = priceField(card);
+  const prices = priceField(card, options.currency ?? "EUR");
   if (prices) fields.push(prices);
   const unique = [...new Map(alternates.filter((entry) => entry.id !== card.id).map((entry) => [entry.id, entry])).values()];
   if (unique.length) fields.push({ name: "Other printings", value: unique.map((entry) => printedNumber(entry.id)).join(", ") });
