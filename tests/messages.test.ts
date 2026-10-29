@@ -67,6 +67,48 @@ const DECK = ["Pokémon: 2", "4 Dreepy TWM 128", "3 Drakloak TWM 129", "Trainer:
 afterEach(() => vi.restoreAllMocks());
 
 describe("message handler", () => {
+  it("lets a member's own on override a server that has replies off", async () => {
+    const settings = {
+      get: () => ({
+        guildId: "g1",
+        messageReplies: false,
+        decklistReplies: false,
+        autoReplyChannelMode: "all" as const,
+        selectedChannelIds: [] as string[],
+        cooldownSeconds: 0,
+        cardGames: "both" as const,
+        defaultCardGame: "ptcg" as const,
+        currency: undefined,
+        updatedAt: "",
+      }),
+      messageRepliesFor: () => true,
+    };
+    const { message, replies } = fakeMessage("[[Dragapult ex]]", { guildId: "g1" });
+    await handler({ settings })(message);
+    expect(replies.length).toBe(1);
+  });
+
+  it("lets a member's own off suppress replies on a server that has them on", async () => {
+    const settings = {
+      get: () => ({
+        guildId: "g1",
+        messageReplies: true,
+        decklistReplies: false,
+        autoReplyChannelMode: "all" as const,
+        selectedChannelIds: [] as string[],
+        cooldownSeconds: 0,
+        cardGames: "both" as const,
+        defaultCardGame: "ptcg" as const,
+        currency: undefined,
+        updatedAt: "",
+      }),
+      messageRepliesFor: () => false,
+    };
+    const { message, replies } = fakeMessage("[[Dragapult ex]]", { guildId: "g1" });
+    await handler({ settings })(message);
+    expect(replies.length).toBe(0);
+  });
+
   it.each([
     ["a bot", { bot: true }],
     ["a webhook", { webhookId: "w" }],

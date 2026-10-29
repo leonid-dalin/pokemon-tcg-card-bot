@@ -515,8 +515,23 @@ class DeploymentTests(unittest.TestCase):
 
     def test_missing_or_incomplete_release_keeps_installed_code(self):
         for assets in [[], [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"}]]:
-            with patch.object(m, "api", side_effect=[{"sha": NEW}, {"assets": assets}]):
+            release = {"assets": assets, "target_commitish": NEW}
+            with patch.object(m, "api", side_effect=[{"sha": NEW}, release, release]):
                 self.assertIsNone(m.published_head())
+
+    def test_release_lookup_accepts_the_short_tag_and_the_old_one(self):
+        assets = [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"},
+                  {"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz.sha256"}]
+        with patch.object(m, "api", side_effect=[{"sha": NEW}, {"assets": assets, "target_commitish": NEW}]):
+            self.assertEqual(m.published_head(), NEW)
+            self.assertEqual(m.release_tag(NEW), f"linux-arm64-{NEW[:7]}")
+
+    def test_release_lookup_skips_a_short_tag_that_points_elsewhere(self):
+        assets = [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"},
+                  {"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz.sha256"}]
+        moved = {"assets": assets, "target_commitish": OLD}
+        with patch.object(m, "api", side_effect=[{"sha": NEW}, moved, moved]):
+            self.assertIsNone(m.published_head())
 
     def test_checksum_failure_does_not_switch_or_stop_bot(self):
         previous = self.release(OLD)

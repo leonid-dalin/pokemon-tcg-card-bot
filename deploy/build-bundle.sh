@@ -31,7 +31,7 @@ cp src/data/text-index.json "$stage/src/data/"
 cp package.json package-lock.json LICENSE NOTICE "$stage/"
 cp docs/THIRD_PARTY_NOTICES.md "$stage/docs/"
 cp deploy/smoke.mjs deploy/import-env.mjs "$stage/deploy/"
-printf '{"sha":"%s","platform":"linux","arch":"arm64","node":"%s"}\n' "$sha" "$node_version" > "$stage/BUILD.json"
+printf '{"sha":"%s","platform":"linux","arch":"arm64","node":"%s","built":"%s"}\n' "$sha" "$node_version" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$stage/BUILD.json"
 (
   cd "$stage"
   npm ci --omit=dev --ignore-scripts --no-audit --no-fund

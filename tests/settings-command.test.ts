@@ -31,6 +31,18 @@ function fakeStore(row: Partial<GuildSettings> = {}, failUpdate = false): Store 
     delete: () => {
       store.deleted = true;
     },
+    setCurrency: (userId: string, currency: string) => {
+      (store as unknown as { userCurrency?: string }).userCurrency = `${userId}:${currency}`;
+    },
+    clearCurrency: (userId: string) => {
+      (store as unknown as { userCurrency?: string }).userCurrency = `${userId}:cleared`;
+    },
+    setMessageReplies: (userId: string, enabled: boolean) => {
+      (store as unknown as { userReplies?: string }).userReplies = `${userId}:${enabled}`;
+    },
+    clearMessageReplies: (userId: string) => {
+      (store as unknown as { userReplies?: string }).userReplies = `${userId}:cleared`;
+    },
   };
   return store as unknown as Store;
 }
@@ -46,6 +58,7 @@ function fakeInteraction(
   const interaction = {
     inGuild: () => inGuild,
     guildId: inGuild ? "g1" : null,
+    user: { id: "u1" },
     memberPermissions: {
       has: (flag: unknown) =>
         (overrides.permissions ?? ["ManageGuild"]).some((name) => flag === name || flag === PermissionFlagsBits[name as keyof typeof PermissionFlagsBits]),
@@ -109,6 +122,55 @@ describe("settings command", () => {
     await run(store, interaction);
     expect(store.updates).toEqual([{ messageReplies: false }]);
     expect(replies[0]?.content).toContain("Message replies are now off");
+  });
+
+  it("sets the server currency from the currency group", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["currency", "server"], { code: "GBP" });
+    await run(store, interaction);
+    expect(store.updates).toEqual([{ currency: "GBP" }]);
+    expect(replies[0]?.content).toContain("default currency is now pounds");
+  });
+
+  it("clears a user currency so the server default applies again", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["currency", "user"], { code: "default" });
+    await run(store, interaction);
+    expect((store as unknown as { userCurrency?: string }).userCurrency).toBe("u1:cleared");
+    expect(replies[0]?.content).toContain("follow this server's currency");
+  });
+
+  it("stores a user currency without touching the server row", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["currency", "user"], { code: "CNY" });
+    await run(store, interaction);
+    expect(store.updates).toEqual([]);
+    expect((store as unknown as { userCurrency?: string }).userCurrency).toBe("u1:CNY");
+    expect(replies[0]?.content).toContain("yuan");
+  });
+
+  it("lets a member without Manage Server set their own reply preference", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["mentions"], { enabled: "off" }, { permissions: [] });
+    await run(store, interaction);
+    expect((store as unknown as { userReplies?: string }).userReplies).toBe("u1:false");
+    expect(replies[0]?.content).toContain("automatic replies are now off");
+  });
+
+  it("still refuses server settings to a member without Manage Server", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["messages"], { enabled: false }, { permissions: [] });
+    await run(store, interaction);
+    expect(store.updates).toEqual([]);
+    expect(replies[0]?.content).toContain("Manage Server");
+  });
+
+  it("returns a member to the server reply switch", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["mentions"], { enabled: "default" });
+    await run(store, interaction);
+    expect((store as unknown as { userReplies?: string }).userReplies).toBe("u1:cleared");
+    expect(replies[0]?.content).toContain("follow this server");
   });
 
   it("reports a failed save without a success confirmation", async () => {

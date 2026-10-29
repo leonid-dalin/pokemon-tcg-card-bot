@@ -28,28 +28,82 @@ describe("renderCard", () => {
   it("puts game information on the Mega Gallade ex front", () => {
     const view = renderCard(megaGallade);
     expect(view.description).toMatch(/^350 HP · Fighting · Stage 2 · from Kirlia/);
-    expect(view.fields.map((field) => field.name)).toEqual(["Gale Slash  50+", "Marvelous Edge  240", "Weakness", "Retreat"]);
+    expect(view.fields.map((field) => field.name)).toEqual(["[F]  Gale Slash  50+", "[FFC]  Marvelous Edge  240", "Weakness", "Retreat"]);
     expect(view.fields.find((field) => field.name === "Weakness")?.value).toBe("Psychic ×2");
-    expect(view.fields.some((field) => ["Rarity", "Legal", "Prices", "Illustrator"].includes(field.name))).toBe(false);
+    expect(view.fields.some((field) => ["Rarity", "Legal", "Illustrator"].includes(field.name))).toBe(false);
+    expect(view.fields.map((field) => field.name)).not.toContain("Prices (Cardmarket)");
     expect(view.footer).toMatch(/^CRI 48 · Reg J/);
     expect(JSON.stringify(view)).not.toContain("—");
   });
 
-  it("starts attack values with compact energy tokens", () => {
-    const attacks = renderCard(megaGallade).fields;
-    expect(attacks.find((field) => field.name === "Gale Slash  50+")?.value).toMatch(/^\[F\]/);
-    expect(attacks.find((field) => field.name === "Marvelous Edge  240")?.value).toMatch(/^\[F\]\[F\]\[C\]/);
+  it("puts the compact energy token in the attack name", () => {
+    const attacks = renderCard(megaGallade).fields.map((field) => field.name);
+    expect(attacks).toContain("[F]  Gale Slash  50+");
+    expect(attacks).toContain("[FFC]  Marvelous Edge  240");
   });
-  it("uses configured energy emoji in attack values", () => {
-    const attacks = renderCard(megaGallade, { energyEmoji: { Fighting: "<:f:1>" } }).fields;
-    expect(attacks.find((field) => field.name === "Gale Slash  50+")?.value).toMatch(/^<:f:1>/);
-    expect(attacks.find((field) => field.name === "Marvelous Edge  240")?.value).toMatch(/^<:f:1><:f:1>\[C\]/);
+  it("uses configured energy emoji in the attack name", () => {
+    const attacks = renderCard(megaGallade, { energyEmoji: { Fighting: "<:f:1>" } }).fields.map((field) => field.name);
+    expect(attacks).toContain("<:f:1>  Gale Slash  50+");
+    expect(attacks).toContain("<:f:1><:f:1>[C]  Marvelous Edge  240");
   });
   it("renders card details separately", () => {
     const view = renderCardDetails(megaGallade, [], { attribution: "Card data from TCGdex" });
-    expect(view.fields.map((field) => field.name)).toEqual(["Set", "Rarity", "Illustrator", "Legal", "Prices"]);
+    expect(view.fields.map((field) => field.name)).toEqual(["Set", "Rarity", "Illustrator", "Legal", "Prices (Cardmarket)"]);
     expect(view.fields.find((field) => field.name === "Set")?.value).toContain("Chaos Rising");
     expect(view.fields.find((field) => field.name === "Set")?.value).toContain("CRI 48");
+  });
+
+  it("labels a thirty-day average as thirty days", () => {
+    const card = { ...dragapult, variants_detailed: [] } as Card;
+    (card as { pricing?: unknown }).pricing = {
+      cardmarket: { unit: "EUR", avg: 2, low: 1, avg7: null, avg30: 3.25, updated: "2026-10-01T00:00:00Z" },
+    };
+    const field = priceField(card);
+    expect(field?.value).toContain("30d");
+    expect(field?.value).not.toContain("7d");
+  });
+
+  it("keeps a long configured emoji from erasing the attack name", () => {
+    const longEmoji = `<:p${"a".repeat(20)}:1234567890123456789>`;
+    const attacks = renderCard(megaGallade, { energyEmoji: { Fighting: longEmoji } }).fields;
+    const edge = attacks.find((field) => field.name.includes("Marvelous Edge"));
+    expect(edge?.name).toContain("Marvelous Edge");
+    expect(edge?.name).toContain("240");
+  });
+
+  it("names only the marketplace that supplied a price", () => {
+    const card = { ...dragapult, variants_detailed: [] } as Card;
+    (card as { pricing?: unknown }).pricing = {
+      cardmarket: { unit: "EUR", avg: null, low: null, avg7: null, avg30: null, updated: "2026-10-01T00:00:00Z" },
+      tcgplayer: { unit: "USD", normal: { marketPrice: 4.5 } },
+    };
+    const field = priceField(card);
+    expect(field?.name).toBe("Prices (TCGplayer)");
+    expect(field?.name).not.toContain("Cardmarket");
+  });
+
+  it("converts both marketplaces into a non-euro currency", () => {
+    const card = { ...dragapult, variants_detailed: [] } as Card;
+    (card as { pricing?: unknown }).pricing = {
+      cardmarket: { unit: "EUR", avg: 2, low: 1, updated: "2026-10-01T00:00:00Z" },
+      tcgplayer: { unit: "USD", normal: { marketPrice: 4 } },
+    };
+    const usd = priceField(card, "USD")!;
+    expect(usd.value).toContain("$");
+    const jpy = priceField(card, "JPY")!;
+    expect(jpy.value).not.toMatch(/\.\d/);
+    const cny = priceField(card, "CNY")!;
+    expect(cny.value).toContain("RMB");
+  });
+
+  it("does not lead a priceless attack name with a separator", () => {
+    const card = {
+      ...dragapult,
+      abilities: [],
+      attacks: [{ name: "Free Strike", damage: 10, effect: "Draw a card." }],
+    } as Card;
+    const field = renderCard(card).fields.find((entry) => entry.name.includes("Free Strike"));
+    expect(field?.name).toBe("Free Strike  10");
   });
 
   it("renders an image-only card with the scan and nothing else", () => {
@@ -57,7 +111,7 @@ describe("renderCard", () => {
     expect(view.fields).toEqual([]);
     expect(view.imageUrl).toBe("https://assets.tcgdex.net/en/sv/sv08.5/073/high.webp");
     expect(view.title).toBe("Dragapult ex · PRE 73");
-    expect(view.footer).toBe("Card data from TCGdex");
+    expect(view.footer).toBe("Card data from TCGdex · tcgdex.com");
     expect(view.url).toBe(view.imageUrl);
   });
 
@@ -107,9 +161,9 @@ describe("renderCard", () => {
 
   it("renders each attack with its name, damage and effect", () => {
     const attacks = renderCard(dragapult).fields;
-    expect(attacks.some((field) => field.name === "Jet Headbutt  70")).toBe(true);
-    expect(attacks.some((field) => field.name === "Phantom Dive  200")).toBe(true);
-    expect(attacks.find((field) => field.name === "Phantom Dive  200")?.value).toContain("Put 6 damage counters");
+    expect(attacks.some((field) => field.name.endsWith("Jet Headbutt  70"))).toBe(true);
+    expect(attacks.some((field) => field.name.endsWith("Phantom Dive  200"))).toBe(true);
+    expect(attacks.find((field) => field.name.endsWith("Phantom Dive  200"))?.value).toContain("Put 6 damage counters");
   });
 
   it("lists every format the card is legal in on Details", () => {
@@ -125,9 +179,9 @@ describe("renderCard", () => {
   });
 
   it("prices the card in the currency the source reports on Details", () => {
-    const prices = renderCardDetails(dragapult, [], {}).fields.find((field) => field.name === "Prices")?.value;
-    expect(prices).toContain("Cardmarket 1.49 EUR");
-    expect(prices).toContain("low 0.39 EUR");
+    const prices = renderCardDetails(dragapult, [], {}).fields.find((field) => field.name === "Prices (Cardmarket)")?.value;
+    expect(prices).toContain("€1.49");
+    expect(prices).toContain("€0.39");
     expect(prices).toMatch(/Updated \d{4}-\d{2}-\d{2}/);
   });
 
@@ -155,8 +209,8 @@ describe("renderCard", () => {
       ],
     };
     const value = priceField(both)?.value ?? "";
-    expect(value).toContain("Cardmarket 2.50 EUR");
-    expect(value).toContain("TCGplayer 3.25 USD");
+    expect(value).toContain("€2.50");
+    expect(value).toContain("TCGplayer");
   });
 
   it("keeps every field inside the Discord value limit", () => {

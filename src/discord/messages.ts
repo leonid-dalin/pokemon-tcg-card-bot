@@ -19,7 +19,10 @@ export interface MessageContext {
   pages: import("./pages.js").PageStore;
   budget?: MentionBudget | undefined;
   invocations?: { record: (entry: import("../invocation-log.js").InvocationEntry) => void } | undefined;
-  settings?: { get: (guildId: string) => import("../settings-store.js").GuildSettings } | undefined;
+  settings?: {
+    get: (guildId: string) => import("../settings-store.js").GuildSettings;
+    messageRepliesFor?: (userId: string) => boolean | undefined;
+  } | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
 }
@@ -101,9 +104,11 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     let guild: EffectiveGuildSettings | undefined;
+    let personalReplies: boolean | undefined;
     if (message.guildId && context.settings) {
       try {
         guild = context.settings.get(message.guildId);
+        personalReplies = context.settings.messageRepliesFor?.(message.author.id);
       } catch (error) {
         console.error(`settings read failed (${errorCategory(error)})`);
         return;
@@ -111,7 +116,9 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
     const decklistOn = guild ? guild.decklistReplies : config.decklistEnabled;
     const gamePreference = guild ? { allowed: guild.cardGames, default: guild.defaultCardGame } : undefined;
-    const messageRepliesOn = guild ? guild.messageReplies : true;
+    const serverReplies = guild ? guild.messageReplies : true;
+    // A member's own choice overrides the server switch, as the command advertises.
+    const messageRepliesOn = personalReplies ?? serverReplies;
 
     const deck = decklistOn ? parseDecklist(message.content) : undefined;
     const selfId = context.selfId();

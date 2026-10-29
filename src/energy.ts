@@ -14,5 +14,10 @@ const LETTERS: Record<string, string> = {
 
 /** Formats costs with configured emoji, falling back to bracketed type codes. */
 export function energyCost(cost: string[] | undefined, emoji: Record<string, string> = {}): string {
-  return (cost ?? []).map((type) => emoji[type] ?? `[${LETTERS[type] ?? type}]`).join("");
+  if (!cost || cost.length === 0) return "";
+  const letters = cost.map((type) => emoji[type] ? "" : (LETTERS[type] ?? type)).join("");
+  const tokens = cost.map((type) => emoji[type] ?? "").join("");
+  if (tokens && !letters) return tokens;
+  if (tokens) return `${tokens}[${letters}]`;
+  return `[${letters}]`;
 }

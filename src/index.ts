@@ -8,6 +8,7 @@ import {
   handleDetailsButton,
   handleFilterMenu,
   handleHelpCommand,
+  handleVersionCommand,
   handleOpenCardMenu,
   handlePageButton,
   handlePrintingButton,
@@ -91,6 +92,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handlePrintingsCommand(context, interaction);
     } else if (interaction.commandName === "help") {
       await handleHelpCommand(interaction);
+    } else if (interaction.commandName === "version") {
+      await handleVersionCommand(interaction);
     } else if (interaction.commandName === "settings") {
       await handleSettingsCommand({ settings, mentionEnabled: config.mentionEnabled }, interaction);
     }

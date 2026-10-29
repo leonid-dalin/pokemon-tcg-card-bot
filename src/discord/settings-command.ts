@@ -8,13 +8,20 @@ import {
   type InteractionReplyOptions,
 } from "discord.js";
 import { errorCategory } from "../diagnostics.js";
-import type { GuildSettingsPatch, SettingsStore } from "../settings-store.js";
+import type { Currency, GuildSettingsPatch, SettingsStore } from "../settings-store.js";
+
+const CURRENCY_LABELS: Record<Currency, string> = {
+  EUR: "euros (€)",
+  USD: "US dollars ($)",
+  GBP: "pounds (£)",
+  JPY: "yen (¥)",
+  CNY: "yuan (¥)",
+};
 
 export const settingsCommand = new SlashCommandBuilder()
   .setName("settings")
   .setDescription("Configure how the bot replies in this server")
   .setContexts(InteractionContextType.Guild)
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((sub) => sub.setName("view").setDescription("Show the current settings"))
   .addSubcommand((sub) =>
     sub
@@ -111,6 +118,64 @@ export const settingsCommand = new SlashCommandBuilder()
         option.setName("seconds").setDescription("0 to 86400").setMinValue(0).setMaxValue(86_400).setRequired(true),
       ),
   )
+  .addSubcommandGroup((group) =>
+    group
+      .setName("currency")
+      .setDescription("Prices for you, or the default this server starts from")
+      .addSubcommand((sub) =>
+        sub
+          .setName("user")
+          .setDescription("Your price currency; overrides this server's default")
+          .addStringOption((option) =>
+            option
+              .setName("code")
+              .setDescription("currency for your prices")
+              .addChoices(
+                { name: "Default (follow this server)", value: "default" },
+                { name: "Euro (€)", value: "EUR" },
+                { name: "US dollar ($)", value: "USD" },
+                { name: "Pound (£)", value: "GBP" },
+                { name: "Yen (¥)", value: "JPY" },
+                { name: "Yuan (¥ RMB)", value: "CNY" },
+              )
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName("server")
+          .setDescription("Default price currency for this server")
+          .addStringOption((option) =>
+            option
+              .setName("code")
+              .setDescription("currency for the server default")
+              .addChoices(
+                { name: "Euro (€)", value: "EUR" },
+                { name: "US dollar ($)", value: "USD" },
+                { name: "Pound (£)", value: "GBP" },
+                { name: "Yen (¥)", value: "JPY" },
+                { name: "Yuan (¥ RMB)", value: "CNY" },
+              )
+              .setRequired(true),
+          ),
+      ),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("mentions")
+      .setDescription("Your own automatic replies, overriding this server's switch")
+      .addStringOption((option) =>
+        option
+          .setName("enabled")
+          .setDescription("on, off, or follow this server")
+          .addChoices(
+            { name: "Follow this server", value: "default" },
+            { name: "On", value: "on" },
+            { name: "Off", value: "off" },
+          )
+          .setRequired(true),
+      ),
+  )
   .addSubcommand((sub) => sub.setName("reset").setDescription("Back to the deployment defaults"));
 
 export interface SettingsCommandContext {
@@ -128,10 +193,6 @@ export async function handleSettingsCommand(
 ): Promise<void> {
   if (!interaction.inGuild() || !interaction.guildId) {
     await interaction.reply(ephemeral("Settings belong to a server. Run this in one where you manage it."));
-    return;
-  }
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-    await interaction.reply(ephemeral("Only members with the Manage Server permission can change these settings."));
     return;
   }
   const guildId = interaction.guildId;
@@ -154,6 +215,12 @@ export async function handleSettingsCommand(
 
   const group = interaction.options.getSubcommandGroup(false);
   const sub = group ? `${group}:${interaction.options.getSubcommand(true)}` : interaction.options.getSubcommand(true);
+
+  const personal = sub === "mentions" || sub === "currency:user";
+  if (!personal && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    await reply("Only members with the Manage Server permission can change these settings.");
+    return;
+  }
 
   if (sub === "view") {
     const settings = context.settings.get(guildId);
@@ -279,6 +346,36 @@ export async function handleSettingsCommand(
       { cooldownSeconds: seconds },
       seconds === 0 ? "The per-member throttle is off." : `Members now wait ${seconds}s between automatic replies.`,
     );
+    return;
+  }
+
+  if (sub === "mentions") {
+    const choice = interaction.options.getString("enabled", true);
+    if (choice === "default") {
+      context.settings.clearMessageReplies(interaction.user.id);
+      await reply("Your automatic replies follow this server again.");
+      return;
+    }
+    context.settings.setMessageReplies(interaction.user.id, choice === "on");
+    await reply(`Your automatic replies are now ${choice}.`);
+    return;
+  }
+
+  if (sub === "currency:user") {
+    const code = interaction.options.getString("code", true);
+    if (code === "default") {
+      context.settings.clearCurrency(interaction.user.id);
+      await reply("Your prices now follow this server's currency.");
+      return;
+    }
+    context.settings.setCurrency(interaction.user.id, code as Currency);
+    await reply(`Your prices now show in ${CURRENCY_LABELS[code as Currency]}.`);
+    return;
+  }
+
+  if (sub === "currency:server") {
+    const code = interaction.options.getString("code", true) as Currency;
+    await apply({ currency: code }, `This server's default currency is now ${CURRENCY_LABELS[code]}.`);
     return;
   }
 

@@ -23,6 +23,7 @@
     "index:text": "tsx scripts/build-text-index.ts"
   },
   "dependencies": {
+    "@fawazahmed0/currency-api": "2026.10.28",
     "discord.js": "^14.27.0",
     "pokemon-tcg-pocket-cards": "^5.4.0"
   },

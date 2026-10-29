@@ -12,7 +12,7 @@ describe("loadConfig", () => {
       mentionEnabled: true,
       decklistEnabled: false,
       mentionCooldownSeconds: 0,
-      attribution: "Card data from TCGdex",
+      attribution: "Card data from TCGdex · tcgdex.com",
       energyEmoji: {},
       invocationLogRetentionDays: 60,
     });

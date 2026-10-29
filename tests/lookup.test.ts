@@ -126,6 +126,21 @@ describe("lookupCard", () => {
     expect(calls.some((call) => call.includes("/cards/sv"))).toBe(false);
   });
 
+  it("measures short queries after normalisation", async () => {
+    const { calls } = stubFetch({ "/cards?name=": { body: summaries } });
+    const client = new TcgdexClient();
+    // Combining marks survive trim as extra code units but normalise away to one letter.
+    await expect(lookupCard(client, "n\u0303")).resolves.toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
+  it("returns undefined for a one-character name without querying the API", async () => {
+    const { calls } = stubFetch({ "/cards?name=": { body: summaries } });
+    const client = new TcgdexClient();
+    await expect(lookupCard(client, "N")).resolves.toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
   it("honours the set hint from a mention", async () => {
     stubFetch({
       "/cards?name=": { body: summaries },

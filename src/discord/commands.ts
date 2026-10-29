@@ -20,13 +20,20 @@ import { toEmbed } from "./embeds.js";
 import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
 import { settingsCommand } from "./settings-command.js";
+import { buildIdentity, formatUptime } from "../version.js";
+import { ratesDate } from "../currency.js";
+
+const SOURCE_LABEL = { env: "deployed", build: "bundle", git: "checkout", package: "package version" } as const;
 
 export interface CommandContext {
   client: TcgdexClient;
   attribution: string;
   energyEmoji: Record<string, string>;
   pages: PageStore;
-  settings?: { get: (guildId: string) => import("../settings-store.js").GuildSettings } | undefined;
+  settings?: {
+    get: (guildId: string) => import("../settings-store.js").GuildSettings;
+    resolveCurrency: (userId: string, guildId: string | null) => import("../settings-store.js").Currency;
+  } | undefined;
 }
 
 /** Reads the per-server game preference; explicit hints and exact IDs bypass it. */
@@ -95,7 +102,11 @@ export const helpCommand = new SlashCommandBuilder()
   .setName("help")
   .setDescription("List what the bot can do");
 
-export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand, settingsCommand];
+export const versionCommand = new SlashCommandBuilder()
+  .setName("version")
+  .setDescription("Show the running revision, uptime and data version");
+
+export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand, versionCommand, settingsCommand];
 
 export async function handleAutocomplete(
   context: CommandContext,
@@ -183,7 +194,14 @@ export async function handleDetailsButton(
   }
   // Use the lookup's source attribution for Pocket cards.
   await interaction.editReply({
-    embeds: [toEmbed(renderCardDetails(lookup.card, lookup.alternates, { attribution: lookup.attribution ?? context.attribution }))],
+    embeds: [
+      toEmbed(
+        renderCardDetails(lookup.card, lookup.alternates, {
+          attribution: lookup.attribution ?? context.attribution,
+          currency: context.settings?.resolveCurrency(interaction.user.id, interaction.guildId) ?? "EUR",
+        }),
+      ),
+    ],
     ...(cardmarketRow(lookup.card.id, lookup.card.name) ? { components: [cardmarketRow(lookup.card.id, lookup.card.name)!] } : {}),
   });
 }
@@ -284,6 +302,23 @@ export async function handleHelpCommand(interaction: ChatInputCommandInteraction
   await interaction.reply({ embeds: [toEmbed(helpView())] });
 }
 
+/** Reports the running revision, its build date and how long this process has been up. */
+export async function handleVersionCommand(
+  interaction: ChatInputCommandInteraction,
+  startedAt = Date.now() - process.uptime() * 1_000,
+  now = Date.now(),
+): Promise<void> {
+  const identity = buildIdentity();
+  const lines = [
+    `Revision: ${identity.label} (${SOURCE_LABEL[identity.source]})`,
+    identity.packageVersion ? `Version: ${identity.packageVersion}` : undefined,
+    identity.built ? `Last updated: ${identity.built.slice(0, 10)}` : undefined,
+    `Uptime: ${formatUptime(now - startedAt)}`,
+    ratesDate() ? `Exchange rates: ${ratesDate()}` : undefined,
+  ].filter((line): line is string => Boolean(line));
+  await interaction.reply({ content: lines.join("\n"), flags: MessageFlags.Ephemeral });
+}
+
 /** Pocket set prefixes, including promo ids, distinguish Pocket cards from physical-card ids. */
 const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
 
@@ -291,7 +326,7 @@ const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
 function footerFor(printings: { id: string }[], attribution: string): string {
   const pocket = printings.some((printing) => POCKET_ID.test(printing.id));
   const physical = printings.some((printing) => !POCKET_ID.test(printing.id));
-  if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards`;
+  if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards · github.com/PocketDecks/pokemon-tcg-pocket-cards`;
   return pocket ? POCKET_ATTRIBUTION : attribution;
 }
 

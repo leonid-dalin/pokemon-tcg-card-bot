@@ -18,7 +18,8 @@ describe("nested tcgplayer market price", () => {
       pricing: { tcgplayer: { normal: { marketPrice: 0.15 }, holo: { marketPrice: 0.4 } } },
     };
     const field = priceField(card);
-    expect(field?.value).toContain("TCGplayer 0.15 USD");
+    expect(field?.value).toContain("TCGplayer");
+    expect(field?.value).toMatch(/€0\.1[0-9]/);
   });
 
   it("prefers flat averages when the record carries them", () => {
@@ -28,7 +29,8 @@ describe("nested tcgplayer market price", () => {
       pricing: { tcgplayer: { unit: "USD", avg: 2, normal: { marketPrice: 0.15 } } },
     };
     const field = priceField(card);
-    expect(field?.value).toContain("TCGplayer 2.00 USD");
+    expect(field?.value).toContain("TCGplayer");
+    expect(field?.value).toMatch(/€1\.[0-9]{2}/);
     expect(field?.value).not.toContain("0.15");
   });
 

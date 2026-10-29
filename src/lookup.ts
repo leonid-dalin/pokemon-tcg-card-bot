@@ -98,7 +98,7 @@ export const isCardId = (value: string): boolean => {
 };
 
 /** Source credit for cards loaded from the Pocket package. */
-export const POCKET_ATTRIBUTION = "Pocket card data from pokemon-tcg-pocket-cards";
+export const POCKET_ATTRIBUTION = "Pocket card data from pokemon-tcg-pocket-cards · github.com/PocketDecks/pokemon-tcg-pocket-cards";
 
 // Resolve against the package; use the hint's subset when it contains a match.
 // requireSet keeps a concrete set hint from widening to unrelated package results.
@@ -206,6 +206,10 @@ export async function lookupCard(
   if (setHint && isCardId(setHint.trim())) {
     return lookupById(client, setHint.trim(), options);
   }
+
+  // A one-character name cannot be resolved by upstream search: TCGdex treats it
+  // as a substring filter and returns thousands of unrelated cards.
+  if (normaliseName(query).length < 2 && !getPocketCard(query.trim())) return undefined;
 
   // A Pocket alias selects the package catalogue; forcing a game always wins.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;

@@ -13,6 +13,7 @@ const COMMANDS: { name: string; value: string }[] = [
   { name: "/set id:<set id> checklist:true", value: "lists every card in the set" },
   { name: "/search text:<words>", value: "finds cards whose ability, attack or Trainer wording contains every word" },
   { name: "/help", value: "shows this card" },
+  { name: "/version", value: "the running revision, uptime and version" },
   { name: "/settings", value: "for server admins: choose where and what the bot replies to" },
 ];
 

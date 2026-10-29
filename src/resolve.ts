@@ -40,6 +40,9 @@ export function scoreCandidate(query: string, candidate: string): number {
   if (!q || !c) return 0;
   if (q === c) return 100;
   const extra = Math.min(20, Math.max(0, c.length - q.length));
+  // A single-character query matches almost every name as a substring, so it
+  // only counts when the whole name equals it.
+  if (q.length < 2) return 0;
   if (c.startsWith(q)) return 80 - extra;
   if (c.includes(q)) return 50 - extra;
   const tokens = q.split(" ").filter(Boolean);

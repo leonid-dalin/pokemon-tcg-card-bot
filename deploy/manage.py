@@ -77,19 +77,34 @@ def valid_sha(value):
     return value
 
 
+def release_tag(sha):
+    return f"linux-arm64-{sha[:7]}"
+
+
 def published_head():
     sha = valid_sha(api("commits/master")["sha"])
-    try:
-        release = api(f"releases/tags/pi-{sha}")
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            return None
-        raise
-    if release.get("draft"):
-        return None
-    names = {asset["name"] for asset in release.get("assets", [])}
-    name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
-    return sha if {name, name + ".sha256"} <= names else None
+    tag = published_tag(sha)
+    return sha if tag else None
+
+
+def published_tag(sha):
+    for tag in (release_tag(sha), f"pi-{sha}"):
+        try:
+            release = api(f"releases/tags/{tag}")
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                continue
+            raise
+        if release.get("draft"):
+            continue
+        target = release.get("target_commitish")
+        if target and target != sha:
+            continue
+        names = {asset["name"] for asset in release.get("assets", [])}
+        name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
+        if {name, name + ".sha256"} <= names:
+            return tag
+    return None
 
 
 def download(url, destination, limit):
@@ -321,7 +336,8 @@ def fetch(sha):
         progress(f"Downloading tested revision {sha}")
         stage = Path(temporary)
         name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
-        url = f"https://github.com/{REPO}/releases/download/pi-{sha}/{name}"
+        tag = published_tag(sha) or release_tag(sha)
+        url = f"https://github.com/{REPO}/releases/download/{tag}/{name}"
         archive, checksum = stage / name, stage / "checksum"
         download(url + ".sha256", checksum, 1024)
         expected = checksum.read_text().split()[0]
