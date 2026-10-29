@@ -25,13 +25,38 @@ export function mergeEntry(result: SetDetailResult, previous?: SetIndexEntry): S
   // Upstream nests the code under "official"; older snapshots stored a plain string.
   const upstream = detail?.abbreviation;
   const code = (typeof upstream === "string" ? upstream : upstream?.official) ?? previous?.code;
-  const releaseDate = detail?.releaseDate ?? previous?.releaseDate;
+  // The detail record wins; a summary date outranks a value already curated.
+  const releaseDate = detail?.releaseDate ?? result.summary.releaseDate ?? previous?.releaseDate;
   return {
     id,
     name,
     ...(code ? { code } : {}),
     ...(releaseDate ? { releaseDate } : {}),
   };
+}
+
+/** Reports exactly the fields that differ, so a name-only change never prints a code pair. */
+export type SetIndexOutcome = { status: "ok"; results: SetDetailResult[] } | { status: "failed"; reason: string };
+
+/** Publishes only a complete run: no empty list, no failed detail request. */
+export function setIndexOutcome(results: SetDetailResult[]): SetIndexOutcome {
+  if (results.length === 0) return { status: "failed", reason: "the set list came back empty" };
+  const failed = results.filter((result) => result.failed).length;
+  if (failed > 0) return { status: "failed", reason: `${failed} set details failed` };
+  return { status: "ok", results };
+}
+
+export function describeChanges(entries: SetIndexEntry[], known: Map<string, SetIndexEntry>): string[] {
+  return entries.flatMap((entry) => {
+    const before = known.get(entry.id);
+    if (!before) return entry.code || entry.releaseDate ? [`added ${entry.id}`] : [];
+    const fields = [
+      before.name !== entry.name ? `name ${JSON.stringify(before.name)} -> ${JSON.stringify(entry.name)}` : undefined,
+      before.code !== entry.code ? `code ${before.code ?? "-"} -> ${entry.code ?? "-"}` : undefined,
+      before.releaseDate !== entry.releaseDate ? `date ${before.releaseDate ?? "-"} -> ${entry.releaseDate ?? "-"}` : undefined,
+    ].filter((line) => line !== undefined);
+    return fields.length > 0 ? [`changed ${entry.id}: ${fields.join("; ")}`] : [];
+  });
 }
 
 export function sortEntries(entries: SetIndexEntry[]): SetIndexEntry[] {
