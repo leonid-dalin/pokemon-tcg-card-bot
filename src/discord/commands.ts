@@ -20,6 +20,9 @@ import { toEmbed } from "./embeds.js";
 import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
 import { settingsCommand } from "./settings-command.js";
+import { buildIdentity, formatUptime } from "../version.js";
+
+const SOURCE_LABEL = { env: "deployed", build: "bundle", git: "checkout", package: "package version" } as const;
 
 export interface CommandContext {
   client: TcgdexClient;
@@ -98,7 +101,11 @@ export const helpCommand = new SlashCommandBuilder()
   .setName("help")
   .setDescription("List what the bot can do");
 
-export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand, settingsCommand];
+export const versionCommand = new SlashCommandBuilder()
+  .setName("version")
+  .setDescription("Show the running revision, uptime and data version");
+
+export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand, versionCommand, settingsCommand];
 
 export async function handleAutocomplete(
   context: CommandContext,
@@ -292,6 +299,22 @@ export async function handleSetCommand(
 
 export async function handleHelpCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.reply({ embeds: [toEmbed(helpView())] });
+}
+
+/** Reports the running revision, its build date and how long this process has been up. */
+export async function handleVersionCommand(
+  interaction: ChatInputCommandInteraction,
+  startedAt = Date.now() - process.uptime() * 1_000,
+  now = Date.now(),
+): Promise<void> {
+  const identity = buildIdentity();
+  const lines = [
+    `Revision: ${identity.label} (${SOURCE_LABEL[identity.source]})`,
+    identity.packageVersion ? `Version: ${identity.packageVersion}` : undefined,
+    identity.built ? `Last updated: ${identity.built.slice(0, 10)}` : undefined,
+    `Uptime: ${formatUptime(now - startedAt)}`,
+  ].filter((line): line is string => Boolean(line));
+  await interaction.reply({ content: lines.join("\n"), ephemeral: true });
 }
 
 /** Pocket set prefixes, including promo ids, distinguish Pocket cards from physical-card ids. */
