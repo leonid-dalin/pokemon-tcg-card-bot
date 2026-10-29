@@ -216,7 +216,6 @@ export async function handleSettingsCommand(
   const group = interaction.options.getSubcommandGroup(false);
   const sub = group ? `${group}:${interaction.options.getSubcommand(true)}` : interaction.options.getSubcommand(true);
 
-  // Personal preferences are open to every member; the rest need Manage Server.
   const personal = sub === "mentions" || sub === "currency:user";
   if (!personal && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
     await reply("Only members with the Manage Server permission can change these settings.");

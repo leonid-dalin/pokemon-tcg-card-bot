@@ -198,8 +198,6 @@ export class SettingsStore {
         `);
       }
       if (version <= 3) {
-        // Rebuilt rather than altered: currency must become nullable so a row can
-        // hold a reply preference without also holding a currency.
         this.db.exec(`
           CREATE TABLE user_settings_v4 (
             user_id TEXT PRIMARY KEY,

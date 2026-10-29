@@ -77,8 +77,6 @@ function attackName(attack: Attack, emoji: Record<string, string>): string {
   const damage = attack.damage !== undefined && attack.damage !== null ? `  ${attack.damage}` : "";
   const label = `${attack.name}${damage}`;
   const budget = Math.max(0, ATTACK_NAME_LIMIT - label.length - 2);
-  // Configured emoji can be long enough to erase the name entirely, so fall back
-  // to the compact codes when the styled cost cannot fit beside the label.
   const styled = energyCost(attack.cost, emoji);
   const cost = styled.length <= budget ? styled : energyCost(attack.cost);
   const withCost = cost.length <= budget ? `${cost}  ${label}` : label;
@@ -147,7 +145,6 @@ export function priceField(card: Card, currency: Currency = "EUR"): EmbedField |
   let usedTcgplayer = false;
   const show = (amount: number | null | undefined, source: string): string =>
     `\`${source.padEnd(10)}\` ${amount === null || amount === undefined ? "" : formatPrice(amount, currency)}`.trimEnd();
-  // TCGplayer quotes in USD, so its rows convert from USD rather than from EUR.
   const showUsd = (amountUsd: number, source: string): string =>
     `\`${source.padEnd(10)}\` ${formatPrice(amountUsd / convertFromEur(1, "USD"), currency)}`;
 
@@ -181,8 +178,6 @@ export function priceField(card: Card, currency: Currency = "EUR"): EmbedField |
   }
   if (!rows.length) return undefined;
 
-  // Name only the sources that produced a row, so an empty object cannot claim
-  // credit for another marketplace's price.
   const used = [usedCardmarket ? "Cardmarket" : undefined, usedTcgplayer ? "TCGplayer" : undefined]
     .filter((name): name is string => Boolean(name));
   const source = used.length > 1 ? "Cardmarket and TCGplayer" : used[0] ?? "market";

@@ -88,7 +88,6 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     if (!config.mentionEnabled) return;
     if (message.author.bot || message.webhookId) return;
     if (message.system) return;
-    // A member can opt out of automatic replies; their choice beats the server switch.
     if (context.settings?.messageRepliesFor?.(message.author.id) === false) return;
 
     // Warn once when plain text is missing without attachments, embeds or stickers.
