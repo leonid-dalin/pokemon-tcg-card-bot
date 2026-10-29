@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MessageFlags } from "discord.js";
 import { TcgdexClient } from "../src/api/tcgdex.js";
-import { handlePrintingButton } from "../src/discord/commands.js";
+import { handleCardCommand, handlePrintingButton } from "../src/discord/commands.js";
 
 const context = {
   client: new TcgdexClient({ retries: 0 }),
@@ -10,6 +10,56 @@ const context = {
 };
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe("member lookup budget in /card", () => {
+  function cardInteraction() {
+    const calls: string[] = [];
+    const interaction = {
+      guildId: "guild-a",
+      user: { id: "member-1" },
+      options: {
+        getString: (name: string) => (name === "name" ? "Dragapult ex" : null),
+        getBoolean: () => null,
+      },
+      deferReply: async () => calls.push("defer"),
+      editReply: async (payload: { content?: string }) => calls.push(`edit:${payload.content ?? ""}`),
+    };
+    return { interaction, calls };
+  }
+
+  it("answers busy without reaching upstream when the member is over budget", async () => {
+    const fetchCalls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      fetchCalls.push(String(url));
+      return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+    });
+    const throttled = {
+      ...context,
+      requests: { take: () => ({ allowed: false as const, retryAfterSeconds: 3 }) },
+    };
+    const { interaction, calls } = cardInteraction();
+
+    await handleCardCommand(throttled as never, interaction as never);
+
+    expect(calls).toEqual(["defer", "edit:The card service is busy. Try again in 3 seconds."]);
+    expect(fetchCalls).toEqual([]);
+  });
+
+  it("looks the card up when the member still has budget", async () => {
+    vi.stubGlobal("fetch", async () => ({
+      ok: true,
+      status: 200,
+      json: async () => [],
+    }) as unknown as Response);
+    const allowed = { ...context, requests: { take: () => ({ allowed: true as const }) } };
+    const { interaction, calls } = cardInteraction();
+
+    await handleCardCommand(allowed as never, interaction as never);
+
+    expect(calls[0]).toBe("defer");
+    expect(calls[1]).toContain("No card matched");
+  });
+});
 
 describe("handlePrintingButton", () => {
   it("refuses a printing press from another user", async () => {

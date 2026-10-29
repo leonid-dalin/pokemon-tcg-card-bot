@@ -23,6 +23,8 @@ import { settingsCommand } from "./settings-command.js";
 import { buildIdentity, formatUptime } from "../version.js";
 import { ratesDate } from "../currency.js";
 
+import { busyMessage } from "./interaction-failure.js";
+
 const SOURCE_LABEL = { env: "deployed", build: "bundle", git: "checkout", package: "package version" } as const;
 
 export interface CommandContext {
@@ -34,6 +36,19 @@ export interface CommandContext {
     get: (guildId: string) => import("../settings-store.js").GuildSettings;
     resolveCurrency: (userId: string, guildId: string | null) => import("../settings-store.js").Currency;
   } | undefined;
+  /** Guild-scoped member budget for expensive lookups; absent means unmetered. */
+  requests?: {
+    take: (key: string) => { allowed: true } | { allowed: false; retryAfterSeconds: number };
+  } | undefined;
+}
+
+function admitRequest(
+  context: CommandContext,
+  guildId: string | null,
+  userId: string,
+): { allowed: true } | { allowed: false; retryAfterSeconds: number } {
+  if (!guildId || !context.requests) return { allowed: true };
+  return context.requests.take(`${guildId}:${userId}`);
 }
 
 /** Reads the per-server game preference; explicit hints and exact IDs bypass it. */
@@ -144,6 +159,11 @@ export async function handleCardCommand(
   const setHint = interaction.options.getString("set")?.trim() || undefined;
 
   await interaction.deferReply();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   // Look up autocomplete values by card id.
   const preference = gamePreference(context, interaction.guildId);
   const lookup = isCardId(query)
@@ -261,6 +281,11 @@ export async function handleOpenCardMenu(
   }
   // A card lookup may exceed Discord's three-second interaction response window.
   await interaction.deferReply();
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
   const lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
   if (!lookup) {
     await interaction.editReply({ content: `No card matched \`${cardId}\`.` });

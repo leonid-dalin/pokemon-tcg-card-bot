@@ -2,6 +2,10 @@ import { MessageFlags, type Interaction } from "discord.js";
 
 const FAILURE = "Card lookup failed, try again.";
 
+export function busyMessage(retryAfterSeconds: number): string {
+  return `The card service is busy. Try again in ${retryAfterSeconds} second${retryAfterSeconds === 1 ? "" : "s"}.`;
+}
+
 /** Reports failure through a reply, deferred-command edit or ephemeral follow-up. */
 export async function reportInteractionFailure(interaction: Interaction): Promise<void> {
   if (!interaction.isRepliable()) return;
