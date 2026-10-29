@@ -200,6 +200,8 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         settings: context.settings,
         mentionEnabled: config.mentionEnabled,
         guildId: message.guildId,
+        authorId: message.author.id,
+        messageRepliesFor: context.settings?.messageRepliesFor,
         reply: logReply,
       });
       return;
@@ -272,6 +274,8 @@ interface InlineContext {
   } | undefined;
   mentionEnabled: boolean;
   guildId: string | null;
+  authorId: string;
+  messageRepliesFor?: (userId: string) => boolean | undefined;
   reply: (payload: ReplyPayload) => Promise<void>;
 }
 
@@ -284,7 +288,15 @@ async function runInline(inline: InlineInvocation, context: InlineContext): Prom
 
   if (inline.command === "settings") {
     if (!context.guildId || !context.settings) {
-      await context.reply({ content: "Settings belong to a server. Ask in one to see them." });
+      // A DM has no server settings, so show the member their own preferences.
+      const replies = context.messageRepliesFor?.(context.authorId);
+      await context.reply({
+        content: [
+          "This is a direct message, so only your personal preferences apply:",
+          `Automatic replies: ${replies === undefined ? "each server's own switch" : replies ? "on" : "off"}`,
+          "Change them with `/settings currency user` and `/settings mentions` here.",
+        ].join("\n"),
+      });
       return;
     }
     await context.reply({ content: settingsViewLines(context.settings.get(context.guildId), context.mentionEnabled).join("\n") });
