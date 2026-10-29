@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Card, CardSummary } from "./types.js";
+import { normaliseName } from "../resolve.js";
 
 // Resolve package data relative to this module, independent of the working directory.
 const PACKAGE_ROOT = join(
@@ -196,7 +197,7 @@ function loadIndex(): PocketIndex {
 
   // Build name results from the final map to avoid duplicate ids.
   for (const card of cards.values()) {
-    const key = card.name.toLowerCase();
+    const key = normaliseName(card.name);
     const list = byName.get(key) ?? [];
     list.push({
       id: card.id,
@@ -214,7 +215,7 @@ function loadIndex(): PocketIndex {
 /** Searches Pocket printings by name; exact-name results sort newest first. */
 export function searchPocketByName(name: string): CardSummary[] {
   const { byName } = loadIndex();
-  const query = name.trim().toLowerCase();
+  const query = normaliseName(name);
   if (!query) return [];
 
   const exact = byName.get(query) ?? [];

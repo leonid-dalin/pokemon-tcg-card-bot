@@ -244,7 +244,9 @@ export async function lookupCard(
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
     if (preference?.allowed === "ptcg" || forcedPhysical) return undefined;
-    return lookupPocket(query, setHint, options);
+    // A concrete hint stays a requirement here: an empty filtered set must not
+    // widen to every package printing.
+    return lookupPocket(query, setHint, options, Boolean(resolved && isPocketSet(resolved)));
   }
 
   // For a shared name, the preferred game wins before artwork or recency comparisons.
