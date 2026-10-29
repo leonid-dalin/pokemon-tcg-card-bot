@@ -98,8 +98,10 @@ describe("SettingsStore", () => {
 
   it("refuses a database marked current without its table", () => {
     const path = tempPath();
+    // Let the store create a current schema, then remove one table so the guard fires.
+    new SettingsStore(path, DEFAULTS).close();
     const raw = new DatabaseSync(path);
-    raw.exec("PRAGMA user_version = 3");
+    raw.exec("DROP TABLE guild_settings");
     raw.close();
     expect(() => new SettingsStore(path, DEFAULTS)).toThrow("guild_settings table is missing");
   });

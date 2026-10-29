@@ -161,6 +161,22 @@ export const settingsCommand = new SlashCommandBuilder()
           ),
       ),
   )
+  .addSubcommand((sub) =>
+    sub
+      .setName("mentions")
+      .setDescription("Your own automatic replies, overriding this server's switch")
+      .addStringOption((option) =>
+        option
+          .setName("enabled")
+          .setDescription("on, off, or follow this server")
+          .addChoices(
+            { name: "Follow this server", value: "default" },
+            { name: "On", value: "on" },
+            { name: "Off", value: "off" },
+          )
+          .setRequired(true),
+      ),
+  )
   .addSubcommand((sub) => sub.setName("reset").setDescription("Back to the deployment defaults"));
 
 export interface SettingsCommandContext {
@@ -178,10 +194,6 @@ export async function handleSettingsCommand(
 ): Promise<void> {
   if (!interaction.inGuild() || !interaction.guildId) {
     await interaction.reply(ephemeral("Settings belong to a server. Run this in one where you manage it."));
-    return;
-  }
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-    await interaction.reply(ephemeral("Only members with the Manage Server permission can change these settings."));
     return;
   }
   const guildId = interaction.guildId;
@@ -204,6 +216,13 @@ export async function handleSettingsCommand(
 
   const group = interaction.options.getSubcommandGroup(false);
   const sub = group ? `${group}:${interaction.options.getSubcommand(true)}` : interaction.options.getSubcommand(true);
+
+  // Personal preferences are open to every member; the rest need Manage Server.
+  const personal = sub === "mentions" || sub === "currency:user";
+  if (!personal && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    await reply("Only members with the Manage Server permission can change these settings.");
+    return;
+  }
 
   if (sub === "view") {
     const settings = context.settings.get(guildId);
@@ -329,6 +348,18 @@ export async function handleSettingsCommand(
       { cooldownSeconds: seconds },
       seconds === 0 ? "The per-member throttle is off." : `Members now wait ${seconds}s between automatic replies.`,
     );
+    return;
+  }
+
+  if (sub === "mentions") {
+    const choice = interaction.options.getString("enabled", true);
+    if (choice === "default") {
+      context.settings.clearMessageReplies(interaction.user.id);
+      await reply("Your automatic replies follow this server again.");
+      return;
+    }
+    context.settings.setMessageReplies(interaction.user.id, choice === "on");
+    await reply(`Your automatic replies are now ${choice}.`);
     return;
   }
 

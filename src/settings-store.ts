@@ -42,7 +42,7 @@ export interface GuildSettingsPatch {
   currency?: Currency;
 }
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const CARD_GAME_SCOPES: CardGameScope[] = ["ptcg", "pocket", "both"];
 const CARD_GAME_DEFAULTS: CardGameDefault[] = ["ptcg", "pocket"];
 export const DEFAULT_CARD_GAMES: CardGameScope = "both";
@@ -197,6 +197,22 @@ export class SettingsStore {
           )
         `);
       }
+      if (version <= 3) {
+        // Rebuilt rather than altered: currency must become nullable so a row can
+        // hold a reply preference without also holding a currency.
+        this.db.exec(`
+          CREATE TABLE user_settings_v4 (
+            user_id TEXT PRIMARY KEY,
+            currency TEXT,
+            message_replies INTEGER,
+            updated_at TEXT NOT NULL
+          );
+          INSERT INTO user_settings_v4 (user_id, currency, updated_at)
+            SELECT user_id, currency, updated_at FROM user_settings;
+          DROP TABLE user_settings;
+          ALTER TABLE user_settings_v4 RENAME TO user_settings;
+        `);
+      }
       this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
       this.db.exec("COMMIT");
     } catch (error) {
@@ -349,9 +365,52 @@ export class SettingsStore {
     return { userId, currency, updatedAt };
   }
 
-  /** Drops a user's choice so their prices follow the server again. */
+  /** Drops a user's currency so their prices follow the server again. */
   clearCurrency(userId: string): void {
-    this.db.prepare("DELETE FROM user_settings WHERE user_id = ?").run(userId);
+    this.db
+      .prepare(
+        `UPDATE user_settings SET currency = NULL, updated_at = ?
+         WHERE user_id = ?`,
+      )
+      .run(new Date().toISOString(), userId);
+    this.dropEmptyUser(userId);
+  }
+
+  /** A user's own reply preference, or undefined when they follow the server. */
+  messageRepliesFor(userId: string): boolean | undefined {
+    const row = this.db.prepare("SELECT message_replies FROM user_settings WHERE user_id = ?").get(userId) as
+      | { message_replies: number | null }
+      | undefined;
+    if (!row || row.message_replies === null || row.message_replies === undefined) return undefined;
+    return row.message_replies === 1;
+  }
+
+  setMessageReplies(userId: string, enabled: boolean): void {
+    this.db
+      .prepare(
+        `INSERT INTO user_settings (user_id, message_replies, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET message_replies = excluded.message_replies, updated_at = excluded.updated_at`,
+      )
+      .run(userId, enabled ? 1 : 0, new Date().toISOString());
+  }
+
+  clearMessageReplies(userId: string): void {
+    this.db
+      .prepare("UPDATE user_settings SET message_replies = NULL, updated_at = ? WHERE user_id = ?")
+      .run(new Date().toISOString(), userId);
+    this.dropEmptyUser(userId);
+  }
+
+  /** Removes a row once neither preference is set, so the table only holds real choices. */
+  private dropEmptyUser(userId: string): void {
+    this.db
+      .prepare("DELETE FROM user_settings WHERE user_id = ? AND currency IS NULL AND message_replies IS NULL")
+      .run(userId);
+  }
+
+  /** Resolves whether replies reach this user: their choice, then the server switch. */
+  resolveMessageReplies(userId: string, serverEnabled: boolean): boolean {
+    return this.messageRepliesFor(userId) ?? serverEnabled;
   }
 
   /** Resolves the currency for a lookup: the user's choice, then the server default, then EUR. */

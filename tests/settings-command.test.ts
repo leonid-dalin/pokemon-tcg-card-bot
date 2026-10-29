@@ -37,6 +37,12 @@ function fakeStore(row: Partial<GuildSettings> = {}, failUpdate = false): Store 
     clearCurrency: (userId: string) => {
       (store as unknown as { userCurrency?: string }).userCurrency = `${userId}:cleared`;
     },
+    setMessageReplies: (userId: string, enabled: boolean) => {
+      (store as unknown as { userReplies?: string }).userReplies = `${userId}:${enabled}`;
+    },
+    clearMessageReplies: (userId: string) => {
+      (store as unknown as { userReplies?: string }).userReplies = `${userId}:cleared`;
+    },
   };
   return store as unknown as Store;
 }
@@ -141,6 +147,30 @@ describe("settings command", () => {
     expect(store.updates).toEqual([]);
     expect((store as unknown as { userCurrency?: string }).userCurrency).toBe("u1:CNY");
     expect(replies[0]?.content).toContain("yuan");
+  });
+
+  it("lets a member without Manage Server set their own reply preference", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["mentions"], { enabled: "off" }, { permissions: [] });
+    await run(store, interaction);
+    expect((store as unknown as { userReplies?: string }).userReplies).toBe("u1:false");
+    expect(replies[0]?.content).toContain("automatic replies are now off");
+  });
+
+  it("still refuses server settings to a member without Manage Server", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["messages"], { enabled: false }, { permissions: [] });
+    await run(store, interaction);
+    expect(store.updates).toEqual([]);
+    expect(replies[0]?.content).toContain("Manage Server");
+  });
+
+  it("returns a member to the server reply switch", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["mentions"], { enabled: "default" });
+    await run(store, interaction);
+    expect((store as unknown as { userReplies?: string }).userReplies).toBe("u1:cleared");
+    expect(replies[0]?.content).toContain("follow this server");
   });
 
   it("reports a failed save without a success confirmation", async () => {

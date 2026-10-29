@@ -19,7 +19,10 @@ export interface MessageContext {
   pages: import("./pages.js").PageStore;
   budget?: MentionBudget | undefined;
   invocations?: { record: (entry: import("../invocation-log.js").InvocationEntry) => void } | undefined;
-  settings?: { get: (guildId: string) => import("../settings-store.js").GuildSettings } | undefined;
+  settings?: {
+    get: (guildId: string) => import("../settings-store.js").GuildSettings;
+    messageRepliesFor?: (userId: string) => boolean | undefined;
+  } | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
 }
@@ -85,6 +88,8 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     if (!config.mentionEnabled) return;
     if (message.author.bot || message.webhookId) return;
     if (message.system) return;
+    // A member can opt out of automatic replies; their choice beats the server switch.
+    if (context.settings?.messageRepliesFor?.(message.author.id) === false) return;
 
     // Warn once when plain text is missing without attachments, embeds or stickers.
     // Discord may strip the text when the Message Content intent is disabled.
