@@ -131,3 +131,41 @@ describe("mention handling spends the same allowance", () => {
     expect(replies[0]?.content).not.toBe(busyMessage(60));
   });
 });
+
+describe("set autocomplete answers inside Discord's window", () => {
+  it("responds with an empty list when the upstream request outlasts the deadline", async () => {
+    vi.useFakeTimers();
+    const hanging = { listSets: () => new Promise<never>(() => undefined) };
+    const responses: unknown[] = [];
+    const interaction = {
+      guildId: "guild-a",
+      user: { id: "member-1" },
+      options: { getFocused: () => ({ name: "id", value: "sv0" }) },
+      respond: async (value: unknown) => void responses.push(value),
+    };
+    const context = { ...base, client: hanging as never, typing: { take: () => ({ allowed: true as const }) } };
+
+    const pending = handleAutocomplete(context as never, interaction as never);
+    await vi.advanceTimersByTimeAsync(2100);
+    await pending;
+
+    expect(responses).toEqual([[]]);
+    vi.useRealTimers();
+  });
+
+  it("still returns choices when the catalogue arrives in time", async () => {
+    const responses: unknown[] = [];
+    const interaction = {
+      guildId: "guild-a",
+      user: { id: "member-1" },
+      options: { getFocused: () => ({ name: "id", value: "sv0" }) },
+      respond: async (value: unknown) => void responses.push(value),
+    };
+    const client = { listSets: async () => [{ id: "sv01", name: "Scarlet & Violet" }] };
+    const context = { ...base, client: client as never, typing: { take: () => ({ allowed: true as const }) } };
+
+    await handleAutocomplete(context as never, interaction as never);
+
+    expect(responses[0]).toEqual([{ name: "Scarlet & Violet (sv01)", value: "sv01" }]);
+  });
+});

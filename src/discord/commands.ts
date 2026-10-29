@@ -27,6 +27,8 @@ import { busyMessage, overloadHint } from "./interaction-failure.js";
 
 const SOURCE_LABEL = { env: "deployed", build: "bundle", git: "checkout", package: "package version" } as const;
 
+const AUTOCOMPLETE_DEADLINE_MS = 2000;
+
 export interface CommandContext {
   client: TcgdexClient;
   attribution: string;
@@ -157,7 +159,15 @@ export async function handleAutocomplete(
   }
 
   if (focused.name === "id") {
-    const sets = await context.client.listSets();
+    // Discord wants an autocomplete answer within three seconds, so do not wait the full queue deadline.
+    const sets = await Promise.race([
+      context.client.listSets(),
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), AUTOCOMPLETE_DEADLINE_MS)),
+    ]);
+    if (!sets) {
+      await interaction.respond([]);
+      return;
+    }
     const matches = sets
       .filter((set) => set.id.toLowerCase().includes(query.toLowerCase()) || set.name.toLowerCase().includes(query.toLowerCase()))
       .slice(0, 25)
