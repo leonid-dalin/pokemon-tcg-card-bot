@@ -79,7 +79,7 @@ jobs:
           docker compose config --quiet
       - uses: actions/upload-artifact@v7
         with:
-          name: pi-bundle
+          name: linux-arm64-bundle
           path: ${{ runner.temp }}/bundle/*
           if-no-files-found: error
           retention-days: 7
@@ -91,17 +91,36 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - uses: actions/download-artifact@v8
         with:
-          name: pi-bundle
+          name: linux-arm64-bundle
           path: bundle
-      - name: Publish tested Pi bundle
+      - name: Publish tested Linux ARM64 bundle
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           REVISION: ${{ github.sha }}
         run: |
-          if ! gh release view "pi-$REVISION" >/dev/null 2>&1; then
-            gh release create "pi-$REVISION" --target "$REVISION" --title "Pi $REVISION" --notes 'Tested Linux ARM64 deployment bundle' --prerelease --latest=false
+          short="${REVISION:0:7}"
+          tag="linux-arm64-$short"
+          subject=$(git log -1 --format=%s "$REVISION")
+          body=$(git log -1 --format=%b "$REVISION")
+          committed=$(git log -1 --format=%cI "$REVISION")
+          # Title carries the change, so two releases are distinguishable at a glance.
+          title="${subject}"
+          {
+            printf '%s\n\n' "$subject"
+            [ -n "$body" ] && printf '%s\n\n' "$body"
+            printf -- '---\n'
+            printf -- '- Commit: %s\n' "$REVISION"
+            printf -- '- Committed: %s\n' "$committed"
+            printf -- '- Built: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf -- '- Checks: application suite on x64 and ARM64, native bundle smoke in Debian 12, Docker image\n'
+          } > notes.md
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$REVISION" --title "$title" --notes-file notes.md --prerelease --latest=false
           fi
-          gh release upload "pi-$REVISION" bundle/* --clobber
+          gh release upload "$tag" bundle/* --clobber
