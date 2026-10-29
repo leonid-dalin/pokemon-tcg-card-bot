@@ -52,13 +52,18 @@ function admitRequest(
   guildId: string | null,
   userId: string,
 ): { allowed: true } | { allowed: false; retryAfterSeconds: number } {
-  if (!guildId || !context.requests) return { allowed: true };
-  return context.requests.take(`${guildId}:${userId}`);
+  if (!context.requests) return { allowed: true };
+  return context.requests.take(budgetKey(guildId, userId));
 }
 
 function admitTyping(context: CommandContext, guildId: string | null, userId: string): boolean {
-  if (!guildId || !context.typing) return true;
-  return context.typing.take(`${guildId}:${userId}`).allowed;
+  if (!context.typing) return true;
+  return context.typing.take(budgetKey(guildId, userId)).allowed;
+}
+
+/** A direct message has no guild, so its allowance is keyed per member instead of skipping the budget. */
+function budgetKey(guildId: string | null, userId: string): string {
+  return guildId ? `${guildId}:${userId}` : `dm:${userId}`;
 }
 
 /** Reads the per-server game preference; explicit hints and exact IDs bypass it. */
