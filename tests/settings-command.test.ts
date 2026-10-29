@@ -181,12 +181,27 @@ describe("settings command", () => {
     expect(replies[0]?.content).not.toContain("now on");
   });
 
-  it("refuses a direct message", async () => {
+  it("refuses a server subcommand in a direct message", async () => {
     const store = fakeStore();
     const { interaction, replies } = fakeInteraction(["view"], {}, { guild: false });
     await run(store, interaction);
-    expect(replies[0]?.content).toContain("belong to a server");
+    expect(replies[0]?.content).toContain("personal preferences");
     expect(store.updates).toEqual([]);
+  });
+
+  it("lets a direct message set the personal reply preference", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["mentions"], { enabled: "on" }, { guild: false });
+    await run(store, interaction);
+    expect(replies[0]?.content).toContain("Your automatic replies are now on.");
+    expect(store.updates).toEqual([]);
+  });
+
+  it("lets a direct message set the personal currency", async () => {
+    const store = fakeStore();
+    const { interaction, replies } = fakeInteraction(["currency", "user"], { code: "USD" }, { guild: false });
+    await run(store, interaction);
+    expect(replies[0]?.content).toContain("US dollars");
   });
 
   it("refuses a member without Manage Server", async () => {

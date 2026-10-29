@@ -21,7 +21,7 @@ const CURRENCY_LABELS: Record<Currency, string> = {
 export const settingsCommand = new SlashCommandBuilder()
   .setName("settings")
   .setDescription("Configure how the bot replies in this server")
-  .setContexts(InteractionContextType.Guild)
+  .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM)
   .addSubcommand((sub) => sub.setName("view").setDescription("Show the current settings"))
   .addSubcommand((sub) =>
     sub
@@ -191,8 +191,39 @@ export async function handleSettingsCommand(
   context: SettingsCommandContext,
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
+  const sub = interaction.options.getSubcommandGroup(false)
+    ? `${interaction.options.getSubcommandGroup()}:${interaction.options.getSubcommand()}`
+    : interaction.options.getSubcommand();
+
   if (!interaction.inGuild() || !interaction.guildId) {
-    await interaction.reply(ephemeral("Settings belong to a server. Run this in one where you manage it."));
+    // Personal preferences work in a DM; everything server-scoped does not.
+    if (sub === "mentions" || sub === "currency:user") {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const reply = async (content: string) => {
+        await interaction.editReply({ content });
+      };
+      if (sub === "mentions") {
+        const choice = interaction.options.getString("enabled", true);
+        if (choice === "default") {
+          context.settings.clearMessageReplies(interaction.user.id);
+          await reply("Your automatic replies follow each server's own switch again.");
+          return;
+        }
+        context.settings.setMessageReplies(interaction.user.id, choice === "on");
+        await reply(`Your automatic replies are now ${choice}.`);
+        return;
+      }
+      const code = interaction.options.getString("code", true);
+      if (code === "default") {
+        context.settings.clearCurrency(interaction.user.id);
+        await reply("Your prices now follow each server's currency.");
+        return;
+      }
+      context.settings.setCurrency(interaction.user.id, code as Currency);
+      await reply(`Your prices now show in ${CURRENCY_LABELS[code as Currency]}.`);
+      return;
+    }
+    await interaction.reply(ephemeral("Only your personal preferences work here: `/settings mentions` and `/settings currency user`. Everything else belongs to a server."));
     return;
   }
   const guildId = interaction.guildId;
@@ -213,8 +244,6 @@ export async function handleSettingsCommand(
     await reply(confirm).catch(() => {});
   };
 
-  const group = interaction.options.getSubcommandGroup(false);
-  const sub = group ? `${group}:${interaction.options.getSubcommand(true)}` : interaction.options.getSubcommand(true);
 
   const personal = sub === "mentions" || sub === "currency:user";
   if (!personal && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
