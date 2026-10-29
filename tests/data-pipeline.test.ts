@@ -2,11 +2,80 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { entryFor, manifestFor, sha256, writeAtomic } from "../scripts/lib/publish.js";
+import { entryFor, manifestFor, readManifest, sha256, upsertEntry, writeAtomic } from "../scripts/lib/publish.js";
 import { mergeEntry, renderModule, sortEntries, splitModule } from "../scripts/lib/set-index.js";
 import type { SetIndexEntry } from "../src/data/set-index.js";
 
 const TARGET = new URL("../src/data/set-index.ts", import.meta.url);
+
+describe("manifest upsert", () => {
+  const setEntry = entryFor("src/data/set-index.ts", "set-bytes", 220, "2026-01-01T00:00:00.000Z");
+  const textEntry = entryFor("src/data/text-index.json", "text-bytes", 100, "2026-01-02T00:00:00.000Z");
+
+  it("preserves a sibling entry when upserting", () => {
+    const existing = manifestFor("source", [textEntry, setEntry]);
+    const updated = upsertEntry(readManifestFrom(existing), "source", { ...setEntry, sha256: "new" });
+    expect(updated.entries.map((entry) => entry.path)).toEqual(["src/data/text-index.json", "src/data/set-index.ts"]);
+  });
+
+  it("keeps generatedAt when the dataset bytes are unchanged", () => {
+    const existing = manifestFor("source", [setEntry]);
+    const updated = upsertEntry(readManifestFrom(existing), "source", { ...setEntry, generatedAt: "2026-06-06T00:00:00.000Z" });
+    expect(updated.entries[0]?.generatedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("updates generatedAt when the bytes change", () => {
+    const existing = manifestFor("source", [setEntry]);
+    const updated = upsertEntry(readManifestFrom(existing), "source", { ...setEntry, sha256: "changed", generatedAt: "2026-06-06T00:00:00.000Z" });
+    expect(updated.entries[0]?.generatedAt).toBe("2026-06-06T00:00:00.000Z");
+  });
+
+  it("rejects a malformed manifest instead of replacing it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "manifest-"));
+    try {
+      const file = join(dir, "data-manifest.json");
+      for (const bad of ["{ not json", JSON.stringify({ version: 2, source: "s", entries: [] }), JSON.stringify({ version: 1, source: "s", entries: [{ path: 1 }] })]) {
+        writeFileSync(file, bad, "utf8");
+        expect(() => readManifest(file)).toThrow();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("uses the known sha256 answer for abc", () => {
+    expect(sha256("abc")).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  });
+});
+
+describe("committed data manifest", () => {
+  const DATASETS = ["src/data/set-index.ts", "src/data/text-index.json"];
+
+  it("lists every generated dataset", () => {
+    const manifest = JSON.parse(readFileSync("src/data/data-manifest.json", "utf8")) as { entries: { path: string }[] };
+    expect(manifest.entries.map((entry) => entry.path).sort()).toEqual([...DATASETS].sort());
+  });
+
+  it("agrees with the files it names", () => {
+    const manifest = JSON.parse(readFileSync("src/data/data-manifest.json", "utf8")) as {
+      entries: { path: string; records: number; sha256: string }[];
+    };
+    for (const entry of manifest.entries) {
+      const content = readFileSync(entry.path, "utf8");
+      expect(sha256(content)).toBe(entry.sha256);
+      if (entry.path.endsWith(".json")) {
+        expect(JSON.parse(content).length).toBe(entry.records);
+      } else {
+        expect((content.match(/\{ id: /g) ?? []).length).toBe(entry.records);
+      }
+    }
+  });
+});
+
+function readManifestFrom(text: string) {
+  return JSON.parse(text) as Parameters<typeof upsertEntry>[0];
+}
+
 
 describe("set index rendering", () => {
   it("round-trips the shipped index byte for byte", () => {

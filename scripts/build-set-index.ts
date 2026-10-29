@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import { TcgdexClient } from "../src/api/tcgdex.js";
 import type { SetIndexEntry } from "../src/data/set-index.js";
-import { entryFor, manifestFor, writeAtomic } from "./lib/publish.js";
+import { entryFor, manifestFor, readManifest, upsertEntry, writeAtomic } from "./lib/publish.js";
 import { mergeEntry, renderModule, sortEntries, splitModule, type SetDetailResult } from "./lib/set-index.js";
 
 const TARGET = "src/data/set-index.ts";
 const MANIFEST = "src/data/data-manifest.json";
+const SOURCE = "https://api.tcgdex.net/v2";
 
 const client = new TcgdexClient({ timeoutMs: 20_000, retries: 3 });
 const sets = await client.listSets();
@@ -40,7 +41,8 @@ if (sets.length === 0) {
   const rendered = renderModule(entries, previous.header);
   writeAtomic(TARGET, rendered);
   const generatedAt = new Date().toISOString();
-  writeAtomic(MANIFEST, manifestFor("https://api.tcgdex.net/v2", [entryFor(TARGET, rendered, entries.length, generatedAt)]));
+  const manifest = upsertEntry(readManifest(MANIFEST), SOURCE, entryFor(TARGET, rendered, entries.length, generatedAt));
+  writeAtomic(MANIFEST, manifestFor(manifest.source, manifest.entries));
   const withDate = entries.filter((entry) => entry.releaseDate).length;
   const withCode = entries.filter((entry) => entry.code).length;
   console.log(`wrote ${TARGET}: ${entries.length} sets, ${withDate} with a date, ${withCode} with a code`);

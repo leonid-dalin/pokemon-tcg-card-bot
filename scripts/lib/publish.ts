@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export interface ManifestEntry {
@@ -41,4 +41,40 @@ export function entryFor(path: string, content: string, records: number, generat
 
 export function manifestFor(source: string, entries: ManifestEntry[]): string {
   return `${JSON.stringify({ version: 1, source, entries } satisfies Manifest, null, 1)}\n`;
+}
+
+export function readManifest(path: string): Manifest | undefined {
+  if (!existsSync(path)) return undefined;
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<Manifest>;
+  if (parsed.version !== 1 || typeof parsed.source !== "string" || !Array.isArray(parsed.entries)) {
+    throw new Error(`manifest at ${path} has an unexpected shape`);
+  }
+  for (const entry of parsed.entries) {
+    if (
+      typeof entry.path !== "string" ||
+      typeof entry.records !== "number" ||
+      typeof entry.sha256 !== "string" ||
+      typeof entry.generatedAt !== "string"
+    ) {
+      throw new Error(`manifest at ${path} has a malformed entry`);
+    }
+  }
+  return parsed as Manifest;
+}
+
+/**
+ * Replaces one dataset's entry and keeps the rest. A dataset whose bytes and
+ * record count are unchanged keeps its original generatedAt, so an identical
+ * regeneration leaves the manifest byte-identical.
+ */
+export function upsertEntry(manifest: Manifest | undefined, source: string, entry: ManifestEntry): Manifest {
+  const previous = manifest?.entries.filter((existing) => existing.path !== entry.path) ?? [];
+  const unchanged = manifest?.entries.find(
+    (existing) => existing.path === entry.path && existing.sha256 === entry.sha256 && existing.records === entry.records,
+  );
+  const entries = [
+    ...previous.filter((existing) => existing.path !== entry.path),
+    unchanged ? { ...entry, generatedAt: unchanged.generatedAt } : entry,
+  ];
+  return { version: 1, source, entries };
 }

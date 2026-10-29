@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { TcgdexClient, TcgdexError } from "../src/api/tcgdex.js";
 import type { Card } from "../src/api/types.js";
-import { entryFor, manifestFor, writeAtomic } from "./lib/publish.js";
+import { entryFor, manifestFor, readManifest, upsertEntry, writeAtomic } from "./lib/publish.js";
 
 const CONCURRENCY = 6;
 const TARGET = "src/data/text-index.json";
 const MANIFEST = "src/data/data-manifest.json";
+const SOURCE = "https://api.tcgdex.net/v2";
 
 interface IndexedPart {
   kind: "ability" | "attack" | "effect";
@@ -86,14 +87,8 @@ if (failures.length > 0) {
   const rendered = `${JSON.stringify(entries)}\n`;
   writeAtomic(TARGET, rendered);
   const generatedAt = new Date().toISOString();
-  const previous = (existsSync(MANIFEST)
-    ? JSON.parse(readFileSync(MANIFEST, "utf8")) as { entries?: unknown[] }
-    : {}) as { entries?: unknown[] };
-  const kept = (previous.entries ?? []).filter((entry) => (entry as { path?: string }).path !== TARGET);
-  writeAtomic(MANIFEST, manifestFor("https://api.tcgdex.net/v2", [
-    ...(kept as ReturnType<typeof entryFor>[]),
-    entryFor(TARGET, rendered, entries.length, generatedAt),
-  ]));
+  const manifest = upsertEntry(readManifest(MANIFEST), SOURCE, entryFor(TARGET, rendered, entries.length, generatedAt));
+  writeAtomic(MANIFEST, manifestFor(manifest.source, manifest.entries));
   const bytes = Buffer.byteLength(rendered);
   console.log(`wrote ${TARGET}: ${entries.length} cards with text, ${(bytes / 1024 / 1024).toFixed(1)} MB`);
 }
