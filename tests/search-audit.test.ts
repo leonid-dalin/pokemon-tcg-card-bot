@@ -4,19 +4,34 @@ import { lookupCard } from "../src/lookup.js";
 import { printingsOf } from "../src/printings.js";
 import { searchPocketByName, getPocketCard } from "../src/api/pocket.js";
 
-vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, json: async () => [] }) as unknown as Response);
+vi.stubGlobal("fetch", async (url: string) => {
+  if (!String(url).includes("/cards?name=")) {
+    return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+  }
+  return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+});
 
 const client = new TcgdexClient({ retries: 0 });
 
 describe("a concrete Pocket hint stays within its set", () => {
-  it("rejects a name the hinted set does not carry instead of widening", async () => {
-    const hinted = await lookupCard(client, "Sigilyph", "A1", { gamePreference: { allowed: "both", default: "ptcg" } });
-    expect(hinted === undefined || hinted.card.id.startsWith("a1-")).toBe(true);
+  it.each([
+    ["A1", undefined],
+    ["A1", { allowed: "both" as const, default: "ptcg" as const }],
+    ["P-A", undefined],
+    ["Genetic Apex", undefined],
+  ])("rejects Sigilyph for %s rather than widening to another set", async (hint, preference) => {
+    const hinted = await lookupCard(client, "Sigilyph", hint, preference ? { gamePreference: preference } : {});
+    expect(hinted).toBeUndefined();
   });
 
   it("resolves the same name in the set that carries it", async () => {
     const hinted = await lookupCard(client, "Sigilyph", "A1a");
     expect(hinted?.card.id.startsWith("a1a-")).toBe(true);
+  });
+
+  it("maps the promos set to its package id", async () => {
+    const hinted = await lookupCard(client, "Potion", "P-A");
+    expect(hinted?.card.id.startsWith("pa-")).toBe(true);
   });
 
   it("keeps the unhinted package fallback working", async () => {

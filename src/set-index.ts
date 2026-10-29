@@ -32,6 +32,11 @@ export function setRecency(cardId: string): number {
  * Resolves a printed code, set ID, or full/partial set name against the index.
  * Returns undefined when the hint has no match.
  */
+/** Maps a set-index id to the package's own id: Genetic Apex A1 -> a1, Promos-A P-A -> pa. */
+export function packageSetId(resolved: string): string {
+  return resolved.toLowerCase().replace(/-/g, "");
+}
+
 export function resolveSetHint(hint: string): string | undefined {
   const trimmed = hint.trim();
   if (!trimmed) return undefined;
