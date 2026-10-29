@@ -6,7 +6,14 @@ import { parseDecklist } from "../decklist.js";
 import { resolveDeckCards } from "../deck-check.js";
 import { errorCategory } from "../diagnostics.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
-import { extractMentions, parseHelpCommand, parseSearchCommand } from "../mentions.js";
+import { extractMentions, parseHelpCommand, parseInlineCommand, parseSearchCommand } from "../mentions.js";
+import { settingsViewLines } from "./settings-command.js";
+import { listReply, type ListPage } from "./pages.js";
+import { printingsOf, printingItems } from "../printings.js";
+import { renderSet } from "../render.js";
+import { versionLines } from "./commands.js";
+import { toEmbed } from "./embeds.js";
+import { busyMessage, overloadHint } from "./interaction-failure.js";
 import { renderDecklist } from "../render.js";
 import { searchCardGroups } from "../text-search.js";
 import { helpView } from "../help.js";
@@ -127,11 +134,15 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     // Decklists answer on their own switch, so message replies off mutes only
     // mentions, searches and help.
     const wantsHelp = !deck && messageRepliesOn && selfId ? parseHelpCommand(message.content, selfId) : undefined;
+    const inline =
+      !deck && !wantsHelp && messageRepliesOn && selfId ? parseInlineCommand(message.content, selfId) : undefined;
     const searchQuery =
-      !deck && !wantsHelp && messageRepliesOn && selfId ? parseSearchCommand(message.content, selfId) : undefined;
+      !deck && !wantsHelp && inline === undefined && messageRepliesOn && selfId
+        ? parseSearchCommand(message.content, selfId)
+        : undefined;
     const mentions =
       deck || wantsHelp || searchQuery !== undefined ? [] : messageRepliesOn ? extractMentions(message.content) : [];
-    if (!deck && !wantsHelp && searchQuery === undefined && mentions.length === 0) return;
+    if (!deck && !wantsHelp && inline === undefined && searchQuery === undefined && mentions.length === 0) return;
 
     const channel = message.channel as { isThread?: () => boolean; parentId?: string | null } | undefined;
     const replyChannelId = channel?.isThread?.() ? (channel.parentId ?? message.channelId) : message.channelId;
@@ -177,6 +188,20 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
 
     if (wantsHelp) {
       await logReply({ embeds: toEmbeds([helpView()]) as never });
+      return;
+    }
+
+    if (inline) {
+      await runInline(inline, {
+        api,
+        pages: context.pages,
+        attribution: config.attribution,
+        energyEmoji: config.energyEmoji,
+        settings: context.settings,
+        mentionEnabled: config.mentionEnabled,
+        guildId: message.guildId,
+        reply: logReply,
+      });
       return;
     }
 
@@ -229,4 +254,87 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       await logReply({ content: "Card lookup failed, try again in a moment." });
     }
   };
+}
+
+
+interface InlineInvocation {
+  command: "version" | "settings" | "printings" | "set";
+  argument: string;
+}
+
+interface InlineContext {
+  api: TcgdexClient;
+  pages: import("./pages.js").PageStore;
+  attribution: string;
+  energyEmoji: Record<string, string>;
+  settings?: {
+    get: (guildId: string) => import("../settings-store.js").GuildSettings;
+  } | undefined;
+  mentionEnabled: boolean;
+  guildId: string | null;
+  reply: (payload: ReplyPayload) => Promise<void>;
+}
+
+/** Serves the plain-text counterparts of /version, /settings, /printings and /set. */
+async function runInline(inline: InlineInvocation, context: InlineContext): Promise<void> {
+  if (inline.command === "version") {
+    await context.reply({ content: versionLines().join("\n") });
+    return;
+  }
+
+  if (inline.command === "settings") {
+    if (!context.guildId || !context.settings) {
+      await context.reply({ content: "Settings belong to a server. Ask in one to see them." });
+      return;
+    }
+    await context.reply({ content: settingsViewLines(context.settings.get(context.guildId), context.mentionEnabled).join("\n") });
+    return;
+  }
+
+  if (inline.command === "printings") {
+    if (!inline.argument) {
+      await context.reply({ content: "Add a card name, for example: printings Pikachu." });
+      return;
+    }
+    let printings: Awaited<ReturnType<typeof printingsOf>>;
+    try {
+      printings = await printingsOf(context.api, inline.argument, "both");
+    } catch (error) {
+      const hint = overloadHint(error);
+      await context.reply({ content: hint === undefined ? "Card lookup failed, try again in a moment." : busyMessage(hint) });
+      return;
+    }
+    if (printings.length === 0) {
+      await context.reply({ content: `No card matched \`${inline.argument}\`.` });
+      return;
+    }
+    const page: ListPage = {
+      title: `${printings.length} ${printings.length === 1 ? "printing" : "printings"} of ${printings[0]!.name}`,
+      items: printingItems(printings),
+      perPage: 10,
+      ownerId: "inline",
+      footer: printings.some((printing) => /^p[ab]?-/i.test(printing.id))
+        ? `${context.attribution} · Pocket cards from pokemon-tcg-pocket-cards`
+        : context.attribution,
+    };
+    const token = context.pages.put(page);
+    await context.reply(listReply(page, token, 0) as ReplyPayload);
+    return;
+  }
+
+  if (!inline.argument) {
+    await context.reply({ content: "Add a set id, for example: set sv01." });
+    return;
+  }
+  try {
+    const set = await context.api.getSet(inline.argument);
+    await context.reply({ embeds: [toEmbed(renderSet(set, context.attribution))] } as never);
+  } catch (error) {
+    const hint = overloadHint(error);
+    if (hint !== undefined) {
+      await context.reply({ content: busyMessage(hint) });
+      return;
+    }
+    await context.reply({ content: `No set matched \`${inline.argument}\`.` });
+  }
 }
