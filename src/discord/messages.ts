@@ -104,9 +104,11 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     let guild: EffectiveGuildSettings | undefined;
+    let personalReplies: boolean | undefined;
     if (message.guildId && context.settings) {
       try {
         guild = context.settings.get(message.guildId);
+        personalReplies = context.settings.messageRepliesFor?.(message.author.id);
       } catch (error) {
         console.error(`settings read failed (${errorCategory(error)})`);
         return;
@@ -116,7 +118,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     const gamePreference = guild ? { allowed: guild.cardGames, default: guild.defaultCardGame } : undefined;
     const serverReplies = guild ? guild.messageReplies : true;
     // A member's own choice overrides the server switch, as the command advertises.
-    const messageRepliesOn = context.settings?.messageRepliesFor?.(message.author.id) ?? serverReplies;
+    const messageRepliesOn = personalReplies ?? serverReplies;
 
     const deck = decklistOn ? parseDecklist(message.content) : undefined;
     const selfId = context.selfId();
