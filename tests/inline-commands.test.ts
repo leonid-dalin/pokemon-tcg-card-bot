@@ -138,10 +138,14 @@ describe("inline counterparts answer like their slash commands", () => {
   it("confirms a saved change privately when the view refresh fails", async () => {
     const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
     const settings = {
-      get: () => ({ messageReplies: true, decklistReplies: false }),
+      get: () => ({
+        guildId: "guild-a", messageReplies: true, decklistReplies: false,
+        autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0,
+        cardGames: "both" as const, defaultCardGame: "ptcg" as const, currency: undefined, updatedAt: "",
+      }),
       update: () => undefined,
     };
-    const updates: unknown[] = [];
+    let editAttempts = 0;
     const followUps: { content?: string }[] = [];
     const interaction = {
       guildId: "guild-a",
@@ -149,13 +153,16 @@ describe("inline counterparts answer like their slash commands", () => {
       inGuild: () => true,
       memberPermissions: { has: () => true },
       deferUpdate: async () => undefined,
-      editReply: async () => { throw new Error("discord rejected the edit"); },
+      editReply: async () => {
+        editAttempts += 1;
+        throw new Error("discord rejected the edit");
+      },
       followUp: async (payload: { content?: string }) => void followUps.push(payload),
     };
 
     await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
 
-    expect(updates).toEqual([]);
+    expect(editAttempts).toBe(1);
     expect(followUps[0]?.content).toContain("Saved: Message replies is now off");
     expect(followUps[0]?.content).toContain("/settings view");
   });
