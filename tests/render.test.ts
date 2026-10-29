@@ -38,7 +38,7 @@ describe("renderCard", () => {
   it("starts attack values with compact energy tokens", () => {
     const attacks = renderCard(megaGallade).fields;
     expect(attacks.find((field) => field.name === "Gale Slash  50+")?.value).toMatch(/^\[F\]/);
-    expect(attacks.find((field) => field.name === "Marvelous Edge  240")?.value).toMatch(/^\[F\]\[F\]\[C\]/);
+    expect(attacks.find((field) => field.name === "Marvelous Edge  240")?.value).toMatch(/^\[FFC\]/);
   });
   it("uses configured energy emoji in attack values", () => {
     const attacks = renderCard(megaGallade, { energyEmoji: { Fighting: "<:f:1>" } }).fields;
@@ -57,7 +57,7 @@ describe("renderCard", () => {
     expect(view.fields).toEqual([]);
     expect(view.imageUrl).toBe("https://assets.tcgdex.net/en/sv/sv08.5/073/high.webp");
     expect(view.title).toBe("Dragapult ex · PRE 73");
-    expect(view.footer).toBe("Card data from TCGdex");
+    expect(view.footer).toBe("Card data from TCGdex · tcgdex.com");
     expect(view.url).toBe(view.imageUrl);
   });
 
