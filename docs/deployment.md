@@ -46,12 +46,24 @@ If you have an existing settings database, install it while both bot instances a
 sudo install -o pokemon-card-bot -g pokemon-card-bot -m 0600 \
   "$HOME/card-bot-migration/settings.db" /var/lib/pokemon-card-bot/data/settings.db
 # Repeat for settings.db-wal and settings.db-shm if transferred.
+```
+
+Register the slash commands on the host. The bundle ships the compiled registration script and its own Node runtime, so this needs no npm or source checkout. It reads the imported environment file, registers guild commands when the file sets a guild ID and global commands otherwise, and is safe to re-run after the definitions change:
+
+```bash
+sudo bash -c 'set -a; . /etc/pokemon-card-bot/bot.env; set +a;
+  cd /opt/pokemon-card-bot/current && ./bin/node dist/src/discord/register.js'
+```
+
+Enable the service and check it. Registration works whether the bot is running or not:
+
+```bash
 sudo systemctl enable --now pokemon-card-bot.service
 sudo pokemon-card-bot status
 sudo journalctl -u pokemon-card-bot.service -n 30 --no-pager
 ```
 
-For a new installation without a database, skip the `install` command and enable the service directly. Run the application's command registration once if its slash command definitions have changed; [development](development.md) describes registration. Deployment never registers commands automatically
+For a new installation without a database, skip the `install` command and enable the service directly. Deployment never registers commands automatically
 
 Once the acceptance checks pass, delete the temporary secret copy from the migration directory and keep an independent backup of the private environment file. Restrict any retained copy to the account that owns it
 
@@ -59,7 +71,7 @@ Once the acceptance checks pass, delete the temporary secret copy from the migra
 
 - Confirm `systemctl is-enabled pokemon-card-bot.service` returns `enabled`
 - Confirm `sudo pokemon-card-bot status` reports the expected revision and `discordReady: true`
-- Try `/card`, `/search` and an enabled message reply in a test server
+- Try `/card`, `/search` and an enabled message reply in a test server; these need the registration step above to have run first
 - Check that migrated per-server settings survive `sudo systemctl restart pokemon-card-bot.service`
 - Reboot during a maintenance window and repeat the readiness and command checks
 - Confirm other services on the host still work, then inspect `systemctl show pokemon-card-bot.service -p MemoryCurrent -p MemoryPeak -p NRestarts` and the hardware's temperature and throttling status
