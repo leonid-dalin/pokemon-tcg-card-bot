@@ -22,7 +22,6 @@ export const settingsCommand = new SlashCommandBuilder()
   .setName("settings")
   .setDescription("Configure how the bot replies in this server")
   .setContexts(InteractionContextType.Guild)
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((sub) => sub.setName("view").setDescription("Show the current settings"))
   .addSubcommand((sub) =>
     sub
