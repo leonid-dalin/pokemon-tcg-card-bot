@@ -26,7 +26,10 @@ export interface CommandContext {
   attribution: string;
   energyEmoji: Record<string, string>;
   pages: PageStore;
-  settings?: { get: (guildId: string) => import("../settings-store.js").GuildSettings } | undefined;
+  settings?: {
+    get: (guildId: string) => import("../settings-store.js").GuildSettings;
+    resolveCurrency: (userId: string, guildId: string | null) => import("../settings-store.js").Currency;
+  } | undefined;
 }
 
 /** Reads the per-server game preference; explicit hints and exact IDs bypass it. */
@@ -183,7 +186,14 @@ export async function handleDetailsButton(
   }
   // Use the lookup's source attribution for Pocket cards.
   await interaction.editReply({
-    embeds: [toEmbed(renderCardDetails(lookup.card, lookup.alternates, { attribution: lookup.attribution ?? context.attribution }))],
+    embeds: [
+      toEmbed(
+        renderCardDetails(lookup.card, lookup.alternates, {
+          attribution: lookup.attribution ?? context.attribution,
+          currency: context.settings?.resolveCurrency(interaction.user.id, interaction.guildId) ?? "EUR",
+        }),
+      ),
+    ],
     ...(cardmarketRow(lookup.card.id, lookup.card.name) ? { components: [cardmarketRow(lookup.card.id, lookup.card.name)!] } : {}),
   });
 }

@@ -8,7 +8,15 @@ import {
   type InteractionReplyOptions,
 } from "discord.js";
 import { errorCategory } from "../diagnostics.js";
-import type { GuildSettingsPatch, SettingsStore } from "../settings-store.js";
+import type { Currency, GuildSettingsPatch, SettingsStore } from "../settings-store.js";
+
+const CURRENCY_LABELS: Record<Currency, string> = {
+  EUR: "euros (€)",
+  USD: "US dollars ($)",
+  GBP: "pounds (£)",
+  JPY: "yen (¥)",
+  CNY: "yuan (¥)",
+};
 
 export const settingsCommand = new SlashCommandBuilder()
   .setName("settings")
@@ -109,6 +117,24 @@ export const settingsCommand = new SlashCommandBuilder()
       .setDescription("Seconds a member waits between automatic replies; 0 turns the throttle off")
       .addIntegerOption((option) =>
         option.setName("seconds").setDescription("0 to 86400").setMinValue(0).setMaxValue(86_400).setRequired(true),
+      ),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName("currency")
+      .setDescription("Your price currency; overrides this server's default")
+      .addStringOption((option) =>
+        option
+          .setName("code")
+          .setDescription("currency for your prices")
+          .addChoices(
+            { name: "Euro (€)", value: "EUR" },
+            { name: "US dollar ($)", value: "USD" },
+            { name: "Pound (£)", value: "GBP" },
+            { name: "Yen (¥)", value: "JPY" },
+            { name: "Yuan (¥)", value: "CNY" },
+          )
+          .setRequired(true),
       ),
   )
   .addSubcommand((sub) => sub.setName("reset").setDescription("Back to the deployment defaults"));
@@ -279,6 +305,13 @@ export async function handleSettingsCommand(
       { cooldownSeconds: seconds },
       seconds === 0 ? "The per-member throttle is off." : `Members now wait ${seconds}s between automatic replies.`,
     );
+    return;
+  }
+
+  if (sub === "currency") {
+    const code = interaction.options.getString("code", true) as Currency;
+    context.settings.setCurrency(interaction.user.id, code);
+    await reply(`Your prices now show in ${CURRENCY_LABELS[code]}.`);
     return;
   }
 

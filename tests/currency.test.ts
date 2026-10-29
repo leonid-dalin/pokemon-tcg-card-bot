@@ -1,0 +1,50 @@
+import { describe, expect, it } from "vitest";
+import { convertFromEur, formatPrice } from "../src/currency.js";
+import { SettingsStore } from "../src/settings-store.js";
+
+const DEFAULTS = { messageReplies: true, decklistReplies: false, cooldownSeconds: 0 };
+
+describe("currency conversion", () => {
+  it("returns the amount unchanged in euros", () => {
+    expect(convertFromEur(1.49, "EUR")).toBe(1.49);
+    expect(formatPrice(1.49, "EUR")).toBe("€1.49");
+  });
+
+  it("uses the symbol rather than the code for every supported currency", () => {
+    expect(formatPrice(1.49, "USD")).toMatch(/^\$\d+\.\d{2}$/);
+    expect(formatPrice(1.49, "GBP")).toMatch(/^£\d+\.\d{2}$/);
+    expect(formatPrice(1.49, "JPY")).toMatch(/^¥\d+$/);
+    expect(formatPrice(1.49, "CNY")).toMatch(/^¥\d+\.\d{2}$/);
+  });
+
+  it("drops the minor unit for yen", () => {
+    expect(formatPrice(1.49, "JPY")).not.toContain(".");
+  });
+});
+
+describe("currency resolution", () => {
+  it("prefers the user's choice over the server default", () => {
+    const store = new SettingsStore(undefined, DEFAULTS);
+    store.update("g1", { currency: "GBP" });
+    store.setCurrency("u1", "USD");
+    expect(store.resolveCurrency("u1", "g1")).toBe("USD");
+  });
+
+  it("falls back to the server default for a user with no choice", () => {
+    const store = new SettingsStore(undefined, DEFAULTS);
+    store.update("g1", { currency: "GBP" });
+    expect(store.resolveCurrency("u2", "g1")).toBe("GBP");
+  });
+
+  it("falls back to euros when neither has chosen", () => {
+    const store = new SettingsStore(undefined, DEFAULTS);
+    expect(store.resolveCurrency("u3", "g1")).toBe("EUR");
+    expect(store.resolveCurrency("u3", null)).toBe("EUR");
+  });
+
+  it("rejects an unsupported currency", () => {
+    const store = new SettingsStore(undefined, DEFAULTS);
+    expect(() => store.setCurrency("u4", "CHF" as never)).toThrow("EUR, USD, GBP, JPY or CNY");
+    expect(() => store.update("g1", { currency: "CHF" as never })).toThrow("EUR, USD, GBP, JPY or CNY");
+  });
+});
