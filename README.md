@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-<a href="docs/usage.md">Use the bot</a> · <a href="docs/setup.md">Run your own</a> · <a href="docs/development.md">Develop</a>
+<a href="https://discord.com/oauth2/authorize?client_id=1564749707740192818"><strong>Add to Discord</strong></a> · <a href="docs/usage.md">Use the bot</a> · <a href="docs/setup.md">Host your own</a> · <a href="docs/development.md">Develop</a>
 </p>
 
 ## Card lookup
@@ -33,9 +33,9 @@ Use `/card name:Dragapult ex` for the same lookup through a slash command. Add `
 
 Pasted decklists can show card counts, Standard legality and available Cardmarket prices when a server administrator enables decklist replies. The [usage guide](docs/usage.md) explains the commands, printing hints and reply controls
 
-## Run it in your server
+## Host your own
 
-This repository contains a bot you can host with your own Discord application. The source checkout needs Node.js 24 or newer. Automatic replies to ordinary messages need Discord's Message Content Intent; slash-command-only operation is supported
+You can host a separate instance with your own Discord application. The source checkout needs Node.js 24 or newer. Automatic replies to ordinary messages need Discord's Message Content Intent; slash-command-only operation is supported
 
 Follow [setup](docs/setup.md) for the first login and command registration. For a host that should run continuously, use the [deployment guide](docs/deployment.md): native systemd is the main route, with Docker and Compose also available. Published bundles target Linux ARM64 on Debian 12
 
