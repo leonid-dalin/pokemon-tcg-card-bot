@@ -1,4 +1,5 @@
 import type { TcgdexClient } from "./api/tcgdex.js";
+import { OverloadedError } from "./api/limiter.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { printedNumber } from "./printed.js";
 import { normaliseName, setIdOf } from "./resolve.js";
@@ -53,7 +54,9 @@ export async function printingsOf(client: TcgdexClient, name: string, allowed: "
       const date = releaseDateOf(card.id);
       rows.push({ printing: { id: card.id, name: card.name, setLabel: labelOf(card.id, date) }, date, fromPackage: false });
     }
-  } catch {
+  } catch (error) {
+    // A refusal is not a missing card: keep it so the caller can answer busy.
+    if (error instanceof OverloadedError) throw error;
     // Continue with package results after an upstream search failure.
   }
 

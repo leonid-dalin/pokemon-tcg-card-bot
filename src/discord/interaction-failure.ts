@@ -14,9 +14,14 @@ export function busyMessage(retryAfterSeconds: number): string {
 
 /** Reports failure through a reply, deferred-command edit or ephemeral follow-up. */
 export async function reportInteractionFailure(interaction: Interaction, error?: unknown): Promise<void> {
-  if (!interaction.isRepliable()) return;
   const hint = overloadHint(error);
   const content = hint === undefined ? FAILURE : busyMessage(hint);
+  // Autocomplete has no reply channel, so a refused lookup answers with an empty list.
+  if (interaction.isAutocomplete()) {
+    await interaction.respond([]).catch(() => {});
+    return;
+  }
+  if (!interaction.isRepliable()) return;
   if (!interaction.deferred && !interaction.replied) {
     await interaction.reply({ content, flags: MessageFlags.Ephemeral });
   } else if (interaction.deferred && !interaction.replied && interaction.isChatInputCommand()) {

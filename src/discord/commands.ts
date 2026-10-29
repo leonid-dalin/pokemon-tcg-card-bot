@@ -406,8 +406,16 @@ export async function handlePrintingsCommand(
   const allowed = gamePreference(context, interaction.guildId)?.allowed ?? "both";
 
   // Autocomplete values are card ids; use the resolved name for the listing.
-  const pinned = isCardId(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
-  const printings = await printingsOf(context.client, pinned?.card.name ?? query, allowed);
+  let printings: Awaited<ReturnType<typeof printingsOf>>;
+  try {
+    const pinned = isCardId(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
+    printings = await printingsOf(context.client, pinned?.card.name ?? query, allowed);
+  } catch (error) {
+    const hint = overloadHint(error);
+    if (hint === undefined) throw error;
+    await interaction.editReply({ content: busyMessage(hint) });
+    return;
+  }
   if (printings.length === 0) {
     await interaction.editReply({ content: `No card matched \`${query}\`.` });
     return;

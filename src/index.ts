@@ -120,7 +120,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   } catch (error) {
     console.error(`interaction failed (${errorCategory(error)})`);
-    await reportInteractionFailure(interaction).catch(() => {});
+    await reportInteractionFailure(interaction, error).catch(() => {});
   }
 });
 

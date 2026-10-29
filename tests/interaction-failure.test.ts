@@ -7,6 +7,7 @@ function fakeInteraction(state: { deferred: boolean; replied: boolean; command: 
   const interaction = {
     ...state,
     isRepliable: () => true,
+    isAutocomplete: () => false,
     isChatInputCommand: () => state.command,
     reply: async (payload: unknown) => void sent.push({ via: "reply", payload }),
     editReply: async (payload: unknown) => void sent.push({ via: "editReply", payload }),
