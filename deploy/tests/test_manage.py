@@ -201,6 +201,19 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(self.value(), "accepted-by-new-release")
         self.assertFalse(m.STATE.exists())
 
+    def test_interrupted_rollback_without_prerequisites_keeps_the_service_running(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("newer")
+        m.atomic_json(m.STATE, {"phase": "manual", "release": release.name,
+                                "previous": previous.name, "backup": "gone"})
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
+            with self.assertRaises(RuntimeError):
+                m.recover()
+        self.assertEqual(control.call_args_list, [])
+        self.assertTrue(m.STATE.exists())
+        self.assertEqual(self.value(), "newer")
+
     def test_recovery_stops_an_auto_restart_unit_before_restoring(self):
         previous, release = self.release(OLD), self.release(NEW)
         m.point_to(release)

@@ -198,12 +198,16 @@ def recover():
     progress("Recovering an interrupted update")
     selected = current()
     if phase == "manual":
-        systemctl("stop", SERVICE)
-        if selected != previous or not backup.is_dir() or not manifest(previous, previous.name):
+        try:
+            restorable = backup.is_dir() and bool(manifest(previous, previous.name))
+        except (ValueError, OSError):
+            restorable = False
+        if not restorable:
             raise RuntimeError(
                 f"rollback prerequisites for {previous.name} are missing or invalid; "
                 f"{STATE.name} is kept and the service is left untouched"
             )
+        systemctl("stop", SERVICE)
         restore(backup)
         point_to(previous)
         finish_recovery()
