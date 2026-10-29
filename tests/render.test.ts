@@ -53,6 +53,35 @@ describe("renderCard", () => {
     expect(view.fields.find((field) => field.name === "Set")?.value).toContain("CRI 48");
   });
 
+  it("labels a thirty-day average as thirty days", () => {
+    const card = { ...dragapult, variants_detailed: [] } as Card;
+    (card as { pricing?: unknown }).pricing = {
+      cardmarket: { unit: "EUR", avg: 2, low: 1, avg7: null, avg30: 3.25, updated: "2026-10-01T00:00:00Z" },
+    };
+    const field = priceField(card);
+    expect(field?.value).toContain("30d");
+    expect(field?.value).not.toContain("7d");
+  });
+
+  it("keeps a long configured emoji from erasing the attack name", () => {
+    const longEmoji = `<:p${"a".repeat(20)}:1234567890123456789>`;
+    const attacks = renderCard(megaGallade, { energyEmoji: { Fighting: longEmoji } }).fields;
+    const edge = attacks.find((field) => field.name.includes("Marvelous Edge"));
+    expect(edge?.name).toContain("Marvelous Edge");
+    expect(edge?.name).toContain("240");
+  });
+
+  it("names only the marketplace that supplied a price", () => {
+    const card = { ...dragapult, variants_detailed: [] } as Card;
+    (card as { pricing?: unknown }).pricing = {
+      cardmarket: { unit: "EUR", avg: null, low: null, avg7: null, avg30: null, updated: "2026-10-01T00:00:00Z" },
+      tcgplayer: { unit: "USD", normal: { marketPrice: 4.5 } },
+    };
+    const field = priceField(card);
+    expect(field?.name).toBe("Prices (TCGplayer)");
+    expect(field?.name).not.toContain("Cardmarket");
+  });
+
   it("renders an image-only card with the scan and nothing else", () => {
     const view = renderCardImage(dragapult);
     expect(view.fields).toEqual([]);
