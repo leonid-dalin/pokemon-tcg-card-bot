@@ -163,6 +163,24 @@ describe("inline counterparts answer like their slash commands", () => {
   });
 });
 
+describe("inline printings guards short and bang-prefixed names", () => {
+  it.each([
+    ["printings !n", "n"],
+    ["printings N", "N"],
+    ["printings !N", "N"],
+  ])("answers %s with the too-short explanation", async (content, echoed) => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+    });
+    const { message, replies } = fakeMessage(`<@${SELF}> ${content}`);
+    await handler()(message as never);
+    expect(replies[0]?.content).toBe(`No card matched \`${echoed}\`. A single letter is too little to search on.`);
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("inline printings and set spend the member allowance", () => {
   it("answers busy without fetching when the member is spent", async () => {
     const calls: string[] = [];
