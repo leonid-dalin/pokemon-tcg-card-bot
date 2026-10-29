@@ -201,9 +201,33 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(self.value(), "accepted-by-new-release")
         self.assertFalse(m.STATE.exists())
 
-    def test_interrupted_rollback_without_prerequisites_keeps_the_service_running(self):
+    def test_recovery_keeps_settings_accepted_after_the_rollback_switched(self):
         previous, release = self.release(OLD), self.release(NEW)
         m.point_to(previous)
+        self.database("before-upgrade")
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                patch.object(m, "wait_ready"), patch.object(m.os, "chown"):
+            m.activate(release)
+        self.database("newer")
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                patch.object(m, "finish_recovery", side_effect=RuntimeError("power loss")), \
+                patch.object(m.os, "chown"):
+            with self.assertRaises(RuntimeError):
+                m.rollback()
+        self.assertEqual(m.current(), previous)
+        self.assertEqual(json.loads(m.STATE.read_text())["phase"], "manual")
+        self.database("acknowledged-by-restored-bot-after-reboot")
+        with patch.object(m, "active", return_value=False), patch.object(m, "systemctl") as control, \
+                patch.object(m.os, "chown"):
+            m.recover()
+        self.assertEqual(self.value(), "acknowledged-by-restored-bot-after-reboot")
+        self.assertEqual(m.current(), previous)
+        self.assertFalse(m.STATE.exists())
+        self.assertEqual([call.args for call in control.call_args_list], [("start", m.SERVICE)])
+
+    def test_interrupted_rollback_without_prerequisites_keeps_the_service_running(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(release)
         self.database("newer")
         m.atomic_json(m.STATE, {"phase": "manual", "release": release.name,
                                 "previous": previous.name, "backup": "gone"})

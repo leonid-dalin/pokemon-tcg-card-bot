@@ -198,6 +198,10 @@ def recover():
     progress("Recovering an interrupted update")
     selected = current()
     if phase == "manual":
+        if selected == previous:
+            finish_recovery()
+            progress(f"Interrupted rollback already selected {previous.name}; kept its live settings")
+            return
         try:
             restorable = backup.is_dir() and bool(manifest(previous, previous.name))
         except (ValueError, OSError):
