@@ -183,6 +183,24 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
         self.assertFalse(m.STATE.exists())
 
+    def test_ready_recovery_does_not_restore_over_the_new_release(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(release)
+        self.database("new-settings")
+        backup = self.root / "backups" / "ready"
+        m.snapshot(backup)
+        (backup / "previous").write_text(previous.name)
+        self.database("accepted-by-new-release")
+        m.atomic_json(m.STATE, {"phase": "ready", "release": release.name,
+                                "previous": previous.name, "backup": backup.name})
+        with patch.object(m, "active", return_value=False), patch.object(m, "systemctl") as control, \
+                patch.object(m.os, "chown"):
+            m.recover()
+        self.assertEqual([call.args for call in control.call_args_list], [("start", m.SERVICE)])
+        self.assertEqual(m.current(), release)
+        self.assertEqual(self.value(), "accepted-by-new-release")
+        self.assertFalse(m.STATE.exists())
+
     def test_recovery_stops_an_auto_restart_unit_before_restoring(self):
         previous, release = self.release(OLD), self.release(NEW)
         m.point_to(release)

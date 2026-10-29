@@ -217,6 +217,7 @@ def recover():
             STATE.unlink()
             return
         finish_recovery()
+        return
     if phase == "switched" and selected == release:
         try:
             restorable = backup.is_dir() and bool(manifest(previous, previous.name))
