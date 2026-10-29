@@ -16,8 +16,7 @@ describe("shard readiness", () => {
     const client = fakeClient([fakeShard(Status.Ready)]);
     const isReady = createShardReadiness(client);
     expect(isReady()).toBe(true);
-    // A recoverable close leaves the shard in Connecting (which is what the real
-    // socket-close handler does); the manager-level ready latch still says ready.
+    // A recoverable close moves the shard to Connecting while the manager still says ready.
     client.ws.shards = {
       values: () => new Map([[0, fakeShard(Status.Connecting)]]).values(),
       size: 1,

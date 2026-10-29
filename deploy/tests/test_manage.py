@@ -190,8 +190,8 @@ class DeploymentTests(unittest.TestCase):
                                 "previous": OLD, "backup": backup.name})
         with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
             m.recover()
-        # Prerequisite validation happens before any stop; invalid previous stays
-        # selected and the service is restarted without an empty prerequisite.
+        # Prerequisites are checked before the stop, so a missing previous release
+        # never leaves the service down.
         self.assertNotIn(("stop", m.SERVICE), control.call_args_list)
         self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
         self.assertFalse(m.STATE.exists())
@@ -207,8 +207,8 @@ class DeploymentTests(unittest.TestCase):
                                 "previous": previous.name, "backup": backup.name})
         with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
             m.recover()
-        # The new release was never selected, so the pre-reboot checkpoint must
-        # not replace settings acknowledged by the rebooted previous release.
+        # The new release never ran, so the checkpoint must not replace settings
+        # the rebooted previous release has since accepted.
         self.assertEqual(m.current(), previous)
         self.assertEqual(self.value(), "acknowledged-after-boot")
         self.assertFalse((self.root / "failed-revision").exists())
@@ -227,8 +227,7 @@ class DeploymentTests(unittest.TestCase):
                 patch.object(m.os, "chown"):
             with self.assertRaises(OSError):
                 m.activate(release)
-        # The unconfirmed release must not be started; pending state stays for the
-        # next recovery run and the failed revision is recorded up front.
+        # The unconfirmed release stays unstarted and the transaction stays pending.
         self.assertEqual(m.current(), release)
         self.assertEqual(control.call_args_list[-1].args, ("stop", m.SERVICE))
         self.assertTrue(m.STATE.exists())
@@ -257,7 +256,7 @@ class DeploymentTests(unittest.TestCase):
         m.snapshot(backup)
         m.begin_activation(release, previous, backup)
         (backup / "previous").write_text(previous.name)
-        # The link changed before the phase advanced: the crash hit the gap.
+        # Link changed but the phase record did not: the crash hit that gap.
         m.point_to(release)
         with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
                 patch.object(m.os, "chown"):
