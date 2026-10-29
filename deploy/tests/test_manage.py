@@ -168,6 +168,57 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
         self.assertFalse(m.STATE.exists())
 
+    def test_prepared_phase_recovery_restarts_the_previous_release(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("live")
+        m.atomic_json(m.STATE, {"phase": "prepared", "release": release.name,
+                                "previous": previous.name, "backup": "planned"})
+        with patch.object(m, "active", return_value=False), patch.object(m, "systemctl") as control:
+            m.recover()
+        self.assertEqual(m.current(), previous)
+        self.assertEqual(self.value(), "live")
+        self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+        self.assertFalse(m.STATE.exists())
+
+    def test_switch_intent_with_previous_selected_keeps_live_settings(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("acknowledged-after-boot")
+        backup = self.root / "backups" / "stale"
+        m.snapshot(backup)
+        (backup / "previous").write_text(previous.name)
+        m.atomic_json(m.STATE, {"phase": "switched", "release": release.name,
+                                "previous": previous.name, "backup": backup.name})
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
+            m.recover()
+        # The new release was never selected, so the pre-reboot checkpoint must
+        # not replace settings acknowledged by the rebooted previous release.
+        self.assertEqual(m.current(), previous)
+        self.assertEqual(self.value(), "acknowledged-after-boot")
+        self.assertFalse((self.root / "failed-revision").exists())
+        self.assertEqual(control.call_args_list[-1].args, ("start", m.SERVICE))
+        self.assertFalse(m.STATE.exists())
+
+    def test_failed_activation_restore_keeps_pending_state_and_new_release(self):
+        previous, release = self.release(OLD), self.release(NEW)
+        m.point_to(previous)
+        self.database("original")
+        def fail_neediness(*args):
+            raise RuntimeError("readiness timeout")
+        with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control, \
+                patch.object(m, "wait_ready", side_effect=fail_neediness), \
+                patch.object(m.shutil, "copyfileobj", side_effect=OSError("disk full")), \
+                patch.object(m.os, "chown"):
+            with self.assertRaises(OSError):
+                m.activate(release)
+        # The unconfirmed release must not be started; pending state stays for the
+        # next recovery run and re-attempting the same revision is still blocked.
+        self.assertEqual(m.current(), release)
+        self.assertEqual(control.call_args_list[-1].args, ("stop", m.SERVICE))
+        self.assertTrue(m.STATE.exists())
+        self.assertFalse((self.root / "failed-revision").exists())
+
     def test_acknowledged_settings_survive_a_failed_activation(self):
         previous, release = self.release(OLD), self.release(NEW)
         m.point_to(previous)
