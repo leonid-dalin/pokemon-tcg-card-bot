@@ -65,4 +65,4 @@ npm run build
 git diff --check
 ```
 
-Generators run against the live TCGdex API, so tests never call it. [data-pipeline.test.ts](../tests/data-pipeline.test.ts) covers the merge, ordering, atomic write and manifest behaviour with fixtures. Use [the preview command](development.md#preview-a-card) for a live card check when upstream access is available. Include the dataset changes and check results in the pull request
+Generators run against the live TCGdex API, so tests never call it. [data-pipeline.test.ts](../tests/data-pipeline.test.ts) covers the merge, ordering, atomic write and manifest behaviour with fixtures, and [generator-pipeline.test.ts](../tests/generator-pipeline.test.ts) covers the generator decisions: empty and all-404 runs refuse to publish, one 404 skips a single card, and the changed-field report names only fields that moved. Use [the preview command](development.md#preview-a-card) for a live card check when upstream access is available. Include the dataset changes and check results in the pull request

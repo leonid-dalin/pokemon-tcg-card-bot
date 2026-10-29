@@ -26,7 +26,7 @@ In a service manager or a container, use `npm run build` then `npm start`
 
 Two tools help when you change lookup behaviour. `npm run preview "Card name"` runs the real lookup and render path against the live APIs, prints the embed payload and writes a Discord-styled HTML page to `preview/`
 
-Two commands regenerate the local datasets. `npm run index:sets` rewrites `src/data/set-index.ts`, which is the file the runtime imports; `npm run index:text` rebuilds the wording index. Both write through a temporary file and a rename, so an interrupted run cannot truncate a dataset, and both refuse to publish after a failed fetch. Every run records the record count and hash in `src/data/data-manifest.json`, so compare that file with what you committed. Neither command runs in CI, because both need the live TCGdex API. Follow [data maintenance](docs/data-maintenance.md) for the review steps
+Two commands regenerate the local datasets. `npm run index:sets` rewrites `src/data/set-index.ts`, which is the file the runtime imports; `npm run index:text` rebuilds the wording index. Both write through a temporary file and a rename, so an interrupted run cannot truncate a dataset, and both refuse to publish after a failed fetch. Every successful run records the record count and hash in `src/data/data-manifest.json`, so compare that file with what you committed. The `Refresh card data` workflow runs both against the live TCGdex API and opens a pull request with the result. Follow [data maintenance](docs/data-maintenance.md) for the review steps
 
 ## Changes
 
