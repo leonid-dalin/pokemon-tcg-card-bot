@@ -1,0 +1,14 @@
+[Unit]
+Description=Update the Pokemon TCG card bot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pokemon-card-bot update
+TimeoutStartSec=15min
+UMask=0077
+Nice=15
+IOSchedulingClass=idle
+MemoryMax=256M
+CPUQuota=50%

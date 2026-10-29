@@ -26,7 +26,9 @@ import { MentionBudget } from "./cooldown.js";
 import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
+import { createShardReadiness } from "./discord/shard-readiness.js";
 import { handleSettingsCommand } from "./discord/settings-command.js";
+import { startRuntimeStatus } from "./runtime-status.js";
 
 loadDotEnv();
 
@@ -42,6 +44,7 @@ const api = new TcgdexClient();
 const context: CommandContext = { client: api, attribution: config.attribution, energyEmoji: config.energyEmoji, pages: new PageStore(), settings };
 
 const client = new Client(clientOptions(config));
+startRuntimeStatus(createShardReadiness(client));
 const budget =
   config.mentionCooldownSeconds > 0
     ? new MentionBudget({ refillSeconds: config.mentionCooldownSeconds })

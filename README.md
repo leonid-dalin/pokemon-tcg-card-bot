@@ -1,129 +1,56 @@
-# Pokémon TCG card bot
+<h1 align="center">Pokémon TCG card bot</h1>
 
-A Discord bot for Pokémon TCG and Pokémon TCG Pocket cards, answered from a slash command or a `[[card]]` mention in any message
+<p align="center">A Discord bot that looks up Pokémon TCG and Pokémon TCG Pocket cards</p>
 
-## What it answers
+<p align="center">
+<a href="https://github.com/leonid-dalin/pokemon-tcg-card-bot/actions/workflows/ci.yml"><img src="https://github.com/leonid-dalin/pokemon-tcg-card-bot/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI on master"></a>
+</p>
 
-| You type | The bot replies with |
-| --- | --- |
-| `/card name:<name> [set:<hint>]` | The card front, with name autocomplete and an optional set hint |
-| `/printings name:<name>` | Every printing of that name, newest first, ten to a page |
-| `/set id:<set id>` | The set: card count, series and release date |
-| `/set id:<set id> checklist:true` | Every card in the set, fifteen to a page |
-| `/search text:<words>` | Cards whose ability, attack or Trainer text contains every word, five to a page |
-| `/help` | What the bot can do |
-| `@bot` or `@bot help` | The same help card from the message box |
-| `@bot search <words>` | The same search from the message box, which is easier on a phone |
-| `[[Card name]]` | The card, from any message. Up to three per message |
-| `[[Card name\|hint]]` | One printing. The hint can be a set id (`sv07`), a printed code (`SCR`) or a set name (`Stellar Crown`) |
-| `[[Card name\|sv08.5-073]]` | The exact printing with that card id |
-| `[[Card name\|pocket]]` | The Pocket version. `ptcgp` and `tcgp` work as well |
-| `[[!Card name]]` | The scan alone, with no fields and no buttons |
-| A pasted decklist | The list, counted against 60, with cards that are not Standard legal and a Cardmarket price where the card data and prices are available. Off unless `DECKLIST_ENABLED=true` |
+<p align="center">
+<a href="https://discord.com/oauth2/authorize?client_id=1564749707740192818&scope=bot+applications.commands&permissions=4503876652887104"><strong>Add to Discord</strong></a> · <a href="docs/usage.md">Use the bot</a> · <a href="docs/setup.md">Host your own</a> · <a href="docs/development.md">Develop</a>
+</p>
 
-A card reply shows the front first: the name linked to its scan, then HP, type, stage, what it evolves from and how many prizes it gives up, then the wording of Trainers and Energy, one field per ability and per attack with the cost as energy tokens, and weakness, resistance and retreat. Everything printed on the card but not played with sits behind the `Details` button, which answers only whoever presses it: the set and release date, rarity, illustrator, format legality, prices and the other printings. Card ids are written the way players write them, so `me04-048` reads `CRI 48` and a Pocket card reads `B4B 133`.
+## Card lookup
 
-Names match regardless of case, accents, apostrophes and spacing, so `pokemon catcher` finds Pokémon Catcher. Printing buttons swap the card in place, and only the person who asked for the reply may press them. A name that matches nothing gets `No card matched`, and in most paths a menu of the closest names: a one-word miss and `/card` resolve without suggestions. `[[...]]` inside backticks or a code block is ignored, so you can explain the syntax in the same channel
+In a server with the bot installed, send:
 
-## Requirements
-
-- Node.js 24 or newer (the settings store uses the built-in `node:sqlite`); CI runs the version in `.nvmrc`
-- A Discord application with a bot user
-- Network access to `api.tcgdex.net`. Pocket cards come from an npm package and need no network
-
-## Quick start
-
-1. Create an application at <https://discord.com/developers/applications>. Copy the Application ID from General Information, then open Bot and press Reset Token to get the token. Discord shows the token once
-2. On the Bot page, under Privileged Gateway Intents, turn on Message Content. Without it only the slash commands work
-3. Install, configure and check the credentials:
-
-   ```bash
-   npm ci
-   cp .env.example .env    # then fill in DISCORD_TOKEN and DISCORD_CLIENT_ID
-   npm run doctor          # prints the bot's name, its servers and its registered commands
-   ```
-
-4. Invite the bot with the `bot` and `applications.commands` scopes and permissions integer `277025475584`. That is View Channels, Send Messages, Send Messages in Threads, Embed Links, Read Message History and Use Application Commands. Without the thread permission it cannot answer inside threads
-5. Register the slash commands, then start the bot:
-
-   ```bash
-   npm run register        # publishes /card, /printings, /set, /search and /help
-   npm run dev             # runs from source
-   ```
-
-Set `DISCORD_GUILD_ID` while you develop, so the commands are registered to that one server and appear there at once
-
-## Configuration
-
-The bot reads these from the environment or from `.env`. `.env.example` lists them all
-
-| Variable | Default | What it does |
-| --- | --- | --- |
-| `DISCORD_TOKEN` | required | The bot token |
-| `DISCORD_CLIENT_ID` | required | The Application ID |
-| `DISCORD_GUILD_ID` | unset | Registers the slash commands in this server only. Unset, they are registered globally |
-| `MENTION_ENABLED` | `true` | Answers `[[...]]` mentions, `@bot search` and decklists. Needs the Message Content intent |
-| `DECKLIST_ENABLED` | `false` | Formats pasted decklists, flags cards that are not Standard legal and prices the deck |
-| `MENTION_COOLDOWN_SECONDS` | `0` (`30` in `.env.example`) | Per-member throttle. Each member gets a burst of three replies, then one more every this many seconds. `0` turns it off |
-| `ATTRIBUTION` | `Card data from TCGdex` | Footer credit on every embed. Pocket cards always credit their own source |
-| `ENERGY_EMOJI` | `{}` | JSON object of energy type to emoji markup, used in attack costs. The owner uploads the icons as application emoji |
-
-The throttle counts every reply to a message, whether it answers a mention, a search or a decklist. It is kept per member and per channel, so one person cannot use up anyone else's replies. The bot never pings anyone: replies carry no user, role or `@everyone` mentions
-
-Paged lists keep their place in memory for fifteen minutes, so the age of an old reply shows up as `This list has expired. Run the command again.`
-
-## Running in production
-
-```bash
-npm ci
-npm run build
-npm start
+```text
+[[Dragapult ex]]
 ```
 
-Run one copy per token. The bot writes `.bot.pid` and refuses to start while the process named there is alive, because two copies would both answer every message
+The reply shows the card scan and rules text, including attacks, abilities and energy costs. Printing buttons switch between versions; `Details` opens set information, legality and available prices in a private reply
 
-## Scripts
+Use `/card name:Dragapult ex` for the same lookup through a slash command. Add `|pocket` inside the brackets to select Pokémon TCG Pocket, for example `[[Charizard ex|pocket]]`
 
-| Command | What it does |
+## Find the card you need
+
+| Task | Start with |
 | --- | --- |
-| `npm run doctor` | Checks the token and lists servers and registered commands |
-| `npm run register` | Publishes the slash commands |
-| `npm run dev` | Runs from source with `tsx` |
-| `npm run build`, `npm start` | Compiles to `dist/` and runs the compiled bot |
-| `npm run preview "Dragapult ex" "Charizard\|sv03.5"` | Runs real lookups without Discord, prints the embed JSON and writes an HTML preview to `preview/` |
-| `npm run avatar assets/avatar.jpg` | Sets the bot's profile picture. PNG, JPEG, WebP or GIF, under 8 MB |
-| `npm run rename "Name"` | Renames the bot. Discord allows two changes an hour |
-| `npm run index:sets` | Fetches `src/data/set-index.json` for review; update the runtime TypeScript index as described in [data maintenance](docs/data-maintenance.md#add-or-update-a-set) |
-| `npm run index:text` | Rebuilds the search index in `src/data/text-index.json`. Several minutes of requests; it keeps the old index if any card fails to load |
-| `npm test`, `npm run typecheck` | The test suite and the type check. Both run offline |
+| Compare versions of a card | `/printings name:Dragapult ex` |
+| Browse a set | `/set id:sv08.5 checklist:true` |
+| Find cards with a phrase in their wording | `/search text:"search your deck"` |
+| Choose reply channels or a preferred card game | `/settings` with Manage Server permission |
 
-## How lookups work
+Pasted decklists can show card counts, Standard legality and available Cardmarket prices when a server administrator enables decklist replies. The [usage guide](docs/usage.md) explains the commands, printing hints and reply controls
 
-Physical cards come from [TCGdex](https://tcgdex.dev), which needs no API key. The bot calls:
+## Host your own
 
-- `GET /v2/en/cards?name=` to find printings by name
-- `GET /v2/en/cards/{id}` for the card, its prices and its legality
-- `GET /v2/{fr,de,es,it,pt}/cards/{id}` when the English record has no prices. The first language with a figure wins
-- `GET /v2/en/sets` and `GET /v2/en/sets/{id}` for `/set` and its autocomplete
+You can host a separate instance with your own Discord application. The source checkout needs Node.js 24 or newer. Automatic replies to ordinary messages need Discord's Message Content Intent; slash-command-only operation is supported
 
-When several printings match, the closest name wins, then a printing with a scan, then the newest set. Release dates and set codes come from `src/data/set-index.ts`, so ranking needs no extra requests. Search reads `src/data/text-index.json`, a local index of about 23,000 cards, because TCGdex only searches Trainer text itself. Prices show Cardmarket's one, seven and thirty day averages when TCGdex has them, and a promo with no scan says so in the embed
+Follow [setup](docs/setup.md) for the first login and command registration. For a host that should run continuously, use the [deployment guide](docs/deployment.md): native systemd is the main route, with Docker and Compose also available. Published bundles target Linux ARM64 on Debian 12
 
-Pocket cards come from the [`pokemon-tcg-pocket-cards`](https://github.com/chase-mew/pokemon-tcg-pocket-cards) package: 4,317 printings across 24 sets. TCGdex's Pocket catalogue stops earlier, so a name TCGdex does not know falls back to the package. Both `[[Crustle ex]]` and `[[Crustle ex|pocket]]` answer with `b4b-133`
+## Documentation
 
-Responses are cached in memory, ten minutes for cards and an hour for sets, up to 1,000 responses. A card TCGdex does not have is remembered for the same ten minutes. Rate limits and server errors are retried with backoff, and every request has a timeout
+| You want to... | Guide |
+| --- | --- |
+| Use card lookups, wording search and lists | [Using the bot](docs/usage.md) |
+| Change replies for your Discord server | [Server settings](docs/server-settings.md) |
+| Set up a bot application and run from source | [Setup](docs/setup.md) |
+| Configure persistence, logging or deployment defaults | [Configuration](docs/configuration.md) |
+| Develop, test or maintain card data | [Developer documentation](docs/README.md) |
 
-## Troubleshooting
+Physical card records come from [TCGdex](https://tcgdex.dev); Pocket records come from [pokemon-tcg-pocket-cards](https://github.com/chase-mew/pokemon-tcg-pocket-cards). Prices depend on the source, and the local wording index can lag new card releases
 
-- The bot answers slash commands but ignores `[[...]]`: turn on the Message Content intent, then restart. The bot logs a warning when it receives a message with its text stripped
-- No reply inside a thread: the invite is missing Send Messages in Threads
-- `npm ci` warns about `esbuild` install scripts: run `npm approve-scripts esbuild`, then `npm ci` again
-- `another instance is already running`: stop the other copy. A pid file left by a crash is ignored once its process is gone
-- Prices show only Cardmarket: TCGdex has little TCGplayer data, so most cards carry one source
+Project code is [Apache-2.0](LICENSE). The Pocket dependency uses AGPL-3.0-or-later; card data and images have separate terms. Read the [third-party notices](docs/THIRD_PARTY_NOTICES.md) before redistributing a build
 
-## Contributing
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. The [contributor documentation](docs/README.md) covers architecture, development and data maintenance. Report vulnerabilities by email as described in [SECURITY.md](SECURITY.md), never in a public issue. Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md)
-
-## Licence
-
-This project's code is licensed under the Apache License 2.0, see [LICENSE](LICENSE). Card data, the Pocket package and the avatar image keep their own terms, see [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md). The Pocket package is AGPL-3.0-or-later, so read the notices before you redistribute a build that includes `node_modules`. Credit for the ideas this bot borrows sits in [ACKNOWLEDGEMENTS.md](docs/ACKNOWLEDGEMENTS.md), and the [privacy policy](PRIVACY.md) and [terms of service](TERMS.md) cover what using it means
+[Contribute](CONTRIBUTING.md) · [Security](SECURITY.md) · [Privacy](PRIVACY.md) · [Terms](TERMS.md) · [Acknowledgements](docs/ACKNOWLEDGEMENTS.md)

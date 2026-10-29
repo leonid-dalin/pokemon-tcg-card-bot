@@ -1,0 +1,14 @@
+**
+!package.json
+!package-lock.json
+!tsconfig.json
+!src/
+!src/**
+!scripts/
+!scripts/**
+!deploy/
+!deploy/smoke.mjs
+!LICENSE
+!NOTICE
+!docs/
+!docs/THIRD_PARTY_NOTICES.md
