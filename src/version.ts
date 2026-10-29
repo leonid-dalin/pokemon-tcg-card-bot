@@ -68,12 +68,13 @@ function readGit(): { sha?: string; date?: string } {
   }
 }
 
-/** Resolved once at module load, so a checkout that moves under a running process cannot rewrite history. */
-const IDENTITY = resolveIdentity();
+/** Resolved on first use, so a dotenv load before login still reaches BUILD_SHA. */
+let identity: BuildIdentity | undefined;
 
-/** The identity captured at startup; later checkout changes cannot alter it. */
+/** The identity captured on first call; later checkout changes cannot alter it. */
 export function buildIdentity(): BuildIdentity {
-  return IDENTITY;
+  identity ??= resolveIdentity();
+  return identity;
 }
 
 /** Resolves the identity from a given environment. Exported for tests and for callers that pass their own. */
