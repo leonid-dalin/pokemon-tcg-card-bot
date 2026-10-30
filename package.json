@@ -25,7 +25,7 @@
   "dependencies": {
     "@fawazahmed0/currency-api": "2026.10.28",
     "discord.js": "^14.27.0",
-    "pokemon-tcg-pocket-cards": "^5.4.0"
+    "pokemon-tcg-pocket-cards": "^5.5.1"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
