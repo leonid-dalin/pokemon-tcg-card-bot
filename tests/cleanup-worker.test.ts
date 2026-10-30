@@ -257,3 +257,40 @@ describe("cleanup worker future deadlines", () => {
     vi.useRealTimers();
   });
 });
+
+describe("cleanup worker shutdown and retry timing", () => {
+  it("measures the retry deadline from when the failure is handled", async () => {
+    vi.useFakeTimers();
+    const deferred: number[] = [];
+    let clock = 1_000_000;
+    vi.setSystemTime(clock);
+    const store = {
+      scheduleCleanup: () => undefined,
+      dueCleanup: () => [{ ...JOB, attempts: 0 }],
+      nextCleanupAt: () => undefined,
+      completeCleanup: () => undefined,
+      deferCleanup: (_id: string, at: number) => void deferred.push(at),
+    };
+    // The channel fetch takes 45 seconds, so the drain starts well before it fails.
+    const slow = {
+      type: ChannelType.GuildText,
+      isTextBased: () => true,
+      permissionsFor: () => ({ has: () => true }),
+      messages: {
+        fetch: async (messageId: string) => {
+          clock += 45_000;
+          vi.setSystemTime(clock);
+          if (messageId === "invoke-1") throw { code: 50013 };
+          return { delete: async () => undefined };
+        },
+      },
+    };
+    const client = { user: { id: "bot" }, channels: { fetch: async () => slow } };
+    const worker = new CleanupWorker(client as never, store as never);
+    await worker.drain();
+    expect(deferred).toHaveLength(1);
+    // RETRY_BASE_MS from the failure time, not from the drain start.
+    expect(deferred[0]! - clock).toBe(60_000);
+    vi.useRealTimers();
+  });
+});
