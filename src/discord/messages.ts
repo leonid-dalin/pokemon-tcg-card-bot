@@ -15,7 +15,7 @@ import { normaliseName } from "../resolve.js";
 import { footerFor } from "./commands.js";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { toEmbed } from "./embeds.js";
-import { versionEmbed, versionLines } from "./version-view.js";
+import { versionActions, versionEmbed, versionLines } from "./version-view.js";
 import { busyMessage, overloadHint } from "./interaction-failure.js";
 import { renderDecklist } from "../render.js";
 import { searchCardGroups } from "../text-search.js";
@@ -308,7 +308,7 @@ function admit(context: InlineContext): { allowed: true } | { allowed: false; re
 /** Serves the plain-text counterparts of /version, /settings, /printings and /set. */
 async function runInline(inline: InlineInvocation, context: InlineContext): Promise<void> {
   if (inline.command === "version") {
-    await context.reply({ embeds: [versionEmbed()] });
+    await context.reply({ embeds: [versionEmbed()], components: versionActions() } as never);
     return;
   }
 
