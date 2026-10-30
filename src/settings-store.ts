@@ -367,7 +367,9 @@ export class SettingsStore {
   scheduleCleanup(job: CleanupJob): void {
     const count = (this.db.prepare("SELECT COUNT(*) AS n FROM cleanup_jobs").get() as { n: number }).n;
     if (count >= MAX_CLEANUP_JOBS) {
-      this.db.prepare("DELETE FROM cleanup_jobs WHERE delete_after IN (SELECT delete_after FROM cleanup_jobs ORDER BY delete_after LIMIT ?)")
+      this.db.prepare(
+        "DELETE FROM cleanup_jobs WHERE message_id IN (SELECT message_id FROM cleanup_jobs ORDER BY delete_after, message_id LIMIT ?)",
+      )
         .run(count - MAX_CLEANUP_JOBS + 1);
     }
     this.db.prepare("INSERT OR REPLACE INTO cleanup_jobs (message_id, channel_id, invoke_message_id, delete_after) VALUES (?, ?, ?, ?)")
