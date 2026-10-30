@@ -24,7 +24,7 @@ export const MENTIONS_VALUE = [
   "`[[!Card name]]` answers with the scan alone",
   "`@bot search <words>` runs the same search from the message box",
   "`@bot printings <name>`, `@bot set <id>`, `@bot version` and `@bot settings` mirror those commands",
-  "`@bot settings` and `@bot version` leave a temporary reply that disappears after 90 seconds",
+  "`@bot settings` leaves a temporary reply that disappears after 90 seconds",
 ].join("\n");
 
 export const NOTES_VALUE = [

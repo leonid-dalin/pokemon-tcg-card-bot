@@ -1,6 +1,6 @@
 # Server settings
 
-`/settings` opens a private panel. Members with Manage Server permission start on the server overview and can change every server choice there. Other members see their own preferences, and the panel shows the server summary without edit controls. These choices affect that server; the host supplies the defaults through [configuration](configuration.md)
+`/settings` opens a private panel. Members with Manage Server permission start on the server overview and can change every server choice there. Members without that permission open their personal preferences and see only their own choices. These choices affect that server; the host supplies the defaults through [configuration](configuration.md)
 
 The panel has a scope switch, For me and This server, and a section menu: Overview, Replies, Channels, Card games and Currency
 
