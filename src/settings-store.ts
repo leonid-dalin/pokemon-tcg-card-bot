@@ -157,7 +157,9 @@ export class SettingsStore {
     }
     if (version === SCHEMA_VERSION) {
       const tables = this.db
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('guild_settings', 'user_settings')")
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('guild_settings', 'user_settings', 'cleanup_jobs')",
+        )
         .all() as { name: string }[];
       const names = new Set(tables.map((row) => row.name));
       if (!names.has("guild_settings")) {
@@ -167,6 +169,10 @@ export class SettingsStore {
       if (!names.has("user_settings")) {
         this.db.close();
         throw new Error("settings database is marked current but the user_settings table is missing");
+      }
+      if (!names.has("cleanup_jobs")) {
+        this.db.close();
+        throw new Error("settings database is marked current but the cleanup_jobs table is missing");
       }
       return;
     }
@@ -205,6 +211,17 @@ export class SettingsStore {
             updated_at TEXT NOT NULL
           )
         `);
+      }
+      if (version <= 4) {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS cleanup_jobs (
+            message_id TEXT PRIMARY KEY,
+            channel_id TEXT NOT NULL,
+            invoke_message_id TEXT NOT NULL,
+            delete_after INTEGER NOT NULL
+          )
+        `);
+        this.db.exec("CREATE INDEX IF NOT EXISTS cleanup_jobs_due ON cleanup_jobs (delete_after)");
       }
       if (version <= 3) {
         this.db.exec(`
