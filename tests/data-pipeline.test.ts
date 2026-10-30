@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { entryFor, manifestFor, readManifest, sha256, upsertEntry, writeAtomic } from "../scripts/lib/publish.js";
@@ -156,13 +156,17 @@ describe("set index rendering", () => {
 });
 
 describe("atomic publication", () => {
-  it("leaves the previous file intact when the write fails", () => {
+  it("leaves the previous file intact and no temporary file when the write fails", () => {
     const dir = mkdtempSync(join(tmpdir(), "publish-"));
     try {
+      // A directory where the target belongs makes the rename fail after the
+      // temporary file has been written.
       const target = join(dir, "data.ts");
-      writeFileSync(target, "original", "utf8");
-      expect(() => writeAtomic(join(dir, "missing", "\0bad"), "replacement")).toThrow();
-      expect(readFileSync(target, "utf8")).toBe("original");
+      mkdirSync(target);
+      writeFileSync(join(target, "keep"), "x", "utf8");
+      expect(() => writeAtomic(target, "replacement")).toThrow();
+      expect(readdirSync(dir)).toEqual(["data.ts"]);
+      expect(readdirSync(target)).toEqual(["keep"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
