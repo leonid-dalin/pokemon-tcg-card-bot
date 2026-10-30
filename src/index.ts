@@ -70,7 +70,6 @@ const context: CommandContext = {
   typing: typingBudget,
 };
 
-/** The permanent record a server settings change leaves in the channel that made it. */
 function settingsAnnouncement(description: string): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle("Server settings changed")
