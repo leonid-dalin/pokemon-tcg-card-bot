@@ -152,7 +152,10 @@ function loadIndex(): PocketIndex {
         ...(parent?.card_text ? { effect: parent.card_text } : {}),
         ...(parent?.health ? { hp: parent.health } : {}),
         ...(parent?.retreat !== undefined ? { retreat: parent.retreat } : {}),
-        ...(parent?.weakness ? { weaknesses: [{ type: parent.weakness, value: "+20" }] } : {}),
+        // Pocket records "none" as a weakness value, alongside cards that carry no field at all.
+        ...(parent?.weakness && parent.weakness.trim().toLowerCase() !== "none"
+          ? { weaknesses: [{ type: parent.weakness, value: "+20" }] }
+          : {}),
         ...(parent?.ability?.exists && parent.ability.name
           ? {
               abilities: [
