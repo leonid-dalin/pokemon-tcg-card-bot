@@ -6,6 +6,7 @@ import { normaliseName, setIdOf } from "./resolve.js";
 import { SET_INDEX } from "./data/set-index.js";
 import { searchWithAccents } from "./lookup.js";
 import { isPocketCard } from "./prizes.js";
+import { findExactNames } from "./text-search.js";
 
 export interface Printing {
   id: string;
@@ -48,10 +49,21 @@ export async function printingsOf(client: TcgdexClient, name: string, allowed: "
   // A Pocket-only list cannot use any upstream row, so a queue refusal must not block it.
   if (allowed !== "pocket") {
     try {
-      for (const card of await searchWithAccents(client, name)) {
+      const searched = await searchWithAccents(client, name);
+      // A short name overflows the upstream result cap ("N" sits past row 1600 of
+      // 10379), so the index supplements the search only when it cannot reach the card.
+      const reachable = searched.some((card) => normaliseName(card.name) === wanted);
+      if (!reachable) {
+        for (const card of findExactNames(name)) {
+          const date = releaseDateOf(card.id);
+          rows.push({ printing: { id: card.id, name: card.name, setLabel: labelOf(card.id, date) }, date, fromPackage: false });
+        }
+      }
+      for (const card of searched) {
         // TCGdex serves Pocket records too, so a physical-only list must drop them.
         if (allowed === "ptcg" && isPocketCard(card as never)) continue;
         if (normaliseName(card.name) !== wanted) continue;
+        if (rows.some((row) => row.printing.id === card.id)) continue;
         const date = releaseDateOf(card.id);
         rows.push({ printing: { id: card.id, name: card.name, setLabel: labelOf(card.id, date) }, date, fromPackage: false });
       }

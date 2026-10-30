@@ -205,6 +205,15 @@ export function findExactCardName(query: string): TextHit | undefined {
   return best;
 }
 
+/** Every card carrying exactly this name, newest id first. */
+export function findExactNames(query: string): TextHit[] {
+  const wanted = query.trim().toLowerCase();
+  if (!wanted) return [];
+  return load()
+    .filter((entry) => entry.name.trim().toLowerCase() === wanted)
+    .sort((a, b) => b.id.localeCompare(a.id));
+}
+
 /** Groups matching index records by normalised card name. */
 export function searchCardGroups(query: string): TextGroup[] {
   return searchGroupsIn(load(), query);
