@@ -99,6 +99,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await settingsPanel.openFromLauncher(interaction as never);
       return;
     }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith("st:")) {
+      await settingsPanel.handleComponent(interaction as never);
+      return;
+    }
     if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith("st:")) {
       await settingsPanel.handleComponent(interaction as never);
       return;
