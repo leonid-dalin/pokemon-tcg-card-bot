@@ -109,8 +109,8 @@ export function renderPanel(model: PanelModel): ContainerBuilder {
         container.addActionRowComponents(currencyActions(model.session.id));
         break;
       case "channels":
-        container.addActionRowComponents(channelsActions(model.server));
-        for (const row of channelDraftActions(model.session.draftChannelIds ?? [], model.session.id)) {
+        container.addActionRowComponents(channelsActions(model.server, model.session.id));
+        for (const row of channelDraftActions(model.session.draftChannelIds ?? [], model.session.id, model.session.draftChannelIds !== undefined)) {
           container.addActionRowComponents(row);
         }
         if (model.session.draftChannelIds && model.session.draftChannelIds.length > 0) {
@@ -176,7 +176,7 @@ function gamesActions(sessionId: string): ActionRowBuilder<StringSelectMenuBuild
   ];
 }
 
-function channelDraftActions(draft: string[], sessionId: string): ActionRowBuilder<ChannelSelectMenuBuilder | ButtonBuilder>[] {
+function channelDraftActions(draft: string[], sessionId: string, editedDraft: boolean): ActionRowBuilder<ChannelSelectMenuBuilder | ButtonBuilder>[] {
   const picker = new ChannelSelectMenuBuilder()
     .setCustomId(`st:ch:add:${sessionId}`)
     .setPlaceholder("Add channels (up to 25 at once)")
@@ -186,9 +186,12 @@ function channelDraftActions(draft: string[], sessionId: string): ActionRowBuild
   const rows: ActionRowBuilder<ChannelSelectMenuBuilder | ButtonBuilder>[] = [
     new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(picker) as never,
   ];
-  if (draft.length > 0) {
+  // An emptied draft still needs Save and Cancel: removing the last channel is a
+  // valid edit, and its confirmation is reachable only through this row.
+  if (draft.length > 0 || editedDraft) {
+    const label = draft.length === 0 ? "Save an empty selection" : `Save ${draft.length} selected channel${draft.length === 1 ? "" : "s"}`;
     rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button(`st:ch:save:${sessionId}`, `Save ${draft.length} selected channel${draft.length === 1 ? "" : "s"}`, ButtonStyle.Success),
+      button(`st:ch:save:${sessionId}`, label, ButtonStyle.Success),
       button(`st:ch:remove:${sessionId}`, "Remove channels", ButtonStyle.Secondary),
       button(`st:ch:cancel:${sessionId}`, "Cancel", ButtonStyle.Secondary),
     ));
@@ -246,11 +249,11 @@ function personalActions(sessionId: string): ActionRowBuilder<StringSelectMenuBu
   ];
 }
 
-function channelsActions(server: GuildSettings | undefined): ActionRowBuilder<ButtonBuilder> {
+function channelsActions(server: GuildSettings | undefined, sessionId: string): ActionRowBuilder<ButtonBuilder> {
   if (!server) throw new Error("channel controls need server settings");
   const everywhere = server.autoReplyChannelMode === "all";
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    button("st:ch:all", "Everywhere", everywhere ? ButtonStyle.Primary : ButtonStyle.Secondary),
-    button("st:ch:selected", "Selected channels", everywhere ? ButtonStyle.Secondary : ButtonStyle.Primary),
+    button(`st:ch:all:${sessionId}`, "Everywhere", everywhere ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    button(`st:ch:selected:${sessionId}`, "Selected channels", everywhere ? ButtonStyle.Secondary : ButtonStyle.Primary),
   );
 }

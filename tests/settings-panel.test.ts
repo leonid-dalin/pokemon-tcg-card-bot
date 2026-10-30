@@ -76,8 +76,8 @@ function fixture(row: Partial<GuildSettings> = {}): Fixture {
         memberPermissions: { has: () => options.admin ?? false },
         inGuild: () => true,
         values: options.values,
-        reply: async () => undefined,
-        editReply: async () => undefined,
+        reply: async (payload: unknown) => void sent.push(payload),
+        editReply: async (payload: unknown) => void updates.push(payload),
         followUp: async () => undefined,
         deferUpdate: async () => undefined,
         showModal: (modal: { customId: string }) => void modals.push(modal.customId),
@@ -86,6 +86,11 @@ function fixture(row: Partial<GuildSettings> = {}): Fixture {
     };
   };
   return { controller, sessions, recorded, interaction };
+}
+
+function openChannelsPanel(fixture: Fixture): string {
+  const session = fixture.sessions.open("member-1", "guild-a", "server", "channels", baselineOf(fixtureStoreState(fixture)));
+  return session.id;
 }
 
 function openServerPanel(fixture: Fixture): string {
@@ -344,5 +349,87 @@ describe("settings panel acknowledgement", () => {
     const sessionId = await openSession(controller);
     await controller.handleComponent(interaction(`st:reset:${sessionId}`) as never);
     expect(updates).toHaveLength(1);
+  });
+});
+
+describe("settings panel audit regressions", () => {
+  function renderedIdsOf(payload: unknown): string[] {
+    const json = JSON.parse(JSON.stringify(payload ?? {}));
+    const ids: string[] = [];
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== "object") return;
+      if (Array.isArray(node)) return void node.forEach(walk);
+      const record = node as { custom_id?: string };
+      if (record.custom_id) ids.push(record.custom_id);
+      for (const value of Object.values(record)) walk(value);
+    };
+    walk(json);
+    return ids;
+  }
+
+  it("carries the session id on both channel-mode buttons", async () => {
+    const fx = fixture();
+    const sessionId = openServerPanel(fx);
+    const view = fx.interaction(`st:nav:${sessionId}`, { values: ["channels"], admin: true });
+    await fx.controller.handleComponent(view.interaction as never);
+    const ids = renderedIdsOf(view.updates.at(-1));
+    const modeIds = ids.filter((id) => id.startsWith("st:ch:all") || id.startsWith("st:ch:selected"));
+    expect(modeIds).toHaveLength(2);
+    for (const id of modeIds) expect(id.split(":").pop()).toBe(sessionId);
+  });
+
+  it("keeps Save and Cancel reachable after the last channel is removed", async () => {
+    const fx = fixture();
+    const sessionId = openChannelsPanel(fx);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
+    const removal = fx.interaction(`st:ch:remove-submit:${sessionId}`, { values: ["ch-1"], admin: true });
+    await fx.controller.handleComponent(removal.interaction as never);
+    const ids = renderedIdsOf(removal.updates.at(-1));
+    expect(ids.some((id) => id.startsWith("st:ch:save:"))).toBe(true);
+    expect(ids.some((id) => id.startsWith("st:ch:cancel:"))).toBe(true);
+  });
+
+  it("refuses a channel save whose draft is stale", async () => {
+    const fx = fixture();
+    const sessionId = openServerPanel(fx);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["old-channel"], admin: true }).interaction as never);
+    (fx.controller as unknown as { store: { update(g: string, p: Partial<GuildSettings>): void } }).store.update("guild-a", {
+      autoReplyChannelMode: "selected",
+      selectedChannelIds: ["new-admin-channel"],
+    });
+    await fx.controller.handleComponent(fx.interaction(`st:ch:save:${sessionId}`, { admin: true }).interaction as never);
+    expect(fxStore(fx).selectedChannelIds).toEqual(["new-admin-channel"]);
+    expect(fx.recorded).toEqual([]);
+  });
+
+  it("refuses a reset confirmation made stale by a newer change", async () => {
+    const fx = fixture();
+    const sessionId = openServerPanel(fx);
+    const view = fx.interaction(`st:reset:${sessionId}`, { admin: true });
+    await fx.controller.handleComponent(view.interaction as never);
+    (fx.controller as unknown as { store: { update(g: string, p: Partial<GuildSettings>): void } }).store.update("guild-a", { currency: "USD" });
+    const confirmId = renderedIdsOf(view.updates.at(-1)).find((id) => id.startsWith("st:reset:confirm"));
+    expect(confirmId).toBeDefined();
+    await fx.controller.handleComponent(fx.interaction(confirmId!, { admin: true }).interaction as never);
+    expect(fxStore(fx).currency).toBe("USD");
+    expect(fx.recorded).toEqual([]);
+  });
+
+  it("announces a channel swap that keeps the same count", async () => {
+    const fx = fixture({ autoReplyChannelMode: "selected", selectedChannelIds: ["ch-1", "ch-2"] });
+    const sessionId = openServerPanel(fx);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-3", "ch-4"], admin: true }).interaction as never);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:save:${sessionId}`, { admin: true }).interaction as never);
+    expect(fx.recorded).toHaveLength(1);
+  });
+
+  it("announces a custom cooldown change", async () => {
+    const fx = fixture();
+    const sessionId = openServerPanel(fx);
+    const modal = fx.interaction(`st:cooldown-modal:${sessionId}`, { admin: true }) as unknown as { interaction: { fields: unknown } };
+    modal.interaction.fields = { getTextInputValue: () => "45" };
+    await fx.controller.handleComponent(modal.interaction as never);
+    expect(fx.recorded).toHaveLength(1);
+    expect(fx.recorded[0]?.join(" ")).toContain("Reply cooldown");
   });
 });
