@@ -468,3 +468,50 @@ describe("settings panel committed channel saves", () => {
     expect(fx.recorded).toHaveLength(1);
   });
 });
+
+describe("settings panel acknowledgement order", () => {
+  it("acknowledges the channel save before awaiting the announcement", async () => {
+    const order: string[] = [];
+    const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: [] });
+    const controller = new SettingsPanelController(
+      (fx.controller as unknown as { store: never }).store,
+      true,
+      fx.sessions,
+      async () => {
+        order.push("announce");
+      },
+    );
+    const session = fx.sessions.open("member-1", "guild-a", "server", "channels", baselineOf(fxStoreState(fx)));
+    await controller.handleComponent(fx.interaction(`st:ch:add:${session.id}`, { values: ["ch-1"], admin: true }).interaction as never);
+    const save = fx.interaction(`st:ch:save:${session.id}`, { admin: true });
+    (save.interaction as { editReply: () => Promise<void> }).editReply = async () => {
+      order.push("edit");
+    };
+    await controller.handleComponent(save.interaction as never);
+    expect(order).toEqual(["edit", "announce"]);
+  });
+
+  it("acknowledges the cooldown modal before awaiting the announcement", async () => {
+    const order: string[] = [];
+    const fx = fixture();
+    const controller = new SettingsPanelController(
+      (fx.controller as unknown as { store: never }).store,
+      true,
+      fx.sessions,
+      async () => {
+        order.push("announce");
+      },
+    );
+    const session = fx.sessions.open("member-1", "guild-a", "server", "overview", baselineOf(fxStoreState(fx)));
+    const modal = fx.interaction(`st:cooldown-modal:${session.id}`, { admin: true }) as unknown as {
+      interaction: { fields: unknown; editReply: () => Promise<void> };
+    };
+    modal.interaction.fields = { getTextInputValue: () => "45" };
+    (modal.interaction as unknown as { editReply: unknown }).editReply = async () => {
+      order.push("edit");
+    };
+    await controller.handleComponent(modal.interaction as never);
+    // Both steps must happen, in this order.
+    expect(order).toEqual(["edit", "announce"]);
+  });
+});

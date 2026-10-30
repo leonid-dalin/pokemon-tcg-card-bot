@@ -524,7 +524,11 @@ export class SettingsPanelController {
     this.sessions.update(session);
     const savedIds = [...after.selectedChannelIds].sort().join(",");
     const modeChanged = before.autoReplyChannelMode !== after.autoReplyChannelMode;
-    if (modeChanged || previousIds !== savedIds) {
+    const changed = modeChanged || previousIds !== savedIds;
+    const saved = `Saved: replies are allowed in ${after.selectedChannelIds.length} channel${after.selectedChannelIds.length === 1 ? "" : "s"}.`;
+    // The panel refresh acknowledges the interaction, so it runs before any slow send.
+    await this.renderCommitted(session, interaction, isAdminNow(interaction), saved, saved);
+    if (changed) {
       // A same-count swap must still name the channels it replaced, or the record says nothing.
       const added = after.selectedChannelIds.filter((id) => !before.selectedChannelIds.includes(id));
       const removed = before.selectedChannelIds.filter((id) => !after.selectedChannelIds.includes(id));
@@ -534,8 +538,6 @@ export class SettingsPanelController {
         ...(removed.length > 0 ? [`Removed: ${removed.map((id) => `<#${id}>`).join(", ")}`] : []),
       ]);
     }
-    const saved = `Saved: replies are allowed in ${after.selectedChannelIds.length} channel${after.selectedChannelIds.length === 1 ? "" : "s"}.`;
-    await this.renderCommitted(session, interaction, isAdminNow(interaction), saved, saved);
   }
 
   private async handleCooldownModal(interaction: PanelInteraction, isAdmin: boolean): Promise<void> {
@@ -567,13 +569,14 @@ export class SettingsPanelController {
     const after = this.store.get(session.guildId);
     session.baseline = baselineOf(after);
     this.sessions.update(session);
+    const saved = `Saved: reply cooldown is ${seconds === 0 ? "off" : `${seconds}s`}.`;
+    // The modal submission is acknowledged before the announcement is sent.
+    await this.renderCommitted(session, interaction, isAdmin, saved, saved);
     if (before.cooldownSeconds !== seconds) {
       await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
         `Reply cooldown: ${before.cooldownSeconds === 0 ? "off" : `${before.cooldownSeconds}s`} -> ${seconds === 0 ? "off" : `${seconds}s`}`,
       ]);
     }
-    const saved = `Saved: reply cooldown is ${seconds === 0 ? "off" : `${seconds}s`}.`;
-    await this.renderCommitted(session, interaction, isAdmin, saved, saved);
   }
 
   private async handleResetConfirm(interaction: PanelInteraction, isAdmin: boolean): Promise<void> {
