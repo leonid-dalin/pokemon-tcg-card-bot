@@ -83,9 +83,14 @@ const settingsPanel = new SettingsPanelController(
   config.mentionEnabled,
   settingsSessions,
   async (guildId, channelId, lines) => {
-    const channel = await client.channels.fetch(channelId).catch(() => undefined);
+    const channel = await client.channels.fetch(channelId).catch((error: unknown) => {
+      console.error(`settings announcement could not reach ${guildId}/${channelId} (${errorCategory(error)})`);
+      return undefined;
+    });
     if (!channel || !channel.isTextBased() || channel.isDMBased()) return;
-    await channel.send({ embeds: [settingsAnnouncement(lines)] }).catch(() => undefined);
+    await channel.send({ embeds: [settingsAnnouncement(lines)] }).catch((error: unknown) => {
+      console.error(`settings announcement failed in ${guildId}/${channelId} (${errorCategory(error)})`);
+    });
   },
 );
 
