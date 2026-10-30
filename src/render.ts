@@ -258,15 +258,38 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
   for (const attack of card.attacks ?? []) {
     fields.push({ name: attackName(attack, options.energyEmoji ?? {}), value: attackValue(attack) || "\u200b", inline: false });
   }
-  for (const weakness of card.weaknesses ?? []) {
-    fields.push({ name: "Weakness", value: `${weakness.type} ${weakness.value}`, inline: true });
-  }
-  for (const resistance of card.resistances ?? []) {
-    fields.push({ name: "Resistance", value: `${resistance.type} ${resistance.value}`, inline: true });
-  }
-  if (card.retreat !== undefined) fields.push({ name: "Retreat", value: String(card.retreat), inline: true });
+  // These three stay visible on every card so the stat block keeps a stable shape.
+  fields.push({ name: "Weakness", value: combatEntry(card.weaknesses), inline: true });
+  fields.push({ name: "Resistance", value: combatEntry(card.resistances), inline: true });
+  fields.push({ name: "Retreat", value: retreatValue(card.retreat), inline: true });
 
   return sharedCardView(card, options, fields, cardDescription(card));
+}
+
+/** A value the card data uses to mean "this stat does not exist". */
+const ABSENT = new Set(["none", "n/a", "null", "undefined", "-"]);
+
+function isAbsent(value: string | undefined): boolean {
+  return value === undefined || ABSENT.has(value.trim().toLowerCase());
+}
+
+/**
+ * Formats a weakness or resistance as `Fire (×2)`; the multiplier sits in
+ * parentheses so it reads apart from the type. An absent stat says "none".
+ */
+export function combatEntry(entries: { type: string; value?: string }[] | undefined): string {
+  const parts: string[] = [];
+  for (const entry of entries ?? []) {
+    if (isAbsent(entry.type)) continue;
+    const multiplier = entry.value?.trim();
+    parts.push(isAbsent(multiplier) ? entry.type : `${entry.type} (${multiplier})`);
+  }
+  return parts.length > 0 ? parts.join(", ") : "none";
+}
+
+/** Retreat cost as a bare number, or "none" when the card has no cost recorded. */
+export function retreatValue(retreat: number | undefined): string {
+  return retreat === undefined || Number.isNaN(retreat) ? "none" : String(retreat);
 }
 
 /** Builds a scan embed with a title and source credit, without gameplay fields. */
