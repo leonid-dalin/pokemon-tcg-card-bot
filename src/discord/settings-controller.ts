@@ -212,6 +212,16 @@ export class SettingsPanelController {
     await interaction.editReply({ flags: MessageFlags.IsComponentsV2, components } as never);
   }
 
+  /** Acknowledges a component interaction with fresh components. */
+  private async present(interaction: PanelInteraction, ...components: unknown[]): Promise<void> {
+    const payload = { flags: MessageFlags.IsComponentsV2, components } as never;
+    if (typeof interaction.update === "function") {
+      await interaction.update(payload);
+      return;
+    }
+    await interaction.editReply(payload);
+  }
+
   /** Routes one st:* component or modal interaction. */
   async handleComponent(interaction: PanelInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
@@ -248,10 +258,7 @@ export class SettingsPanelController {
         return;
       case "close":
         this.sessions.close(session.id);
-        await interaction.editReply({
-          flags: MessageFlags.IsComponentsV2,
-          components: [new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent("Panel closed. Run /settings to reopen."))],
-        } as never);
+        await this.present(interaction, new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent("Panel closed. Run /settings to reopen.")));
         return;
       case "nav": {
         const value = interaction.values?.[0] as SettingsSession["screen"] | undefined;
@@ -315,17 +322,14 @@ export class SettingsPanelController {
       }
       case "reset":
         this.sessions.update(session);
-        await interaction.editReply({
-          flags: MessageFlags.IsComponentsV2,
-          components: [
-            new ContainerBuilder()
+        await this.present(interaction,
+          new ContainerBuilder()
               .addTextDisplayComponents(new TextDisplayBuilder().setContent("**Reset server settings?**\nThis restores the deployment defaults for every server switch, channels, cooldown, games and currency. Personal preferences are kept."))
-              .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder().setCustomId(`st:reset:confirm:${session.id}`).setLabel("Confirm reset").setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId(`st:refresh:${session.id}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
-              )),
-          ],
-        } as never);
+            .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder().setCustomId(`st:reset:confirm:${session.id}`).setLabel("Confirm reset").setStyle(ButtonStyle.Danger),
+              new ButtonBuilder().setCustomId(`st:refresh:${session.id}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
+            )),
+        );
         return;
       default:
         await this.render(session, interaction, isAdmin);
@@ -414,17 +418,14 @@ export class SettingsPanelController {
       const draft = session.draftChannelIds ?? [];
       if (before.autoReplyChannelMode === "selected" && draft.length === 0) {
         this.sessions.update(session);
-        await interaction.editReply({
-          flags: MessageFlags.IsComponentsV2,
-          components: [
-            new ContainerBuilder()
-              .addTextDisplayComponents(new TextDisplayBuilder().setContent("**Save an empty selection?**\nWith Selected channels and no channels saved, automatic replies stop everywhere."))
-              .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder().setCustomId(`st:ch:save-confirm:${session.id}`).setLabel("Stop replies everywhere").setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId(`st:ch:cancel:${session.id}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
-              )),
-          ],
-        } as never);
+        await this.present(interaction,
+          new ContainerBuilder()
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent("**Save an empty selection?**\nWith Selected channels and no channels saved, automatic replies stop everywhere."))
+            .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder().setCustomId(`st:ch:save-confirm:${session.id}`).setLabel("Stop replies everywhere").setStyle(ButtonStyle.Danger),
+              new ButtonBuilder().setCustomId(`st:ch:cancel:${session.id}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
+            )),
+        );
         return;
       }
       await this.saveChannels(interaction, session, draft);
@@ -489,7 +490,6 @@ export class SettingsPanelController {
       await interaction.reply({ content: "Only members with the Manage Server permission can change server settings.", flags: MessageFlags.Ephemeral }).catch(() => {});
       return;
     }
-    await interaction.deferUpdate();
     const raw = interaction.fields?.getTextInputValue("seconds").trim() ?? "";
     const seconds = Number(raw);
     if (!Number.isInteger(seconds) || seconds < 0 || seconds > 86400) {

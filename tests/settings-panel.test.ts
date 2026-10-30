@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { MessageFlags } from "discord.js";
 import type { GuildSettings } from "../src/settings-store.js";
 import { SettingsPanelController, baselineOf } from "../src/discord/settings-controller.js";
 import { SettingsSessions } from "../src/discord/settings-session.js";
@@ -188,7 +189,7 @@ describe("settings panel personal preferences", () => {
 });
 
 function fxStore(fx: Fixture): GuildSettings {
-  return (fixture as unknown as { controller: { store: never } } && fxStoreState(fx));
+  return fxStoreState(fx);
 }
 
 function fxStoreState(fx: Fixture): GuildSettings {
@@ -232,6 +233,11 @@ describe("settings panel routing", () => {
     return { controller, interaction, replies, updates };
   }
 
+  function panelText(payload: { components?: { components: { data?: { content?: string } }[] }[] }): string {
+    const container = payload.components?.[0];
+    return (container?.components ?? []).map((child) => child.data?.content ?? "").join("\n");
+  }
+
   function renderedIds(payload: { components?: { components: { data?: { custom_id?: string }; components?: { data: { custom_id?: string } }[] }[] } }): string[] {
     const container = payload.components?.[0];
     const ids: string[] = [];
@@ -263,16 +269,77 @@ describe("settings panel routing", () => {
   it("opens in a direct message without a server", async () => {
     const { controller, interaction, replies } = panelFixture({ guildId: null, admin: false });
     await controller.openForCommand(interaction("x") as never);
-    expect(replies[0]?.flags).toBeDefined();
+    const flags = replies[0]?.flags ?? 0;
+    expect(flags & MessageFlags.Ephemeral).toBe(MessageFlags.Ephemeral);
+    expect(flags & MessageFlags.IsComponentsV2).toBe(MessageFlags.IsComponentsV2);
+    const ids = renderedIds(replies[0] as never);
+    expect(ids.some((id) => id.startsWith("st:scope:"))).toBe(false);
   });
 
   it("refuses the server scope for a member without Manage Server", async () => {
     const { controller, interaction, replies, updates } = panelFixture({ admin: false });
     await controller.openForCommand(interaction("x") as never);
     const scopeId = renderedIds(replies[0] as never).find((id) => id.startsWith("st:scope:server"));
-    if (scopeId) {
-      await controller.handleComponent(interaction(scopeId) as never);
-      expect(updates.length).toBe(1);
-    }
+    expect(scopeId).toBeDefined();
+    await controller.handleComponent(interaction(scopeId!) as never);
+    expect(panelText(updates[0] as never)).toContain("Manage Server");
+    const ids = renderedIds(updates[0] as never);
+    expect(ids.some((id) => id.startsWith("st:set:"))).toBe(false);
+  });
+});
+
+describe("settings panel acknowledgement", () => {
+  function strictFixture() {
+    const updates: unknown[] = [];
+    const state = {
+      guildId: "guild-a", messageReplies: true, decklistReplies: false,
+      autoReplyChannelMode: "all" as const, selectedChannelIds: [] as string[],
+      cooldownSeconds: 0, cardGames: "both" as const, defaultCardGame: "ptcg" as const,
+      currency: undefined as string | undefined, updatedAt: "",
+    };
+    const store = {
+      get: () => ({ ...state, selectedChannelIds: [...state.selectedChannelIds] }),
+      update: () => ({ ...state }),
+      messageRepliesFor: () => undefined,
+      currencyFor: () => undefined,
+      delete: () => undefined,
+    };
+    const interaction = (customId: string, values?: string[]) => ({
+      customId,
+      values,
+      channelId: "channel-1",
+      user: { id: "member-1" },
+      guildId: "guild-a",
+      inGuild: () => true,
+      memberPermissions: { has: () => true },
+      reply: async () => undefined,
+      update: async (payload: never) => void updates.push(payload),
+      editReply: async () => {
+        throw new Error("InteractionNotReplied: the interaction was never acknowledged");
+      },
+    });
+    const controller = new SettingsPanelController(store as never, true, new SettingsSessions());
+    return { controller, interaction, updates };
+  }
+
+  async function openSession(controller: SettingsPanelController) {
+    const created = (controller as unknown as { sessions: SettingsSessions }).sessions.open(
+      "member-1", "guild-a", "server", "overview", "baseline",
+    );
+    return created.id;
+  }
+
+  it("closes the panel without editReply", async () => {
+    const { controller, interaction, updates } = strictFixture();
+    const sessionId = await openSession(controller);
+    await controller.handleComponent(interaction(`st:close:${sessionId}`) as never);
+    expect(updates).toHaveLength(1);
+  });
+
+  it("shows the reset confirmation without editReply", async () => {
+    const { controller, interaction, updates } = strictFixture();
+    const sessionId = await openSession(controller);
+    await controller.handleComponent(interaction(`st:reset:${sessionId}`) as never);
+    expect(updates).toHaveLength(1);
   });
 });

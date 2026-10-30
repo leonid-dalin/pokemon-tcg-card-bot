@@ -109,22 +109,20 @@ export function renderPanel(model: PanelModel): ContainerBuilder {
         container.addActionRowComponents(currencyActions(model.session.id));
         break;
       case "channels":
+        container.addActionRowComponents(channelsActions(model.server));
         for (const row of channelDraftActions(model.session.draftChannelIds ?? [], model.session.id)) {
           container.addActionRowComponents(row);
         }
-        if (model.session.draftChannelIds && model.session.draftChannelIds.length > 0 && model.notice === undefined) {
+        if (model.session.draftChannelIds && model.session.draftChannelIds.length > 0) {
           container.addActionRowComponents(removeActions(model.session.draftChannelIds, model.session.id));
         }
         break;
       case "games":
         for (const row of gamesActions(model.session.id)) container.addActionRowComponents(row);
         break;
-      default:
-        container.addActionRowComponents(navRow(model));
     }
-  } else if (model.session.scope === "server" && model.session.screen !== "overview") {
     container.addActionRowComponents(navRow(model));
-  } else if (model.session.screen === "overview" && isAdmin) {
+  } else if (model.session.scope === "server" && model.session.screen !== "overview") {
     container.addActionRowComponents(navRow(model));
   }
 
