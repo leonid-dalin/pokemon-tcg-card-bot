@@ -522,9 +522,9 @@ export class SettingsPanelController {
     session.baseline = baselineOf(after);
     session.draftChannelIds = [...after.selectedChannelIds];
     this.sessions.update(session);
-    await this.render(session, interaction, isAdminNow(interaction), undefined, `Saved: replies are allowed in ${after.selectedChannelIds.length} channel${after.selectedChannelIds.length === 1 ? "" : "s"}.`);
     const savedIds = [...after.selectedChannelIds].sort().join(",");
-    if (previousIds !== savedIds) {
+    const modeChanged = before.autoReplyChannelMode !== after.autoReplyChannelMode;
+    if (modeChanged || previousIds !== savedIds) {
       // A same-count swap must still name the channels it replaced, or the record says nothing.
       const added = after.selectedChannelIds.filter((id) => !before.selectedChannelIds.includes(id));
       const removed = before.selectedChannelIds.filter((id) => !after.selectedChannelIds.includes(id));
@@ -534,6 +534,8 @@ export class SettingsPanelController {
         ...(removed.length > 0 ? [`Removed: ${removed.map((id) => `<#${id}>`).join(", ")}`] : []),
       ]);
     }
+    const saved = `Saved: replies are allowed in ${after.selectedChannelIds.length} channel${after.selectedChannelIds.length === 1 ? "" : "s"}.`;
+    await this.renderCommitted(session, interaction, isAdminNow(interaction), saved, saved);
   }
 
   private async handleCooldownModal(interaction: PanelInteraction, isAdmin: boolean): Promise<void> {
@@ -565,12 +567,13 @@ export class SettingsPanelController {
     const after = this.store.get(session.guildId);
     session.baseline = baselineOf(after);
     this.sessions.update(session);
-    await this.render(session, interaction, isAdmin, undefined, `Saved: reply cooldown is ${seconds === 0 ? "off" : `${seconds}s`}.`);
     if (before.cooldownSeconds !== seconds) {
       await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
         `Reply cooldown: ${before.cooldownSeconds === 0 ? "off" : `${before.cooldownSeconds}s`} -> ${seconds === 0 ? "off" : `${seconds}s`}`,
       ]);
     }
+    const saved = `Saved: reply cooldown is ${seconds === 0 ? "off" : `${seconds}s`}.`;
+    await this.renderCommitted(session, interaction, isAdmin, saved, saved);
   }
 
   private async handleResetConfirm(interaction: PanelInteraction, isAdmin: boolean): Promise<void> {
