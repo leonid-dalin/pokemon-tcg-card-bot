@@ -48,7 +48,6 @@ export class CleanupWorker {
 
   /** Drains at the job's own deadline, so polling never adds a whole interval of delay. */
   private wakeAt(deadline: number): void {
-    // A later deadline must not push back the timer already armed for an earlier job.
     if (this.timer && this.armedAt !== undefined && this.armedAt <= deadline) return;
     if (this.timer) clearTimeout(this.timer);
     this.armedAt = deadline;
@@ -60,7 +59,6 @@ export class CleanupWorker {
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.armedAt = undefined;
-      // Retries are scheduled only after the drain settles, so a deferred job is re-armed.
       void this.drain().finally(() => {
         if (!this.stopped) this.wakeAtNext();
       });
@@ -69,8 +67,6 @@ export class CleanupWorker {
   }
 
   private wakeAtNext(): void {
-    // The queue is queried for its earliest deadline, not just the due ones, or a
-    // later job becomes invisible after the first completes and falls back to polling.
     const next = this.store.nextCleanupAt() ?? Date.now() + DRAIN_INTERVAL_MS;
     if (this.timer && this.armedAt !== undefined && this.armedAt <= next) return;
     if (this.timer) clearTimeout(this.timer);
@@ -79,8 +75,6 @@ export class CleanupWorker {
   }
 
   start(): void {
-    // Overdue jobs from an outage are picked up as soon as the bot comes back, then
-    // the single deadline timer takes over and re-arms after every drain.
     this.stopped = false;
     void this.drain().finally(() => {
       if (!this.stopped) this.wakeAtNext();
