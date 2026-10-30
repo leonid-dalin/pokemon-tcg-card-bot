@@ -1,0 +1,18 @@
+{
+ "version": 1,
+ "source": "https://api.tcgdex.net/v2",
+ "entries": [
+  {
+   "path": "src/data/text-index.json",
+   "records": 23271,
+   "sha256": "b0adf9ac7513e6c967f611ab9efb3b36e31b7ecd103e35d402ca4dc7aa0e2975",
+   "generatedAt": "2026-10-28T14:53:00.000Z"
+  },
+  {
+   "path": "src/data/set-index.ts",
+   "records": 220,
+   "sha256": "fff4be0870fa9f423bc879ef5bd7c5bb64c6c807f99ac506c873f72c0e5a5305",
+   "generatedAt": "2026-10-29T13:10:34.564Z"
+  }
+ ]
+}

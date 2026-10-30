@@ -77,10 +77,6 @@ def valid_sha(value):
     return value
 
 
-def release_tag(sha):
-    return f"linux-arm64-{sha[:7]}"
-
-
 def published_head():
     sha = valid_sha(api("commits/master")["sha"])
     tag = published_tag(sha)
@@ -88,23 +84,21 @@ def published_head():
 
 
 def published_tag(sha):
-    for tag in (release_tag(sha), f"pi-{sha}"):
-        try:
-            release = api(f"releases/tags/{tag}")
-        except urllib.error.HTTPError as error:
-            if error.code == 404:
+    # Releases are found by their asset pair, never by tag name, so the tag
+    # scheme can change without stranding an installed updater.
+    name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
+    page = 1
+    while True:
+        releases = api(f"releases?per_page=100&page={page}")
+        for release in releases:
+            if release.get("draft"):
                 continue
-            raise
-        if release.get("draft"):
-            continue
-        target = release.get("target_commitish")
-        if target and target != sha:
-            continue
-        names = {asset["name"] for asset in release.get("assets", [])}
-        name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
-        if {name, name + ".sha256"} <= names:
-            return tag
-    return None
+            names = {asset["name"] for asset in release.get("assets", [])}
+            if {name, name + ".sha256"} <= names:
+                return release["tag_name"]
+        if len(releases) < 100:
+            return None
+        page += 1
 
 
 def download(url, destination, limit):
@@ -336,7 +330,7 @@ def fetch(sha):
         progress(f"Downloading tested revision {sha}")
         stage = Path(temporary)
         name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
-        tag = published_tag(sha) or release_tag(sha)
+        tag = published_tag(sha)
         url = f"https://github.com/{REPO}/releases/download/{tag}/{name}"
         archive, checksum = stage / name, stage / "checksum"
         download(url + ".sha256", checksum, 1024)

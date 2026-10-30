@@ -4,9 +4,11 @@ The bot uses three local datasets with different update paths. Run maintenance c
 
 | Data | Runtime reader | Update path |
 | --- | --- | --- |
-| [src/data/set-index.ts](../src/data/set-index.ts) | Set hints, ranking and printed labels | Review a fetched snapshot and edit the TypeScript entries |
+| [src/data/set-index.ts](../src/data/set-index.ts) | Set hints, ranking and printed labels | `npm run index:sets` |
 | [src/data/text-index.json](../src/data/text-index.json) | Wording search and printing comparisons | `npm run index:text` |
 | Installed Pocket package data | [src/api/pocket.ts](../src/api/pocket.ts) | Update the package and lockfile |
+
+Both generators are also available as the operator-triggered `Refresh card data` workflow. It generates the datasets and opens a pull request with the result, leaving the merge to a reviewer. Review the counts and hashes in `src/data/data-manifest.json` before merging
 
 ## Add or update a set
 
@@ -14,17 +16,14 @@ The bot uses three local datasets with different update paths. Run maintenance c
 npm run index:sets
 ```
 
-[scripts/build-set-index.ts](../scripts/build-set-index.ts) fetches TCGdex set summaries and details, then writes `src/data/set-index.json`. The bot imports `set-index.ts`; it does not read this JSON snapshot
+[scripts/build-set-index.ts](../scripts/build-set-index.ts) fetches TCGdex set summaries and details and rewrites [src/data/set-index.ts](../src/data/set-index.ts), which is the file the bot imports. Upstream supplies `abbreviation`; the runtime field is `code`, and the generator maps between them
 
-The snapshot stores an upstream `abbreviation` field. Runtime entries use `code`, so replacing the TypeScript file with the JSON output would also lose that field mapping
+- Entries are sorted by release date and then by id, so regenerating an unchanged source produces identical bytes
+- A code or release date already in the file survives a detail response that omits it, and the run prints every field it changed
+- A failed detail request or an empty upstream list leaves the runtime file untouched and exits unsuccessfully
+- The write goes through a temporary file and a rename, so an interrupted run cannot truncate the dataset
 
-1. Read the script's final counts and its number of failed detail requests. Failed details leave only an ID and name in the snapshot
-2. Compare the snapshot with `src/data/set-index.ts`. Add or update the relevant `id`, `name`, `releaseDate` and `code` fields, mapping a verified `abbreviation` to `code`
-3. Review removals and missing metadata individually. Preserve existing metadata when a failed fetch supplies no replacement
-4. Check the changed set hint, printed label and ordering in [set-index.test.ts](../tests/set-index.test.ts) and [printed.test.ts](../tests/printed.test.ts)
-5. Remove the temporary `src/data/set-index.json` after review and check `git status` before committing
-
-The generator does not edit the runtime TypeScript index. A successful script run alone will not make a new physical set hint or printed code available to the bot. Build and restart the bot after changing the runtime entries
+Review the printed changes before committing. Build and restart the bot after a successful run, because the index is compiled into `dist/`
 
 ## Refresh searchable wording
 
@@ -37,11 +36,15 @@ npm run index:text
 - A 404 skips that card
 - A card with no indexed wording is omitted
 - Any other card-fetch failure leaves the previous file unchanged and exits unsuccessfully
-- A successful run replaces the file with entries sorted by card ID
+- A successful run replaces the file atomically with entries sorted by card ID
 
 Review the changed IDs and wording before committing. This index comes from TCGdex, so updating the Pocket dependency does not add package-only cards to wording search
 
 The file also controls printing-button wording comparisons. Run the search and printing tests when refreshing it, then restart the running bot so it loads the new index
+
+## Check the generated data manifest
+
+`src/data/data-manifest.json` records the source, the record count, the SHA-256 of the generated file and when it was produced, for every dataset a generator writes. Confirm that each entry's count and hash match the file it names; a mismatch means the generator and the committed dataset disagree
 
 ## Update Pocket cards
 
@@ -62,4 +65,4 @@ npm run build
 git diff --check
 ```
 
-Use [the preview command](development.md#preview-a-card) for a live card check when upstream access is available. Include the dataset changes and check results in the pull request
+Generators run against the live TCGdex API, so tests never call it. [data-pipeline.test.ts](../tests/data-pipeline.test.ts) covers the merge, ordering, atomic write and manifest behaviour with fixtures, and [generator-pipeline.test.ts](../tests/generator-pipeline.test.ts) covers the generator decisions: empty and all-404 runs refuse to publish, one 404 skips a single card, and the changed-field report names only fields that moved. Use [the preview command](development.md#preview-a-card) for a live card check when upstream access is available. Include the dataset changes and check results in the pull request

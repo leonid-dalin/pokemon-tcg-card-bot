@@ -14,14 +14,15 @@ Only the current `master` branch receives fixes. There are no maintained release
 
 ## What counts as a vulnerability
 
-The bot holds one credential, the Discord bot token, and it talks to two data sources. Reports in these areas are in scope:
+The bot holds one credential, the Discord bot token, and it talks to two data sources. The dataset generators are separate from the running bot: they call the card API directly from a developer machine or a CI runner, write local files, and are not reachable at runtime. Reports in these areas are in scope:
 
 - A path that leaks the token, the contents of `.env`, or the bot's pid file into a log, an error message, an embed or a command reply.
 - A way for a Discord user to make the bot read or write files outside the project directory, or to exhaust memory by sending crafted mention text.
 - A crash or hang reachable from a normal message, including a pathological `[[...]]` payload.
+- A generator that writes outside its target dataset, follows a path from upstream data, or publishes a truncated or unvalidated file.
 - A dependency with a known vulnerability that the bot actually reaches.
 
-Out of scope: the accuracy of card data, rate limiting of the data sources, and anything that requires the attacker to already control the host or the Discord application
+Out of scope: the accuracy of card data, rate limiting of the data sources, and anything that requires the attacker to already control the host or the Discord application. A generator that stops after a failed upstream fetch is behaving as designed
 
 ## Handling the token
 

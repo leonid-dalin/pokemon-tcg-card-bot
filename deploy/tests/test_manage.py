@@ -514,24 +514,39 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(m.current(), previous)
 
     def test_missing_or_incomplete_release_keeps_installed_code(self):
-        for assets in [[], [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"}]]:
-            release = {"assets": assets, "target_commitish": NEW}
-            with patch.object(m, "api", side_effect=[{"sha": NEW}, release, release]):
+        complete = [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"},
+                    {"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz.sha256"}]
+        for assets in [[], complete[:1]]:
+            with patch.object(m, "api", side_effect=[{"sha": NEW}, [
+                {"tag_name": "t", "assets": assets, "draft": False},
+            ]]):
                 self.assertIsNone(m.published_head())
 
-    def test_release_lookup_accepts_the_short_tag_and_the_old_one(self):
+    def test_published_tag_finds_a_release_by_its_assets(self):
         assets = [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"},
                   {"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz.sha256"}]
-        with patch.object(m, "api", side_effect=[{"sha": NEW}, {"assets": assets, "target_commitish": NEW}]):
-            self.assertEqual(m.published_head(), NEW)
-            self.assertEqual(m.release_tag(NEW), f"linux-arm64-{NEW[:7]}")
+        with patch.object(m, "api", side_effect=[[
+            {"tag_name": "ptcg-discord-bot-0.1.0.20261029.2210-linux-arm64", "assets": assets, "draft": False},
+        ]]):
+            self.assertEqual(m.published_tag(NEW), "ptcg-discord-bot-0.1.0.20261029.2210-linux-arm64")
 
-    def test_release_lookup_skips_a_short_tag_that_points_elsewhere(self):
-        assets = [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"},
-                  {"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz.sha256"}]
-        moved = {"assets": assets, "target_commitish": OLD}
-        with patch.object(m, "api", side_effect=[{"sha": NEW}, moved, moved]):
-            self.assertIsNone(m.published_head())
+    def test_published_tag_reads_releases_in_the_old_schemes_too(self):
+        assets = [{"name": f"pokemon-card-bot-linux-arm64-{OLD}.tar.gz"},
+                  {"name": f"pokemon-card-bot-linux-arm64-{OLD}.tar.gz.sha256"}]
+        with patch.object(m, "api", side_effect=[[
+            {"tag_name": f"ptcg-discord-bot-0.1.0.20261029.2210-linux-arm64", "assets": [], "draft": False},
+            {"tag_name": f"linux-arm64-{OLD[:7]}", "assets": assets, "draft": False},
+        ]]):
+            self.assertEqual(m.published_tag(OLD), f"linux-arm64-{OLD[:7]}")
+
+    def test_published_tag_skips_drafts_and_incomplete_releases(self):
+        complete = [{"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz"},
+                    {"name": f"pokemon-card-bot-linux-arm64-{NEW}.tar.gz.sha256"}]
+        with patch.object(m, "api", side_effect=[[
+            {"tag_name": "draft-tag", "assets": complete, "draft": True},
+            {"tag_name": "partial-tag", "assets": complete[:1], "draft": False},
+        ]]):
+            self.assertIsNone(m.published_tag(NEW))
 
     def test_checksum_failure_does_not_switch_or_stop_bot(self):
         previous = self.release(OLD)

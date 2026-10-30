@@ -1,4 +1,4 @@
-import type { Card, CardSummary, CardSetRef, SetSummary } from "./types.js";
+import type { Card, CardSetDetail, CardSummary, SetSummary } from "./types.js";
 import { OverloadedError, RequestLimiter, type LimiterOptions } from "./limiter.js";
 
 const BASE = "https://api.tcgdex.net/v2";
@@ -149,8 +149,8 @@ export class TcgdexClient {
     return this.getJson<Card>(`/${lang}/cards/${encodeURIComponent(id)}`, this.cardTtlMs);
   }
 
-  async getSet(id: string, lang = "en"): Promise<CardSetRef> {
-    return this.getJson<CardSetRef>(`/${lang}/sets/${encodeURIComponent(id)}`, this.setTtlMs);
+  async getSet(id: string, lang = "en"): Promise<CardSetDetail> {
+    return this.getJson<CardSetDetail>(`/${lang}/sets/${encodeURIComponent(id)}`, this.setTtlMs);
   }
 
   async listSets(lang = "en"): Promise<SetSummary[]> {
