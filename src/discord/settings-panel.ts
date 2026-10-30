@@ -28,10 +28,8 @@ export interface PanelModel {
   savedNotice?: string;
 }
 
-export const SCOPE_PERSONAL = "sp";
-export const SCOPE_SERVER = "sv";
-const NAV_ID = "st:nav";
-const SCOPE_ID = "st:scope";
+export const SCOPE_PERSONAL = "personal";
+export const SCOPE_SERVER = "server";
 
 function text(content: string): TextDisplayBuilder {
   return new TextDisplayBuilder().setContent(content);
@@ -47,8 +45,8 @@ function button(customId: string, label: string, style: ButtonStyle): ButtonBuil
 
 /** The scope-switch row; only a server panel offers the server view. */
 function scopeRow(model: PanelModel): ActionRowBuilder<ButtonBuilder> {
-  const personal = button(`${SCOPE_PERSONAL}:${model.session.id}`, "For me", ButtonStyle.Secondary);
-  const server = button(`${SCOPE_SERVER}:${model.session.id}`, "This server", ButtonStyle.Secondary);
+  const personal = button(`st:scope:${SCOPE_PERSONAL}:${model.session.id}`, "For me", ButtonStyle.Secondary);
+  const server = button(`st:scope:${SCOPE_SERVER}:${model.session.id}`, "This server", ButtonStyle.Secondary);
   if (model.session.scope === "personal") personal.setStyle(ButtonStyle.Primary);
   else server.setStyle(ButtonStyle.Primary);
   return new ActionRowBuilder<ButtonBuilder>().addComponents(personal, server);
@@ -56,7 +54,7 @@ function scopeRow(model: PanelModel): ActionRowBuilder<ButtonBuilder> {
 
 function navRow(model: PanelModel): ActionRowBuilder<StringSelectMenuBuilder> {
   const menu = new StringSelectMenuBuilder()
-    .setCustomId(NAV_ID)
+    .setCustomId(`st:nav:${model.session.id}`)
     .setPlaceholder("Choose a section")
     .addOptions(
       { label: "Overview", value: "overview" },
@@ -101,14 +99,14 @@ export function renderPanel(model: PanelModel): ContainerBuilder {
 
   const isAdmin = model.isAdmin && model.session.scope === "server";
   if (model.session.screen === "personal" || model.session.scope === "personal") {
-    for (const row of personalActions()) container.addActionRowComponents(row);
+    for (const row of personalActions(model.session.id)) container.addActionRowComponents(row);
   } else if (isAdmin) {
     switch (model.session.screen) {
       case "replies":
         for (const row of repliesActions(model.server, model.session.id)) container.addActionRowComponents(row);
         break;
       case "currency":
-        container.addActionRowComponents(currencyActions());
+        container.addActionRowComponents(currencyActions(model.session.id));
         break;
       case "channels":
         for (const row of channelDraftActions(model.session.draftChannelIds ?? [], model.session.id)) {
@@ -119,7 +117,7 @@ export function renderPanel(model: PanelModel): ContainerBuilder {
         }
         break;
       case "games":
-        for (const row of gamesActions()) container.addActionRowComponents(row);
+        for (const row of gamesActions(model.session.id)) container.addActionRowComponents(row);
         break;
       default:
         container.addActionRowComponents(navRow(model));
@@ -137,13 +135,13 @@ export function renderPanel(model: PanelModel): ContainerBuilder {
 function repliesActions(server: GuildSettings | undefined, sessionId: string): ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] {
   if (!server) throw new Error("reply switches need server settings");
   const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    button("st:set:messages:on", "Enable message replies", server.messageReplies ? ButtonStyle.Success : ButtonStyle.Secondary),
-    button("st:set:messages:off", "Disable message replies", server.messageReplies ? ButtonStyle.Secondary : ButtonStyle.Danger),
-    button("st:set:decklists:on", "Enable decklist replies", server.decklistReplies ? ButtonStyle.Success : ButtonStyle.Secondary),
-    button("st:set:decklists:off", "Disable decklist replies", server.decklistReplies ? ButtonStyle.Secondary : ButtonStyle.Danger),
+    button(`st:set:messages:on:${sessionId}`, "Enable message replies", server.messageReplies ? ButtonStyle.Success : ButtonStyle.Secondary),
+    button(`st:set:messages:off:${sessionId}`, "Disable message replies", server.messageReplies ? ButtonStyle.Secondary : ButtonStyle.Danger),
+    button(`st:set:decklists:on:${sessionId}`, "Enable decklist replies", server.decklistReplies ? ButtonStyle.Success : ButtonStyle.Secondary),
+    button(`st:set:decklists:off:${sessionId}`, "Disable decklist replies", server.decklistReplies ? ButtonStyle.Secondary : ButtonStyle.Danger),
   );
   const presets = new StringSelectMenuBuilder()
-    .setCustomId("st:set:cooldown")
+    .setCustomId(`st:set:cooldown:${sessionId}`)
     .setPlaceholder("Reply cooldown")
     .addOptions(
       { label: "Off", value: "0" },
@@ -158,9 +156,9 @@ function repliesActions(server: GuildSettings | undefined, sessionId: string): A
   return [buttons, new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(presets), custom];
 }
 
-function gamesActions(): ActionRowBuilder<StringSelectMenuBuilder>[] {
+function gamesActions(sessionId: string): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const allowed = new StringSelectMenuBuilder()
-    .setCustomId("st:set:games")
+    .setCustomId(`st:set:games:${sessionId}`)
     .setPlaceholder("Card games")
     .addOptions(
       { label: "Physical game", value: "ptcg" },
@@ -168,7 +166,7 @@ function gamesActions(): ActionRowBuilder<StringSelectMenuBuilder>[] {
       { label: "Both", value: "both" },
     );
   const preferred = new StringSelectMenuBuilder()
-    .setCustomId("st:set:defaultgame")
+    .setCustomId(`st:set:defaultgame:${sessionId}`)
     .setPlaceholder("Preferred game when both")
     .addOptions(
       { label: "Physical preferred", value: "ptcg" },
@@ -182,7 +180,7 @@ function gamesActions(): ActionRowBuilder<StringSelectMenuBuilder>[] {
 
 function channelDraftActions(draft: string[], sessionId: string): ActionRowBuilder<ChannelSelectMenuBuilder | ButtonBuilder>[] {
   const picker = new ChannelSelectMenuBuilder()
-    .setCustomId("st:ch:add")
+    .setCustomId(`st:ch:add:${sessionId}`)
     .setPlaceholder("Add channels (up to 25 at once)")
     .setMinValues(1)
     .setMaxValues(25)
@@ -192,9 +190,9 @@ function channelDraftActions(draft: string[], sessionId: string): ActionRowBuild
   ];
   if (draft.length > 0) {
     rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button("st:ch:save", `Save ${draft.length} selected channel${draft.length === 1 ? "" : "s"}`, ButtonStyle.Success),
+      button(`st:ch:save:${sessionId}`, `Save ${draft.length} selected channel${draft.length === 1 ? "" : "s"}`, ButtonStyle.Success),
       button(`st:ch:remove:${sessionId}`, "Remove channels", ButtonStyle.Secondary),
-      button("st:ch:cancel", "Cancel", ButtonStyle.Secondary),
+      button(`st:ch:cancel:${sessionId}`, "Cancel", ButtonStyle.Secondary),
     ));
   }
   return rows;
@@ -210,9 +208,9 @@ function removeActions(draft: string[], sessionId: string): ActionRowBuilder<Str
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 }
 
-function currencyActions(): ActionRowBuilder<StringSelectMenuBuilder> {
+function currencyActions(sessionId: string): ActionRowBuilder<StringSelectMenuBuilder> {
   const menu = new StringSelectMenuBuilder()
-    .setCustomId("st:set:currency")
+    .setCustomId(`st:set:currency:${sessionId}`)
     .setPlaceholder("Server default currency")
     .addOptions(
       { label: "EUR", value: "EUR" },
@@ -224,9 +222,9 @@ function currencyActions(): ActionRowBuilder<StringSelectMenuBuilder> {
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 }
 
-function personalActions(): ActionRowBuilder<StringSelectMenuBuilder>[] {
+function personalActions(sessionId: string): ActionRowBuilder<StringSelectMenuBuilder>[] {
   const mentions = new StringSelectMenuBuilder()
-    .setCustomId("st:my:mentions")
+    .setCustomId(`st:my:mentions:${sessionId}`)
     .setPlaceholder("Automatic replies")
     .addOptions(
       { label: "Follow each server", value: "default" },
@@ -234,7 +232,7 @@ function personalActions(): ActionRowBuilder<StringSelectMenuBuilder>[] {
       { label: "Off", value: "off" },
     );
   const currency = new StringSelectMenuBuilder()
-    .setCustomId("st:my:currency")
+    .setCustomId(`st:my:currency:${sessionId}`)
     .setPlaceholder("Price currency")
     .addOptions(
       { label: "Follow each server", value: "default" },

@@ -36,6 +36,7 @@ export interface PanelInteraction {
   inGuild?(): boolean;
   values?: string[];
   fields?: { getTextInputValue: (id: string) => string };
+  update?(payload: unknown): Promise<unknown>;
   reply(payload: unknown): Promise<unknown>;
   editReply(payload: unknown): Promise<unknown>;
   followUp(payload: unknown): Promise<unknown>;
@@ -47,12 +48,13 @@ function isAdminNow(interaction: PanelInteraction): boolean {
   return Boolean(interaction.inGuild?.() && interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 }
 
-export function baselineOf(settings: GuildSettings): string {
+export function baselineOf(settings: GuildSettings | undefined): string {
+  if (!settings) return "no-server";
   const fields = [
     settings.messageReplies,
     settings.decklistReplies,
     settings.autoReplyChannelMode,
-    [...settings.selectedChannelIds].sort().join(","),
+    [...(settings.selectedChannelIds ?? [])].sort().join(","),
     settings.cooldownSeconds,
     settings.cardGames,
     settings.defaultCardGame,
@@ -172,7 +174,7 @@ export class SettingsPanelController {
     const scope: "personal" | "server" = guildId && isAdmin ? "server" : "personal";
     const screen: SettingsSession["screen"] = guildId && isAdmin ? "overview" : "personal";
     const server = guildId ? this.store.get(guildId) : undefined;
-    const session = this.sessions.open(interaction.user.id, guildId, scope, screen, baselineOf(server ?? ({} as GuildSettings)));
+    const session = this.sessions.open(interaction.user.id, guildId, scope, screen, baselineOf(server));
     const model = this.model(session, server, isAdmin, staleClient ? "The /settings subcommands were replaced by this panel." : undefined);
     await interaction.reply({
       flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
@@ -202,10 +204,12 @@ export class SettingsPanelController {
 
   private async render(session: SettingsSession, interaction: PanelInteraction, isAdmin: boolean, notice?: string, savedNotice?: string): Promise<void> {
     const server = session.guildId ? this.store.get(session.guildId) : undefined;
-    await interaction.editReply({
-      flags: MessageFlags.IsComponentsV2,
-      components: [renderPanel(this.model(session, server, isAdmin, notice, savedNotice))],
-    } as never);
+    const components = [renderPanel(this.model(session, server, isAdmin, notice, savedNotice))];
+    if (typeof interaction.update === "function") {
+      await interaction.update({ flags: MessageFlags.IsComponentsV2, components } as never);
+      return;
+    }
+    await interaction.editReply({ flags: MessageFlags.IsComponentsV2, components } as never);
   }
 
   /** Routes one st:* component or modal interaction. */
@@ -258,18 +262,18 @@ export class SettingsPanelController {
         await this.render(session, interaction, isAdmin);
         return;
       }
-      case "sp":
-        session.scope = "personal";
-        session.screen = "personal";
+      case "scope": {
+        const target = parts[2];
+        if (target === "server" && !isAdmin) {
+          await this.render(session, interaction, isAdmin, "Only a member with Manage Server can open the server view.");
+          return;
+        }
+        session.scope = target === "server" ? "server" : "personal";
+        session.screen = session.scope === "server" ? "overview" : "personal";
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin);
         return;
-      case "sv":
-        session.scope = "server";
-        session.screen = "overview";
-        this.sessions.update(session);
-        await this.render(session, interaction, isAdmin);
-        return;
+      }
       case "my": {
         const kind = parts[2];
         const choice = interaction.values?.[0] ?? "";
@@ -286,7 +290,6 @@ export class SettingsPanelController {
       }
       case "set": {
         const field = parts[2] ?? "";
-        // Selects carry the value in values[]; buttons carry it in the id.
         const value = interaction.values?.[0] ?? parts[3] ?? "";
         await this.applyServerField(interaction, session, isAdmin, field, value);
         return;
@@ -417,8 +420,8 @@ export class SettingsPanelController {
             new ContainerBuilder()
               .addTextDisplayComponents(new TextDisplayBuilder().setContent("**Save an empty selection?**\nWith Selected channels and no channels saved, automatic replies stop everywhere."))
               .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder().setCustomId("st:ch:save-confirm").setLabel("Stop replies everywhere").setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId("st:ch:cancel").setLabel("Cancel").setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`st:ch:save-confirm:${session.id}`).setLabel("Stop replies everywhere").setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId(`st:ch:cancel:${session.id}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
               )),
           ],
         } as never);
@@ -476,7 +479,7 @@ export class SettingsPanelController {
   }
 
   private async handleCooldownModal(interaction: PanelInteraction, isAdmin: boolean): Promise<void> {
-    const sessionId = interaction.customId.split(":")[2] ?? "";
+    const sessionId = interaction.customId.split(":").pop() ?? "";
     const session = this.sessions.resolve(sessionId, interaction.user.id);
     if (!session || !session.guildId) {
       await interaction.reply({ content: "This panel has expired. Run /settings to open a new one.", flags: MessageFlags.Ephemeral }).catch(() => {});
@@ -508,7 +511,7 @@ export class SettingsPanelController {
   }
 
   private async handleResetConfirm(interaction: PanelInteraction, isAdmin: boolean): Promise<void> {
-    const sessionId = interaction.customId.split(":")[3] ?? "";
+    const sessionId = interaction.customId.split(":").pop() ?? "";
     const session = this.sessions.resolve(sessionId, interaction.user.id);
     if (!session || !session.guildId) {
       await interaction.reply({ content: "This panel has expired. Run /settings to open a new one.", flags: MessageFlags.Ephemeral }).catch(() => {});
