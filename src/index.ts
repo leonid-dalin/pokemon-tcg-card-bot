@@ -29,6 +29,7 @@ import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
 import { createShardReadiness } from "./discord/shard-readiness.js";
 import { SettingsPanelController } from "./discord/settings-controller.js";
+import { handleVersionAction } from "./discord/commands.js";
 import { SettingsSessions } from "./discord/settings-session.js";
 import { CleanupWorker } from "./discord/cleanup-worker.js";
 import { startRuntimeStatus } from "./runtime-status.js";
@@ -90,12 +91,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleAutocomplete(context, interaction);
       return;
     }
+    if (interaction.isButton() && interaction.customId.startsWith("v:")) {
+      await handleVersionAction(interaction);
+      return;
+    }
     if (interaction.isButton() && interaction.customId === "st:launcher") {
-      await settingsPanel.openFromLauncher(interaction);
+      await settingsPanel.openFromLauncher(interaction as never);
       return;
     }
     if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith("st:")) {
-      await settingsPanel.handleComponent(interaction);
+      await settingsPanel.handleComponent(interaction as never);
       return;
     }
     if (interaction.isButton()) {
@@ -132,10 +137,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.commandName === "version") {
       await handleVersionCommand(interaction);
     } else if (interaction.commandName === "settings") {
-      const stale = interaction.options.getSubcommand(false) !== null
-        ? "The /settings subcommands were replaced by this panel."
-        : undefined;
-      await settingsPanel.openForCommand(interaction, stale);
+      const stale = interaction.options.getSubcommand(false) !== null;
+      await settingsPanel.openForCommand(interaction as never, stale);
     }
   } catch (error) {
     console.error(`interaction failed (${errorCategory(error)})`);
