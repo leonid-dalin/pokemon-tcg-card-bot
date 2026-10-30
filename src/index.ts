@@ -28,7 +28,6 @@ import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
 import { createShardReadiness } from "./discord/shard-readiness.js";
-import { EmbedBuilder } from "discord.js";
 import { SettingsPanelController } from "./discord/settings-controller.js";
 import { handleVersionAction } from "./discord/commands.js";
 import { SettingsSessions } from "./discord/settings-session.js";
@@ -69,25 +68,8 @@ const context: CommandContext = {
   typing: typingBudget,
 };
 
-/** The permanent record a server settings change leaves in the channel that made it. */
-function settingsAnnouncement(lines: string[]): EmbedBuilder {
-  return new EmbedBuilder()
-    .setTitle("Server settings changed")
-    .setDescription(lines.join("\n"))
-    .setColor(0x4f9cff);
-}
-
 const settingsSessions = new SettingsSessions();
-const settingsPanel = new SettingsPanelController(
-  settings,
-  config.mentionEnabled,
-  settingsSessions,
-  async (guildId, channelId, lines) => {
-    const channel = await client.channels.fetch(channelId).catch(() => undefined);
-    if (!channel || !channel.isTextBased() || channel.isDMBased()) return;
-    await channel.send({ embeds: [settingsAnnouncement(lines)] }).catch(() => undefined);
-  },
-);
+const settingsPanel = new SettingsPanelController(settings, config.mentionEnabled, settingsSessions);
 
 const client = new Client(clientOptions(config));
 const cleanupWorker = new CleanupWorker(client, settings);
@@ -114,7 +96,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           ? "command"
           : "other";
   const label = "customId" in interaction ? interaction.customId : interaction.commandName;
-  console.log(`interaction ${kind} ${label} received (${interaction.id})`);
+  console.log(`interaction ${kind} ${label} received (${interaction.id}) token=${"token" in interaction ? interaction.token : "none"}`);
   let handled = false;
   try {
     if (interaction.isAutocomplete()) {
@@ -137,10 +119,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await settingsPanel.handleComponent(interaction as never);
       return;
     }
-    if (
-      (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isChannelSelectMenu()) &&
-      interaction.customId.startsWith("st:")
-    ) {
+    if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith("st:")) {
       handled = true;
       await settingsPanel.handleComponent(interaction as never);
       return;
