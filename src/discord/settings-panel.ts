@@ -2,6 +2,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ChannelSelectMenuBuilder,
+  ChannelType,
   ContainerBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
@@ -103,13 +105,21 @@ export function renderPanel(model: PanelModel): ContainerBuilder {
   } else if (isAdmin) {
     switch (model.session.screen) {
       case "replies":
-        container.addActionRowComponents(repliesActions(model.server));
+        for (const row of repliesActions(model.server, model.session.id)) container.addActionRowComponents(row);
         break;
       case "currency":
         container.addActionRowComponents(currencyActions());
         break;
       case "channels":
-        container.addActionRowComponents(channelsActions(model.server));
+        for (const row of channelDraftActions(model.session.draftChannelIds ?? [], model.session.id)) {
+          container.addActionRowComponents(row);
+        }
+        if (model.session.draftChannelIds && model.session.draftChannelIds.length > 0 && model.notice === undefined) {
+          container.addActionRowComponents(removeActions(model.session.draftChannelIds, model.session.id));
+        }
+        break;
+      case "games":
+        for (const row of gamesActions()) container.addActionRowComponents(row);
         break;
       default:
         container.addActionRowComponents(navRow(model));
@@ -124,14 +134,80 @@ export function renderPanel(model: PanelModel): ContainerBuilder {
   return container;
 }
 
-function repliesActions(server: GuildSettings | undefined): ActionRowBuilder<ButtonBuilder> {
+function repliesActions(server: GuildSettings | undefined, sessionId: string): ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] {
   if (!server) throw new Error("reply switches need server settings");
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
     button("st:set:messages:on", "Enable message replies", server.messageReplies ? ButtonStyle.Success : ButtonStyle.Secondary),
     button("st:set:messages:off", "Disable message replies", server.messageReplies ? ButtonStyle.Secondary : ButtonStyle.Danger),
     button("st:set:decklists:on", "Enable decklist replies", server.decklistReplies ? ButtonStyle.Success : ButtonStyle.Secondary),
     button("st:set:decklists:off", "Disable decklist replies", server.decklistReplies ? ButtonStyle.Secondary : ButtonStyle.Danger),
   );
+  const presets = new StringSelectMenuBuilder()
+    .setCustomId("st:set:cooldown")
+    .setPlaceholder("Reply cooldown")
+    .addOptions(
+      { label: "Off", value: "0" },
+      { label: "5 seconds", value: "5" },
+      { label: "15 seconds", value: "15" },
+      { label: "30 seconds", value: "30" },
+      { label: "60 seconds", value: "60" },
+    );
+  const custom = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    button(`st:cooldown-custom:${sessionId}`, "Custom...", ButtonStyle.Secondary),
+  );
+  return [buttons, new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(presets), custom];
+}
+
+function gamesActions(): ActionRowBuilder<StringSelectMenuBuilder>[] {
+  const allowed = new StringSelectMenuBuilder()
+    .setCustomId("st:set:games")
+    .setPlaceholder("Card games")
+    .addOptions(
+      { label: "Physical game", value: "ptcg" },
+      { label: "Pocket", value: "pocket" },
+      { label: "Both", value: "both" },
+    );
+  const preferred = new StringSelectMenuBuilder()
+    .setCustomId("st:set:defaultgame")
+    .setPlaceholder("Preferred game when both")
+    .addOptions(
+      { label: "Physical preferred", value: "ptcg" },
+      { label: "Pocket preferred", value: "pocket" },
+    );
+  return [
+    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(allowed),
+    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(preferred),
+  ];
+}
+
+function channelDraftActions(draft: string[], sessionId: string): ActionRowBuilder<ChannelSelectMenuBuilder | ButtonBuilder>[] {
+  const picker = new ChannelSelectMenuBuilder()
+    .setCustomId("st:ch:add")
+    .setPlaceholder("Add channels (up to 25 at once)")
+    .setMinValues(1)
+    .setMaxValues(25)
+    .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
+  const rows: ActionRowBuilder<ChannelSelectMenuBuilder | ButtonBuilder>[] = [
+    new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(picker) as never,
+  ];
+  if (draft.length > 0) {
+    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
+      button("st:ch:save", `Save ${draft.length} selected channel${draft.length === 1 ? "" : "s"}`, ButtonStyle.Success),
+      button(`st:ch:remove:${sessionId}`, "Remove channels", ButtonStyle.Secondary),
+      button("st:ch:cancel", "Cancel", ButtonStyle.Secondary),
+    ));
+  }
+  return rows;
+}
+
+function removeActions(draft: string[], sessionId: string): ActionRowBuilder<StringSelectMenuBuilder> {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`st:ch:remove-submit:${sessionId}`)
+    .setPlaceholder("Choose saved channels to remove")
+    .setMinValues(1)
+    .setMaxValues(Math.min(25, draft.length))
+    .addOptions(draft.slice(0, 25).map((id) => ({ label: id, value: id })));
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 }
 
 function currencyActions(): ActionRowBuilder<StringSelectMenuBuilder> {

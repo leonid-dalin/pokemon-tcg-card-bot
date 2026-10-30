@@ -29,6 +29,8 @@ export class CleanupWorker {
   }
 
   start(): void {
+    // Overdue jobs from an outage are picked up as soon as the bot comes back.
+    void this.drain();
     this.timer = setInterval(() => {
       void this.drain();
     }, DRAIN_INTERVAL_MS);

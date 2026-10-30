@@ -60,16 +60,20 @@ describe("inline command parsing", () => {
 });
 
 describe("inline counterparts answer like their slash commands", () => {
-  function embedText(payload: { embeds?: { data: { description?: string; title?: string } }[] }): string {
-    return payload.embeds?.[0]?.data.description ?? "";
+  function embedText(payload: { embeds?: { data: { description?: string; title?: string; fields?: { name: string; value: string }[] } }[] }): string {
+    const embed = payload.embeds?.[0]?.data;
+    if (!embed) return "";
+    if (embed.description) return embed.description;
+    return (embed.fields ?? []).map((field) => `${field.name}: ${field.value}`).join("\n");
   }
 
   it("replies with the version embed", async () => {
     const { message, replies } = fakeMessage(`<@${SELF}> version`);
     await handler()(message as never);
     const text = embedText(replies[0] as never);
-    expect(text).toContain("Revision:");
+    expect(text).toContain("Running revision:");
     expect(text).toContain("Uptime:");
+    expect(text).toContain("github.com/leonid-dalin/pokemon-tcg-card-bot/commit/");
   });
 
   it("replies with a temporary settings launcher", async () => {

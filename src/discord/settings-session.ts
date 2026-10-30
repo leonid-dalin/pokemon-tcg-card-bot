@@ -35,7 +35,8 @@ export class SettingsSessions {
       const oldest = [...this.sessions.values()].sort((a, b) => a.expiresAt - b.expiresAt)[0];
       if (oldest) this.sessions.delete(oldest.id);
     }
-    const id = `${ownerId}:${this.now().toString(36)}:${Math.floor(Math.random() * 1e6).toString(36)}`;
+    // Dashes, not colons: component ids are colon-delimited.
+    const id = [ownerId, this.now().toString(36), Math.floor(Math.random() * 1e6).toString(36)].join("-");
     const session: SettingsSession = {
       id,
       ownerId,
