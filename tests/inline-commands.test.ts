@@ -225,16 +225,16 @@ describe("inline cleanup scope", () => {
 });
 
 describe("short names that are real cards", () => {
-  it("admits N because a card carries exactly that name", async () => {
-    const { hasExactCardName } = await import("../src/text-search.js");
-    expect(hasExactCardName("N")).toBe(true);
-    expect(hasExactCardName("n")).toBe(true);
+  it("finds the card N by its exact name", async () => {
+    const { findExactCardName } = await import("../src/text-search.js");
+    expect(findExactCardName("N")?.name).toBe("N");
+    expect(findExactCardName("n")?.name).toBe("N");
   });
 
-  it("still rejects a short string that names no card", async () => {
-    const { hasExactCardName } = await import("../src/text-search.js");
-    expect(hasExactCardName("q")).toBe(false);
-    expect(hasExactCardName("zz")).toBe(false);
+  it("returns nothing for a short string that names no card", async () => {
+    const { findExactCardName } = await import("../src/text-search.js");
+    expect(findExactCardName("q")).toBeUndefined();
+    expect(findExactCardName("zz")).toBeUndefined();
   });
 
   it("does not answer N with the single-letter refusal", async () => {

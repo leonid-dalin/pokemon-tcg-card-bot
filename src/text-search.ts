@@ -190,13 +190,19 @@ export function searchCardText(query: string, limit = Number.POSITIVE_INFINITY):
 }
 
 /**
- * True when a card in the index carries exactly this name. Used to admit short
- * names such as "N", which upstream search would otherwise drown in noise.
+ * The newest card that carries exactly this name, if any. A short name such as
+ * "N" cannot be searched upstream: the service treats it as a substring filter
+ * and returns unrelated cards first, so the id comes from the local index.
  */
-export function hasExactCardName(query: string): boolean {
+export function findExactCardName(query: string): TextHit | undefined {
   const wanted = query.trim().toLowerCase();
-  if (!wanted) return false;
-  return load().some((entry) => entry.name.trim().toLowerCase() === wanted);
+  if (!wanted) return undefined;
+  let best: TextHit | undefined;
+  for (const entry of load()) {
+    if (entry.name.trim().toLowerCase() !== wanted) continue;
+    if (!best || entry.id > best.id) best = entry;
+  }
+  return best;
 }
 
 /** Groups matching index records by normalised card name. */

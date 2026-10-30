@@ -12,7 +12,7 @@ import { printingsOf, printingItems } from "../printings.js";
 import { renderSet } from "../render.js";
 import { resolveSetHint } from "../set-index.js";
 import { normaliseName } from "../resolve.js";
-import { hasExactCardName } from "../text-search.js";
+import { findExactCardName } from "../text-search.js";
 import { footerFor } from "./commands.js";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { toEmbed } from "./embeds.js";
@@ -334,7 +334,7 @@ async function runInline(inline: InlineInvocation, context: InlineContext): Prom
       await context.reply({ content: "Add a card name, for example: printings Pikachu." });
       return;
     }
-    if (normaliseName(name).length < 2 && !hasExactCardName(name)) {
+    if (normaliseName(name).length < 2 && !findExactCardName(name)) {
       await context.reply({ content: `No card matched \`${name}\`. A single letter is too little to search on.` });
       return;
     }

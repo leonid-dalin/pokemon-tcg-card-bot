@@ -141,14 +141,18 @@ describe("lookupCard", () => {
     expect(calls).toEqual([]);
   });
 
-  it("resolves N, which is a real card name", async () => {
-    stubFetch({
-      "/cards?name=N": { body: [{ ...dragapult, id: "bw3-101", name: "N" }] },
-      "/cards/bw3-101": { body: { ...dragapult, id: "bw3-101", name: "N", localId: "101" } },
+  it("resolves N by id, because a name search returns unrelated cards", async () => {
+    // Upstream returns Venusaur first for ?name=N; the index id decides instead.
+    const { calls } = stubFetch({
+      "/cards?name=N": { body: [{ ...dragapult, id: "a1-003", name: "Venusaur" }] },
+      "/cards/xy10-105a": { body: { ...dragapult, id: "xy10-105a", name: "N", localId: "105a" } },
     });
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "N");
+    expect(lookup?.card.id).toBe("xy10-105a");
     expect(lookup?.card.name).toBe("N");
+    // The name search still runs, but only to collect alternates for the card the id selected.
+    expect(calls[0]).toContain("/cards/xy10-105a");
   });
 
   it("honours the set hint from a mention", async () => {
