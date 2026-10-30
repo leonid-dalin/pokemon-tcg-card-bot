@@ -14,7 +14,7 @@ const COMMANDS: { name: string; value: string }[] = [
   { name: "/search text:<words>", value: "finds cards whose ability, attack or Trainer wording contains every word" },
   { name: "/help", value: "shows this card" },
   { name: "/version", value: "the running revision, uptime and version" },
-  { name: "/settings", value: "for server admins: choose where and what the bot replies to" },
+  { name: "/settings", value: "a private panel for server preferences and your own choices" },
 ];
 
 export const MENTIONS_VALUE = [
@@ -24,6 +24,7 @@ export const MENTIONS_VALUE = [
   "`[[!Card name]]` answers with the scan alone",
   "`@bot search <words>` runs the same search from the message box",
   "`@bot printings <name>`, `@bot set <id>`, `@bot version` and `@bot settings` mirror those commands",
+  "`@bot settings` leaves a temporary reply that disappears after 90 seconds",
 ].join("\n");
 
 export const NOTES_VALUE = [

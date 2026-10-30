@@ -7,15 +7,15 @@ import { resolveDeckCards } from "../deck-check.js";
 import { errorCategory } from "../diagnostics.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
 import { extractMentions, parseHelpCommand, parseInlineCommand, parseSearchCommand } from "../mentions.js";
-import { settingsComponents, settingsEmbed, settingsViewLines } from "./settings-command.js";
 import { listReply, type ListPage } from "./pages.js";
 import { printingsOf, printingItems } from "../printings.js";
 import { renderSet } from "../render.js";
 import { resolveSetHint } from "../set-index.js";
 import { normaliseName } from "../resolve.js";
 import { footerFor } from "./commands.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { toEmbed } from "./embeds.js";
-import { versionEmbed, versionLines } from "./version-view.js";
+import { versionActions, versionEmbed, versionLines } from "./version-view.js";
 import { busyMessage, overloadHint } from "./interaction-failure.js";
 import { renderDecklist } from "../render.js";
 import { searchCardGroups } from "../text-search.js";
@@ -36,6 +36,8 @@ export interface MessageContext {
   } | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
+  /** Durable 90-second cleanup for temporary mention-command exchanges. */
+  cleanup?: { schedule: (job: { botMessageId: string; channelId: string; invokeMessageId: string }) => void } | undefined;
 }
 
 export interface EffectiveGuildSettings {
@@ -50,6 +52,7 @@ export interface EffectiveGuildSettings {
 
 export type IncomingMessage = Pick<
   Message,
+  | "id"
   | "author"
   | "webhookId"
   | "system"
@@ -161,9 +164,10 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         trigger: redactUserMentions(message.content),
         reply: redactUserMentions(replyText(payload)),
       };
-      await message.reply(payload as never).then(() => {
+      return message.reply(payload as never).then((sent) => {
         context.invocations?.record(entry);
-      }).catch(() => {});
+        return sent;
+      }).catch(() => undefined);
     };
 
     let activeBudget = budget;
@@ -196,6 +200,15 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     if (inline) {
+      const cleanup = context.cleanup;
+      const commandMessageId = message.id;
+      const finish = async (payload: ReplyPayload): Promise<void> => {
+        const sent = await logReply(payload);
+        // Only the settings launcher announces a 90-second lifetime; a paginated card list stays readable.
+        if (cleanup && sent && inline.command === "settings") {
+          cleanup.schedule({ botMessageId: sent.id, channelId: message.channelId, invokeMessageId: commandMessageId });
+        }
+      };
       await runInline(inline, {
         api,
         pages: context.pages,
@@ -210,7 +223,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         messageRepliesFor: context.settings
           ? (userId: string) => context.settings!.messageRepliesFor!(userId)
           : undefined,
-        reply: logReply,
+        reply: finish,
       });
       return;
     }
@@ -297,28 +310,19 @@ function admit(context: InlineContext): { allowed: true } | { allowed: false; re
 /** Serves the plain-text counterparts of /version, /settings, /printings and /set. */
 async function runInline(inline: InlineInvocation, context: InlineContext): Promise<void> {
   if (inline.command === "version") {
-    await context.reply({ embeds: [versionEmbed()] });
+    await context.reply({ embeds: [versionEmbed()], components: versionActions() } as never);
     return;
   }
 
   if (inline.command === "settings") {
-    if (!context.guildId || !context.settings) {
-      // A DM has no server settings, so show the member their own preferences.
-      const replies = context.messageRepliesFor?.(context.authorId);
-      await context.reply({
-        content: [
-          "This is a direct message, so only your personal preferences apply:",
-          `Automatic replies: ${replies === undefined ? "each server's own switch" : replies ? "on" : "off"}`,
-          "Change them with `/settings currency user` and `/settings mentions` here.",
-        ].join("\n"),
-      });
-      return;
-    }
-    const settings = context.settings.get(context.guildId);
+    // A public reply cannot be private, so the reply is a temporary launcher
+    // and the panel itself opens privately for whoever presses the button.
     await context.reply({
-      embeds: [settingsEmbed(settingsViewLines(settings, context.mentionEnabled))],
-      components: settingsComponents(settings),
-    });
+      embeds: [{ title: "Crustlebot settings", description: "Press below to open your settings panel. This message disappears in 90 seconds." }],
+      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId("st:launcher").setLabel("Open settings").setStyle(ButtonStyle.Primary),
+      )],
+    } as never);
     return;
   }
 

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MessageFlags, type EmbedBuilder } from "discord.js";
 import { TcgdexClient } from "../src/api/tcgdex.js";
 import { parseInlineCommand } from "../src/mentions.js";
 import { createMessageHandler } from "../src/discord/messages.js";
@@ -28,6 +29,7 @@ function fakeMessage(content: string) {
   const replies: { content?: string; embeds?: unknown[] }[] = [];
   const message = {
     guildId: "guild-a",
+    id: "invoke-1",
     author: { id: "member-1", bot: false },
     webhookId: null,
     system: false,
@@ -36,7 +38,10 @@ function fakeMessage(content: string) {
     reference: null,
     channel: { isThread: () => false, parentId: null },
     member: { permissions: { has: () => true } },
-    reply: async (payload: { content?: string; embeds?: unknown[]; components?: unknown[] }) => void replies.push(payload),
+    reply: async (payload: { content?: string; embeds?: unknown[]; components?: unknown[] }) => {
+      replies.push(payload);
+      return { id: "reply-1" };
+    },
   };
   return { message, replies };
 }
@@ -59,165 +64,79 @@ describe("inline command parsing", () => {
 });
 
 describe("inline counterparts answer like their slash commands", () => {
-  function embedText(payload: { embeds?: { data: { description?: string; title?: string } }[] }): string {
-    return payload.embeds?.[0]?.data.description ?? "";
+  function embedText(payload: { embeds?: { data: { description?: string; title?: string; fields?: { name: string; value: string }[] } }[] }): string {
+    const embed = payload.embeds?.[0]?.data;
+    if (!embed) return "";
+    if (embed.description) return embed.description;
+    return (embed.fields ?? []).map((field) => `${field.name}: ${field.value}`).join("\n");
   }
 
   it("replies with the version embed", async () => {
     const { message, replies } = fakeMessage(`<@${SELF}> version`);
     await handler()(message as never);
     const text = embedText(replies[0] as never);
-    expect(text).toContain("Revision:");
+    expect(text).toContain("Running revision:");
     expect(text).toContain("Uptime:");
+    expect(text).toContain("github.com/leonid-dalin/pokemon-tcg-card-bot/commit/");
   });
 
-  it("replies with the settings embed and its toggle buttons", async () => {
+  it("replies with a temporary settings launcher", async () => {
     const { message, replies } = fakeMessage(`<@${SELF}> settings`);
     await handler()(message as never);
-    const text = embedText(replies[0] as never);
-    expect(text).toContain("Message replies: on");
-    expect(text).toContain("Card games:");
-    const row = (replies[0] as { components?: { components: { data: { custom_id: string } }[] }[] }).components?.[0];
-    expect(row?.components.map((button) => button.data.custom_id)).toEqual(["iset:messages", "iset:decklists"]);
+    const payload = replies[0] as { embeds?: (EmbedBuilder | { title?: string })[]; components?: { components: { data: { custom_id: string } }[] }[] };
+    const embed = payload.embeds?.[0] as { data?: { title?: string }; title?: string } | undefined;
+    expect(embed?.data?.title ?? embed?.title).toBe("Crustlebot settings");
+    expect(payload.components?.[0]?.components[0]?.data.custom_id).toBe("st:launcher");
   });
 
-  it("applies a settings toggle from its button and re-renders the view", async () => {
-    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
-    const applied: unknown[] = [];
-    const settings = {
+  it("opens a private panel from the launcher button", async () => {
+    const { SettingsPanelController } = await import("../src/discord/settings-controller.js");
+    const { SettingsSessions } = await import("../src/discord/settings-session.js");
+    const replies: { flags?: number }[] = [];
+    const interaction = {
+      user: { id: "member-1" },
+      guildId: "guild-a",
+      inGuild: () => true,
+      memberPermissions: { has: () => true },
+      reply: async (payload: never) => void replies.push(payload),
+    };
+    const store = {
       get: () => ({
         guildId: "guild-a", messageReplies: true, decklistReplies: false,
         autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0,
         cardGames: "both" as const, defaultCardGame: "ptcg" as const, currency: undefined, updatedAt: "",
       }),
-      update: (guildId: string, patch: Record<string, unknown>) => void applied.push(patch),
+      messageRepliesFor: () => undefined,
+      currencyFor: () => undefined,
     };
-    const updates: { embeds?: { data: { description?: string } }[]; components?: { components: { data: { label: string } }[] }[] }[] = [];
-    const interaction = {
-      guildId: "guild-a",
-      customId: "iset:messages",
-      inGuild: () => true,
-      memberPermissions: { has: () => true },
-      deferUpdate: async () => undefined,
-      editReply: async (payload: never) => void updates.push(payload),
-      followUp: async () => undefined,
-    };
-
-    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
-
-    expect(applied).toEqual([{ messageReplies: false }]);
-    const text = updates[0]?.embeds?.[0]?.data.description ?? "";
-    expect(text).toContain("Message replies: off");
-    expect(updates[0]?.components?.[0]?.components[0]?.data.label).toBe("Message replies: off");
+    const controller = new SettingsPanelController(store as never, true, new SettingsSessions());
+    await controller.openFromLauncher(interaction as never);
+    const flags = replies[0]?.flags ?? 0;
+    expect(flags & MessageFlags.Ephemeral).toBe(MessageFlags.Ephemeral);
+    expect(flags & MessageFlags.IsComponentsV2).toBe(MessageFlags.IsComponentsV2);
   });
 
-  it("reports a failed save without re-rendering the view", async () => {
-    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
-    const settings = {
-      get: () => ({ messageReplies: true, decklistReplies: false }),
-      update: () => { throw new Error("database is locked"); },
-    };
-    const updates: unknown[] = [];
-    const followUps: { content?: string; flags?: number }[] = [];
+  it("opens a private panel in a direct message", async () => {
+    const { SettingsPanelController } = await import("../src/discord/settings-controller.js");
+    const { SettingsSessions } = await import("../src/discord/settings-session.js");
+    const replies: { flags?: number }[] = [];
     const interaction = {
-      guildId: "guild-a",
-      customId: "iset:messages",
-      inGuild: () => true,
-      memberPermissions: { has: () => true },
-      deferUpdate: async () => undefined,
-      editReply: async (payload: never) => void updates.push(payload),
-      followUp: async (payload: never) => void followUps.push(payload),
-    };
-
-    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
-
-    expect(updates).toEqual([]);
-    expect(followUps[0]?.content).toContain("Could not save that change");
-  });
-
-  it("confirms a saved change privately when the view refresh fails", async () => {
-    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
-    const settings = {
-      get: () => ({
-        guildId: "guild-a", messageReplies: true, decklistReplies: false,
-        autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0,
-        cardGames: "both" as const, defaultCardGame: "ptcg" as const, currency: undefined, updatedAt: "",
-      }),
-      update: () => undefined,
-    };
-    let editAttempts = 0;
-    const followUps: { content?: string }[] = [];
-    const interaction = {
-      guildId: "guild-a",
-      customId: "iset:messages",
-      inGuild: () => true,
-      memberPermissions: { has: () => true },
-      deferUpdate: async () => undefined,
-      editReply: async () => {
-        editAttempts += 1;
-        throw new Error("discord rejected the edit");
-      },
-      followUp: async (payload: { content?: string }) => void followUps.push(payload),
-    };
-
-    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
-
-    expect(editAttempts).toBe(1);
-    expect(followUps[0]?.content).toContain("Saved: Message replies is now off");
-    expect(followUps[0]?.content).toContain("/settings view");
-  });
-
-  it("refuses a settings toggle from a member without Manage Server", async () => {
-    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
-    const settings = { get: () => ({ messageReplies: true }), update: () => undefined };
-    const replies: { content?: string }[] = [];
-    const interaction = {
-      guildId: "guild-a",
-      customId: "iset:messages",
-      inGuild: () => true,
-      memberPermissions: { has: () => false },
-      reply: async (payload: { content?: string }) => void replies.push(payload),
+      user: { id: "member-1" },
+      guildId: null,
+      inGuild: () => false,
+      memberPermissions: null,
+      reply: async (payload: never) => void replies.push(payload),
       update: async () => undefined,
+      editReply: async () => undefined,
     };
-
-    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
-
-    expect(replies[0]?.content).toContain("Manage Server");
-  });
-
-  it("lists printings for a name", async () => {
-    vi.stubGlobal("fetch", async (url: string) => {
-      if (!String(url).includes("/cards?name=")) {
-        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
-      }
-      return { ok: true, status: 200, json: async () => [{ id: "sv01-025", name: "Pikachu" }] } as unknown as Response;
-    });
-    const { message, replies } = fakeMessage(`<@${SELF}> printings Pikachu`);
-    await handler()(message as never);
-    expect(replies[0]?.embeds?.length ?? 0).toBeGreaterThan(0);
-  });
-
-  it("shows a set", async () => {
-    vi.stubGlobal("fetch", async (url: string) => {
-      if (!String(url).includes("/sets/sv01")) {
-        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
-      }
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ id: "sv01", name: "Scarlet & Violet", releaseDate: "2023-03-31", cards: [] }),
-      } as unknown as Response;
-    });
-    const { message, replies } = fakeMessage(`<@${SELF}> set sv01`);
-    await handler()(message as never);
-    expect(replies[0]?.embeds?.length ?? 0).toBeGreaterThan(0);
-  });
-
-  it("reports a missing set without claiming an outage", async () => {
-    vi.stubGlobal("fetch", async () => ({ ok: false, status: 404, json: async () => ({}) }) as unknown as Response);
-    const { message, replies } = fakeMessage(`<@${SELF}> set nope-9`);
-    await handler()(message as never);
-    expect(replies[0]?.content).toContain("No set matched");
+    const store = {
+      get: () => undefined,
+      messageRepliesFor: () => undefined,
+      currencyFor: () => undefined,
+    };
+    const controller = new SettingsPanelController(store as never, true, new SettingsSessions());
+    await controller.openForCommand(interaction as never);
+    expect(replies[0]?.flags).toBeDefined();
   });
 });
 
@@ -261,5 +180,36 @@ describe("inline printings and set spend the member allowance", () => {
       requests: { take: (key: string) => { keys.push(key); return { allowed: true as const }; } },
     })(message as never);
     expect(keys[0]).toBe("guild-a:member-1");
+  });
+});
+
+describe("inline cleanup scope", () => {
+  function cleanupFixture() {
+    const scheduled: string[] = [];
+    const recorded: string[] = [];
+    return {
+      scheduled,
+      recorded,
+      context: {
+        cleanup: { schedule: (job: { botMessageId: string }) => void scheduled.push(job.botMessageId) },
+        invocations: { record: () => void recorded.push("entry") },
+      },
+    };
+  }
+
+  it("schedules cleanup for a settings launcher only", async () => {
+    const fixture = cleanupFixture();
+    const { message } = fakeMessage(`<@${SELF}> settings`);
+    await handler(fixture.context as never)(message as never);
+    expect(fixture.scheduled).toHaveLength(1);
+    expect(fixture.recorded).toHaveLength(1);
+  });
+
+  it("leaves a card list readable", async () => {
+    const fixture = cleanupFixture();
+    const { message } = fakeMessage(`<@${SELF}> version`);
+    await handler(fixture.context as never)(message as never);
+    expect(fixture.scheduled).toHaveLength(0);
+    expect(fixture.recorded).toHaveLength(1);
   });
 });

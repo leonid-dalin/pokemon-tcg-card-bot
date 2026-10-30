@@ -11,7 +11,7 @@ Use these commands in a Discord server where the bot is installed. Ordinary-mess
 | `/set id:<set id>` | Set summary; add `checklist:true` for its card list |
 | `/search text:<words>` | Search indexed card names and rules text; quote a phrase to match adjacent words |
 | `/help` | Command and message examples |
-| `/settings view` | Server reply preferences, channels, cooldown and card game choices; other subcommands change them |
+| `/settings` | Opens a private panel for server preferences and your own choices |
 
 ## Card mentions
 
@@ -25,7 +25,7 @@ Mention the bot's actual account for the `@bot` examples. A bare mention or `@bo
 
 ## Decklists
 
-Pasted decklists can show card counts, Standard legality and available Cardmarket prices. A server administrator must enable [decklist replies](server-settings.md#choose-automatic-replies) first
+Pasted decklists can show card counts, Standard legality and available Cardmarket prices. A server administrator must enable [decklist replies](server-settings.md#replies) first
 
 ## Reply controls
 

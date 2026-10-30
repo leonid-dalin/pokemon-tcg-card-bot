@@ -1,57 +1,41 @@
 # Server settings
 
-Members with Manage Server permission can use `/settings` inside a Discord server. These choices affect that server. The host supplies the defaults through [configuration](configuration.md)
+`/settings` opens a private panel. Members with Manage Server permission start on the server overview and can change every server choice there. Members without that permission open their personal preferences and see only their own choices. These choices affect that server; the host supplies the defaults through [configuration](configuration.md)
 
-## View and reset
+The panel has a scope switch, For me and This server, and a section menu: Overview, Replies, Channels, Card games and Currency
 
-```text
-/settings view
-/settings reset
-```
+## Overview
 
-`view` shows the current choices and host-wide switches. `reset` restores deployment defaults. The operator must configure a persistent `DATA_DIR` to retain changes after restart
+The overview shows the reply switches, channel coverage, reply cooldown, card game preference and server currency. Reset server settings restores the deployment defaults for the server and asks for confirmation first. Personal preferences are untouched by a reset. The operator must configure a persistent `DATA_DIR` to retain changes after restart
 
-## Choose automatic replies
+## Replies
 
-```text
-/settings messages enabled:true
-/settings decklists enabled:true
-```
+Message replies cover card mentions, wording searches and help requests. Decklist replies have their own switch and are off by default. The cooldown allows a burst of automatic replies per member and channel, then replenishes one reply per interval; zero disables it. Slash commands do not use this budget
 
-The message switch controls card mentions, wording searches and help requests. Decklists have a separate switch and are off by default. Slash commands remain available when a server turns message replies off
+The host's `MENTION_ENABLED=false` disables all ordinary-message handling, including decklists. The panel says so when it applies, and nothing in the panel can turn it back on
 
-The host's `MENTION_ENABLED=false` disables all ordinary-message handling, including decklists. Ask the operator to enable it if `/settings view` reports that switch
+## Channels
 
-## Limit replies to selected channels
+Choose Everywhere or Selected channels. In selected mode the panel adds channels with a picker and removes them from a list of saved channels; the changes stay in a draft until you save them. A picker adds at most 25 channels at a time, so long lists are added in batches. Saving an empty selection stops automatic replies everywhere, and the panel asks before that happens
 
-Add a channel, then select the restricted mode:
+Threads use their parent channel's selection. These restrictions apply to automatic replies; slash commands use Discord's command permissions
 
-```text
-/settings channels add channel:#cards
-/settings channels mode mode:selected
-```
+## Card games
 
-Use `/settings channels remove channel:#cards` to remove one channel, or `/settings channels clear` to empty the list. Selected mode with an empty list stops automatic replies everywhere. Choose `/settings channels mode mode:all` to allow every channel
+Card games accepts Physical, Pocket or Both. When both are allowed, a second choice picks which game wins an ambiguous card name. New servers allow both and prefer the physical game
 
-The selector accepts server text and announcement channels. Threads use their parent channel's selection. These restrictions apply to automatic replies; slash commands use Discord's command permissions
+These preferences apply to `/card` and card-name mentions. An explicit game or set hint, or an exact card ID, takes precedence
 
-## Choose a card game
+## Currency
 
-```text
-/settings games allowed games:both
-/settings games default game:pocket
-```
+The server currency sets the fallback price currency: EUR, USD, GBP, JPY or CNY. Members can set their own currency on the For me screen, and that choice applies everywhere they use the bot
 
-`games allowed` accepts `ptcg`, `pocket` or `both`. When both are allowed, `games default` chooses which game wins an ambiguous card name. New servers allow both and prefer `ptcg`, the physical game
+## Your own preferences
 
-These preferences apply to `/card` and card-name mentions. An explicit game or set hint, or an exact card ID, takes precedence. Set `games allowed` to `both` before changing the default
+The For me screen holds the two member choices: automatic replies (follow each server, on or off) and price currency (follow each server or a code). These are personal across servers. In a direct message the server currency fallback is the bot default, currently EUR
 
-## Set the reply cooldown
+## What others see
 
-```text
-/settings cooldown seconds:30
-```
-
-The cooldown allows a burst of three automatic replies per member and channel, then replenishes one reply per interval. Set `seconds:0` to disable it. Slash commands do not use this budget
+A server change is announced once in the channel where it happened, naming the setting, the old value and the new value. Personal changes, refreshes and repeated presses are not announced. The announcement names the server default, because members may keep their own choice
 
 For command syntax and printing hints, read [Using the bot](usage.md)

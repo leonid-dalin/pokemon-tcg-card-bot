@@ -22,7 +22,7 @@ import { cardReply, searchReply } from "./replies.js";
 import { settingsCommand } from "./settings-command.js";
 
 import { busyMessage, overloadHint } from "./interaction-failure.js";
-import { versionEmbed } from "./version-view.js";
+import { versionActions, versionDetailsEmbed, versionEmbed } from "./version-view.js";
 
 const AUTOCOMPLETE_DEADLINE_MS = 2000;
 
@@ -382,7 +382,7 @@ export async function handleVersionCommand(
   startedAt = Date.now() - process.uptime() * 1_000,
   now = Date.now(),
 ): Promise<void> {
-  await interaction.reply({ embeds: [versionEmbed(startedAt, now)], flags: MessageFlags.Ephemeral });
+  await interaction.reply({ embeds: [versionEmbed(startedAt, now)], components: versionActions(), flags: MessageFlags.Ephemeral });
 }
 
 /** Pocket set prefixes, including promo ids, distinguish Pocket cards from physical-card ids. */
@@ -435,4 +435,36 @@ export async function handlePrintingsCommand(
   };
   const token = context.pages.put(page);
   await interaction.editReply(listReply(page, token, 0));
+}
+
+/** Rate limit for the public Refresh action, so a shared card cannot be spammed. */
+const PUBLIC_REFRESH_INTERVAL_MS = 30_000;
+const lastPublicRefresh = new Map<string, number>();
+
+export async function handleVersionAction(
+  interaction: ButtonInteraction,
+  startedAt = Date.now() - process.uptime() * 1_000,
+  now = Date.now(),
+): Promise<void> {
+  const action = interaction.customId.split(":")[1] ?? "";
+  if (action === "source") {
+    await interaction.reply({
+      content: "Source: https://github.com/leonid-dalin/pokemon-tcg-card-bot",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+  if (action === "details") {
+    await interaction.reply({ embeds: [versionDetailsEmbed(startedAt, now)], flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (action !== "refresh") return;
+  const key = interaction.channelId ?? interaction.id;
+  const previous = lastPublicRefresh.get(key);
+  if (previous !== undefined && now - previous < PUBLIC_REFRESH_INTERVAL_MS) {
+    await interaction.reply({ content: "This card was refreshed a moment ago. Try again in a little while.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  lastPublicRefresh.set(key, now);
+  await interaction.update({ embeds: [versionEmbed(startedAt, now)] });
 }

@@ -42,7 +42,17 @@ export interface GuildSettingsPatch {
   currency?: Currency;
 }
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
+
+export interface CleanupJob {
+  messageId: string;
+  channelId: string;
+  invokeMessageId: string;
+  deleteAfter: number;
+  attempts: number;
+}
+
+const MAX_CLEANUP_JOBS = 5000;
 const CARD_GAME_SCOPES: CardGameScope[] = ["ptcg", "pocket", "both"];
 const CARD_GAME_DEFAULTS: CardGameDefault[] = ["ptcg", "pocket"];
 export const DEFAULT_CARD_GAMES: CardGameScope = "both";
@@ -148,7 +158,9 @@ export class SettingsStore {
     }
     if (version === SCHEMA_VERSION) {
       const tables = this.db
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('guild_settings', 'user_settings')")
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('guild_settings', 'user_settings', 'cleanup_jobs')",
+        )
         .all() as { name: string }[];
       const names = new Set(tables.map((row) => row.name));
       if (!names.has("guild_settings")) {
@@ -158,6 +170,10 @@ export class SettingsStore {
       if (!names.has("user_settings")) {
         this.db.close();
         throw new Error("settings database is marked current but the user_settings table is missing");
+      }
+      if (!names.has("cleanup_jobs")) {
+        this.db.close();
+        throw new Error("settings database is marked current but the cleanup_jobs table is missing");
       }
       return;
     }
@@ -196,6 +212,18 @@ export class SettingsStore {
             updated_at TEXT NOT NULL
           )
         `);
+      }
+      if (version <= 4) {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS cleanup_jobs (
+            message_id TEXT PRIMARY KEY,
+            channel_id TEXT NOT NULL,
+            invoke_message_id TEXT NOT NULL,
+            delete_after INTEGER NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0
+          )
+        `);
+        this.db.exec("CREATE INDEX IF NOT EXISTS cleanup_jobs_due ON cleanup_jobs (delete_after)");
       }
       if (version <= 3) {
         this.db.exec(`
@@ -338,6 +366,36 @@ export class SettingsStore {
   }
 
   /** Returns the user's stored currency, or undefined when they have not chosen one. */
+  scheduleCleanup(job: CleanupJob): void {
+    const count = (this.db.prepare("SELECT COUNT(*) AS n FROM cleanup_jobs").get() as { n: number }).n;
+    if (count >= MAX_CLEANUP_JOBS) {
+      this.db.prepare(
+        "DELETE FROM cleanup_jobs WHERE message_id IN (SELECT message_id FROM cleanup_jobs ORDER BY delete_after, message_id LIMIT ?)",
+      )
+        .run(count - MAX_CLEANUP_JOBS + 1);
+    }
+    this.db.prepare("INSERT OR REPLACE INTO cleanup_jobs (message_id, channel_id, invoke_message_id, delete_after, attempts) VALUES (?, ?, ?, ?, 0)")
+      .run(job.messageId, job.channelId, job.invokeMessageId, job.deleteAfter);
+  }
+
+  dueCleanup(now: number, limit = 50): CleanupJob[] {
+    return this.db.prepare("SELECT message_id AS messageId, channel_id AS channelId, invoke_message_id AS invokeMessageId, delete_after AS deleteAfter, attempts FROM cleanup_jobs WHERE delete_after <= ? ORDER BY delete_after, message_id LIMIT ?")
+      .all(now, limit) as unknown as CleanupJob[];
+  }
+
+  completeCleanup(messageId: string): void {
+    this.db.prepare("DELETE FROM cleanup_jobs WHERE message_id = ?").run(messageId);
+  }
+
+  /** Moves a job that could not finish to its next attempt. */
+  deferCleanup(messageId: string, nextAttemptAt: number): void {
+    this.db.prepare("UPDATE cleanup_jobs SET delete_after = ?, attempts = attempts + 1 WHERE message_id = ?").run(nextAttemptAt, messageId);
+  }
+
+  cleanupSize(): number {
+    return (this.db.prepare("SELECT COUNT(*) AS n FROM cleanup_jobs").get() as { n: number }).n;
+  }
+
   currencyFor(userId: string): Currency | undefined {
     const row = this.db.prepare("SELECT currency FROM user_settings WHERE user_id = ?").get(userId) as
       | { currency: string | null }
