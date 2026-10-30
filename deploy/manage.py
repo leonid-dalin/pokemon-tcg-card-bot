@@ -87,14 +87,18 @@ def published_tag(sha):
     # Releases are found by their asset pair, never by tag name, so the tag
     # scheme can change without stranding an installed updater.
     name = f"pokemon-card-bot-linux-arm64-{sha}.tar.gz"
-    releases = api("releases?per_page=30")
-    for release in releases:
-        if release.get("draft"):
-            continue
-        names = {asset["name"] for asset in release.get("assets", [])}
-        if {name, name + ".sha256"} <= names:
-            return release["tag_name"]
-    return None
+    page = 1
+    while True:
+        releases = api(f"releases?per_page=100&page={page}")
+        for release in releases:
+            if release.get("draft"):
+                continue
+            names = {asset["name"] for asset in release.get("assets", [])}
+            if {name, name + ".sha256"} <= names:
+                return release["tag_name"]
+        if len(releases) < 100:
+            return None
+        page += 1
 
 
 def download(url, destination, limit):
