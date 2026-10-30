@@ -176,11 +176,16 @@ export class SettingsPanelController {
     const server = guildId ? this.store.get(guildId) : undefined;
     const session = this.sessions.open(interaction.user.id, guildId, scope, screen, baselineOf(server));
     const model = this.model(session, server, isAdmin, staleClient ? "The /settings subcommands were replaced by this panel." : undefined);
+    const payload = {
+      flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+      components: [renderPanel(model)],
+    };
+    console.log(
+      `settings panel payload flags=${payload.flags} rows=${payload.components[0] ? (payload.components[0] as { components?: unknown[] }).components?.length ?? 0 : 0} body=${JSON.stringify(payload).length}`,
+    );
     try {
-      await interaction.reply({
-        flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
-        components: [renderPanel(model)],
-      } as never);
+      await interaction.reply(payload as never);
+      console.log("settings panel reply resolved");
     } catch (error) {
       console.error(`settings panel reply failed (${errorCategory(error)})`);
       await interaction.reply({ content: "The settings panel could not be opened. Try /settings again.", flags: MessageFlags.Ephemeral }).catch(() => {});
