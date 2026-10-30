@@ -26,6 +26,7 @@ function isGone(error: unknown): boolean {
  */
 export class CleanupWorker {
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private armedAt: number | undefined;
 
   constructor(
     private readonly client: Client,
@@ -46,38 +47,44 @@ export class CleanupWorker {
 
   /** Drains at the job's own deadline, so polling never adds a whole interval of delay. */
   private wakeAt(deadline: number): void {
+    // A later deadline must not push back the timer already armed for an earlier job.
+    if (this.timer && this.armedAt !== undefined && this.armedAt <= deadline) return;
     if (this.timer) clearTimeout(this.timer);
+    this.armedAt = deadline;
+    this.arm(deadline);
+  }
+
+  private arm(deadline: number): void {
     const wait = Math.min(Math.max(deadline - Date.now(), 0), MAX_TIMER_MS);
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      void this.drain();
-      this.wakeAtNext();
+      this.armedAt = undefined;
+      // Retries are scheduled only after the drain settles, so a deferred job is re-armed.
+      void this.drain().finally(() => this.wakeAtNext());
     }, wait);
     this.timer.unref?.();
   }
 
   private wakeAtNext(): void {
-    const next = this.store.dueCleanup(Date.now());
-    if (next.length > 0) return;
-    this.timer = setTimeout(() => {
-      this.timer = undefined;
-      void this.drain();
-      this.wakeAtNext();
-    }, DRAIN_INTERVAL_MS);
-    this.timer.unref?.();
+    const pending = this.store.dueCleanup(Date.now());
+    if (pending.length === 0 && this.armedAt !== undefined) return;
+    const next = pending.length > 0
+      ? Math.min(...pending.map((job) => job.deleteAfter))
+      : Date.now() + DRAIN_INTERVAL_MS;
+    this.armedAt = next;
+    this.arm(next);
   }
 
   start(): void {
-    // Overdue jobs from an outage are picked up as soon as the bot comes back.
-    void this.drain();
-    this.timer = setInterval(() => {
-      void this.drain();
-    }, DRAIN_INTERVAL_MS);
+    // Overdue jobs from an outage are picked up as soon as the bot comes back, then
+    // the single deadline timer takes over and re-arms after every drain.
+    void this.drain().finally(() => this.wakeAtNext());
   }
 
   stop(): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
+    this.armedAt = undefined;
   }
 
   async drain(): Promise<void> {
