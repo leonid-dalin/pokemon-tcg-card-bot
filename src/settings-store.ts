@@ -42,7 +42,16 @@ export interface GuildSettingsPatch {
   currency?: Currency;
 }
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
+
+export interface CleanupJob {
+  messageId: string;
+  channelId: string;
+  invokeMessageId: string;
+  deleteAfter: number;
+}
+
+const MAX_CLEANUP_JOBS = 5000;
 const CARD_GAME_SCOPES: CardGameScope[] = ["ptcg", "pocket", "both"];
 const CARD_GAME_DEFAULTS: CardGameDefault[] = ["ptcg", "pocket"];
 export const DEFAULT_CARD_GAMES: CardGameScope = "both";
@@ -338,6 +347,29 @@ export class SettingsStore {
   }
 
   /** Returns the user's stored currency, or undefined when they have not chosen one. */
+  scheduleCleanup(job: CleanupJob): void {
+    const count = (this.db.prepare("SELECT COUNT(*) AS n FROM cleanup_jobs").get() as { n: number }).n;
+    if (count >= MAX_CLEANUP_JOBS) {
+      this.db.prepare("DELETE FROM cleanup_jobs WHERE delete_after IN (SELECT delete_after FROM cleanup_jobs ORDER BY delete_after LIMIT ?)")
+        .run(count - MAX_CLEANUP_JOBS + 1);
+    }
+    this.db.prepare("INSERT OR REPLACE INTO cleanup_jobs (message_id, channel_id, invoke_message_id, delete_after) VALUES (?, ?, ?, ?)")
+      .run(job.messageId, job.channelId, job.invokeMessageId, job.deleteAfter);
+  }
+
+  dueCleanup(now: number, limit = 50): CleanupJob[] {
+    return this.db.prepare("SELECT message_id AS messageId, channel_id AS channelId, invoke_message_id AS invokeMessageId, delete_after AS deleteAfter FROM cleanup_jobs WHERE delete_after <= ? ORDER BY delete_after LIMIT ?")
+      .all(now, limit) as unknown as CleanupJob[];
+  }
+
+  completeCleanup(messageId: string): void {
+    this.db.prepare("DELETE FROM cleanup_jobs WHERE message_id = ?").run(messageId);
+  }
+
+  cleanupSize(): number {
+    return (this.db.prepare("SELECT COUNT(*) AS n FROM cleanup_jobs").get() as { n: number }).n;
+  }
+
   currencyFor(userId: string): Currency | undefined {
     const row = this.db.prepare("SELECT currency FROM user_settings WHERE user_id = ?").get(userId) as
       | { currency: string | null }

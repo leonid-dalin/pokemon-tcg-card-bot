@@ -1,4 +1,4 @@
-import { Client, Events } from "discord.js";
+import { Client, Events, MessageFlags } from "discord.js";
 import { TcgdexClient } from "./api/tcgdex.js";
 import { loadConfig } from "./config.js";
 import { loadDotEnv } from "./env.js";
@@ -28,7 +28,9 @@ import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
 import { createShardReadiness } from "./discord/shard-readiness.js";
-import { handleInlineSettingsButton, handleSettingsCommand } from "./discord/settings-command.js";
+import { SettingsPanelController } from "./discord/settings-controller.js";
+import { SettingsSessions } from "./discord/settings-session.js";
+import { CleanupWorker } from "./discord/cleanup-worker.js";
 import { startRuntimeStatus } from "./runtime-status.js";
 
 loadDotEnv();
@@ -65,7 +67,11 @@ const context: CommandContext = {
   typing: typingBudget,
 };
 
+const settingsSessions = new SettingsSessions();
+const settingsPanel = new SettingsPanelController(settings, config.mentionEnabled, settingsSessions);
+
 const client = new Client(clientOptions(config));
+const cleanupWorker = new CleanupWorker(client, settings);
 startRuntimeStatus(createShardReadiness(client));
 const budget =
   config.mentionCooldownSeconds > 0
@@ -84,9 +90,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleAutocomplete(context, interaction);
       return;
     }
+    if (interaction.isButton() && interaction.customId === "st:launcher") {
+      await settingsPanel.openFromLauncher(interaction);
+      return;
+    }
+    if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith("st:")) {
+      await settingsPanel.handleComponent(interaction);
+      return;
+    }
     if (interaction.isButton()) {
       if (interaction.customId.startsWith("iset:")) {
-        await handleInlineSettingsButton({ settings, mentionEnabled: config.mentionEnabled }, interaction);
+        await interaction.reply({ content: "The settings toggles moved into the settings panel. Run /settings to open it.", flags: MessageFlags.Ephemeral }).catch(() => {});
       } else if (interaction.customId.startsWith("details:")) {
         await handleDetailsButton(context, interaction);
       } else if (interaction.customId.startsWith("page:")) {
@@ -118,7 +132,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.commandName === "version") {
       await handleVersionCommand(interaction);
     } else if (interaction.commandName === "settings") {
-      await handleSettingsCommand({ settings, mentionEnabled: config.mentionEnabled }, interaction);
+      const stale = interaction.options.getSubcommand(false) !== null
+        ? "The /settings subcommands were replaced by this panel."
+        : undefined;
+      await settingsPanel.openForCommand(interaction, stale);
     }
   } catch (error) {
     console.error(`interaction failed (${errorCategory(error)})`);
@@ -128,7 +145,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(
   Events.MessageCreate,
-  createMessageHandler({ api, config, budget, requests: memberBudget, invocations, settings, pages: context.pages, selfId: () => client.user?.id }),
+  createMessageHandler({ api, config, budget, requests: memberBudget, invocations, settings, pages: context.pages, cleanup: cleanupWorker, selfId: () => client.user?.id }),
 );
 
 client.on(Events.GuildDelete, (guild) => {
@@ -142,3 +159,4 @@ client.on(Events.GuildDelete, (guild) => {
 process.on("unhandledRejection", (error) => console.error(`unhandled rejection (${errorCategory(error)})`));
 
 await client.login(config.token);
+cleanupWorker.start();

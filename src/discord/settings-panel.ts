@@ -1,0 +1,184 @@
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ContainerBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  StringSelectMenuBuilder,
+  TextDisplayBuilder,
+} from "discord.js";
+import type { GuildSettings } from "../settings-store.js";
+import type { SettingsSession } from "./settings-session.js";
+
+export type PanelScreen = SettingsSession["screen"];
+
+export interface PanelModel {
+  session: SettingsSession;
+  /** The server's stored settings, when the panel is opened in a server. */
+  server?: GuildSettings;
+  /** The deployment switch; when off, nothing can enable message replies. */
+  mentionEnabled: boolean;
+  isAdmin: boolean;
+  heading: string;
+  rows: { label: string; value: string }[];
+  notice?: string;
+  savedNotice?: string;
+}
+
+export const SCOPE_PERSONAL = "sp";
+export const SCOPE_SERVER = "sv";
+const NAV_ID = "st:nav";
+const SCOPE_ID = "st:scope";
+
+function text(content: string): TextDisplayBuilder {
+  return new TextDisplayBuilder().setContent(content);
+}
+
+function separator(): SeparatorBuilder {
+  return new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small);
+}
+
+function button(customId: string, label: string, style: ButtonStyle): ButtonBuilder {
+  return new ButtonBuilder().setCustomId(customId).setLabel(label).setStyle(style);
+}
+
+/** The scope-switch row; only a server panel offers the server view. */
+function scopeRow(model: PanelModel): ActionRowBuilder<ButtonBuilder> {
+  const personal = button(`${SCOPE_PERSONAL}:${model.session.id}`, "For me", ButtonStyle.Secondary);
+  const server = button(`${SCOPE_SERVER}:${model.session.id}`, "This server", ButtonStyle.Secondary);
+  if (model.session.scope === "personal") personal.setStyle(ButtonStyle.Primary);
+  else server.setStyle(ButtonStyle.Primary);
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(personal, server);
+}
+
+function navRow(model: PanelModel): ActionRowBuilder<StringSelectMenuBuilder> {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(NAV_ID)
+    .setPlaceholder("Choose a section")
+    .addOptions(
+      { label: "Overview", value: "overview" },
+      { label: "Replies", value: "replies" },
+      { label: "Channels", value: "channels" },
+      { label: "Card games", value: "games" },
+      { label: "Currency", value: "currency" },
+    );
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
+}
+
+function footerRow(model: PanelModel, canReset: boolean): ActionRowBuilder<ButtonBuilder>[] {
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    button(`st:refresh:${model.session.id}`, "Refresh", ButtonStyle.Secondary),
+    button(`st:close:${model.session.id}`, "Close", ButtonStyle.Secondary),
+  );
+  if (canReset) row.addComponents(button(`st:reset:${model.session.id}`, "Reset server settings", ButtonStyle.Danger));
+  return [row];
+}
+
+/** Renders one panel screen as a Components V2 container. */
+export function renderPanel(model: PanelModel): ContainerBuilder {
+  const container = new ContainerBuilder();
+  container.addTextDisplayComponents(text(`**Crustlebot settings · ${model.heading}**`));
+  container.addSeparatorComponents(separator());
+  if (model.session.guildId) {
+    container.addActionRowComponents(scopeRow(model));
+    container.addSeparatorComponents(separator());
+  }
+  for (const row of model.rows) {
+    container.addTextDisplayComponents(text(`**${row.label}**\n${row.value}`));
+  }
+  if (model.notice) {
+    container.addSeparatorComponents(separator());
+    container.addTextDisplayComponents(text(`-# ${model.notice}`));
+  }
+  if (model.savedNotice) {
+    container.addSeparatorComponents(separator());
+    container.addTextDisplayComponents(text(`✅ ${model.savedNotice}`));
+  }
+  container.addSeparatorComponents(separator());
+
+  const isAdmin = model.isAdmin && model.session.scope === "server";
+  if (model.session.screen === "personal" || model.session.scope === "personal") {
+    for (const row of personalActions()) container.addActionRowComponents(row);
+  } else if (isAdmin) {
+    switch (model.session.screen) {
+      case "replies":
+        container.addActionRowComponents(repliesActions(model.server));
+        break;
+      case "currency":
+        container.addActionRowComponents(currencyActions());
+        break;
+      case "channels":
+        container.addActionRowComponents(channelsActions(model.server));
+        break;
+      default:
+        container.addActionRowComponents(navRow(model));
+    }
+  } else if (model.session.scope === "server" && model.session.screen !== "overview") {
+    container.addActionRowComponents(navRow(model));
+  } else if (model.session.screen === "overview" && isAdmin) {
+    container.addActionRowComponents(navRow(model));
+  }
+
+  for (const row of footerRow(model, isAdmin)) container.addActionRowComponents(row);
+  return container;
+}
+
+function repliesActions(server: GuildSettings | undefined): ActionRowBuilder<ButtonBuilder> {
+  if (!server) throw new Error("reply switches need server settings");
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    button("st:set:messages:on", "Enable message replies", server.messageReplies ? ButtonStyle.Success : ButtonStyle.Secondary),
+    button("st:set:messages:off", "Disable message replies", server.messageReplies ? ButtonStyle.Secondary : ButtonStyle.Danger),
+    button("st:set:decklists:on", "Enable decklist replies", server.decklistReplies ? ButtonStyle.Success : ButtonStyle.Secondary),
+    button("st:set:decklists:off", "Disable decklist replies", server.decklistReplies ? ButtonStyle.Secondary : ButtonStyle.Danger),
+  );
+}
+
+function currencyActions(): ActionRowBuilder<StringSelectMenuBuilder> {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("st:set:currency")
+    .setPlaceholder("Server default currency")
+    .addOptions(
+      { label: "EUR", value: "EUR" },
+      { label: "USD", value: "USD" },
+      { label: "GBP", value: "GBP" },
+      { label: "JPY", value: "JPY" },
+      { label: "CNY", value: "CNY" },
+    );
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
+}
+
+function personalActions(): ActionRowBuilder<StringSelectMenuBuilder>[] {
+  const mentions = new StringSelectMenuBuilder()
+    .setCustomId("st:my:mentions")
+    .setPlaceholder("Automatic replies")
+    .addOptions(
+      { label: "Follow each server", value: "default" },
+      { label: "On", value: "on" },
+      { label: "Off", value: "off" },
+    );
+  const currency = new StringSelectMenuBuilder()
+    .setCustomId("st:my:currency")
+    .setPlaceholder("Price currency")
+    .addOptions(
+      { label: "Follow each server", value: "default" },
+      { label: "EUR", value: "EUR" },
+      { label: "USD", value: "USD" },
+      { label: "GBP", value: "GBP" },
+      { label: "JPY", value: "JPY" },
+      { label: "CNY", value: "CNY" },
+    );
+  return [
+    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(mentions),
+    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(currency),
+  ];
+}
+
+function channelsActions(server: GuildSettings | undefined): ActionRowBuilder<ButtonBuilder> {
+  if (!server) throw new Error("channel controls need server settings");
+  const everywhere = server.autoReplyChannelMode === "all";
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    button("st:ch:all", "Everywhere", everywhere ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    button("st:ch:selected", "Selected channels", everywhere ? ButtonStyle.Secondary : ButtonStyle.Primary),
+  );
+}

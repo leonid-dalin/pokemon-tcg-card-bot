@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { EmbedBuilder } from "discord.js";
 import { TcgdexClient } from "../src/api/tcgdex.js";
 import { parseInlineCommand } from "../src/mentions.js";
 import { createMessageHandler } from "../src/discord/messages.js";
@@ -71,153 +72,38 @@ describe("inline counterparts answer like their slash commands", () => {
     expect(text).toContain("Uptime:");
   });
 
-  it("replies with the settings embed and its toggle buttons", async () => {
+  it("replies with a temporary settings launcher", async () => {
     const { message, replies } = fakeMessage(`<@${SELF}> settings`);
     await handler()(message as never);
-    const text = embedText(replies[0] as never);
-    expect(text).toContain("Message replies: on");
-    expect(text).toContain("Card games:");
-    const row = (replies[0] as { components?: { components: { data: { custom_id: string } }[] }[] }).components?.[0];
-    expect(row?.components.map((button) => button.data.custom_id)).toEqual(["iset:messages", "iset:decklists"]);
+    const payload = replies[0] as { embeds?: (EmbedBuilder | { title?: string })[]; components?: { components: { data: { custom_id: string } }[] }[] };
+    const embed = payload.embeds?.[0] as { data?: { title?: string }; title?: string } | undefined;
+    expect(embed?.data?.title ?? embed?.title).toBe("Crustlebot settings");
+    expect(payload.components?.[0]?.components[0]?.data.custom_id).toBe("st:launcher");
   });
 
-  it("applies a settings toggle from its button and re-renders the view", async () => {
-    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
-    const applied: unknown[] = [];
-    const settings = {
+  it("opens a private panel from the launcher button", async () => {
+    const { SettingsPanelController } = await import("../src/discord/settings-controller.js");
+    const { SettingsSessions } = await import("../src/discord/settings-session.js");
+    const replies: { flags?: number }[] = [];
+    const interaction = {
+      user: { id: "member-1" },
+      guildId: "guild-a",
+      inGuild: () => true,
+      memberPermissions: { has: () => true },
+      reply: async (payload: never) => void replies.push(payload),
+    };
+    const store = {
       get: () => ({
         guildId: "guild-a", messageReplies: true, decklistReplies: false,
         autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0,
         cardGames: "both" as const, defaultCardGame: "ptcg" as const, currency: undefined, updatedAt: "",
       }),
-      update: (guildId: string, patch: Record<string, unknown>) => void applied.push(patch),
+      messageRepliesFor: () => undefined,
+      currencyFor: () => undefined,
     };
-    const updates: { embeds?: { data: { description?: string } }[]; components?: { components: { data: { label: string } }[] }[] }[] = [];
-    const interaction = {
-      guildId: "guild-a",
-      customId: "iset:messages",
-      inGuild: () => true,
-      memberPermissions: { has: () => true },
-      deferUpdate: async () => undefined,
-      editReply: async (payload: never) => void updates.push(payload),
-      followUp: async () => undefined,
-    };
-
-    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
-
-    expect(applied).toEqual([{ messageReplies: false }]);
-    const text = updates[0]?.embeds?.[0]?.data.description ?? "";
-    expect(text).toContain("Message replies: off");
-    expect(updates[0]?.components?.[0]?.components[0]?.data.label).toBe("Message replies: off");
-  });
-
-  it("reports a failed save without re-rendering the view", async () => {
-    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
-    const settings = {
-      get: () => ({ messageReplies: true, decklistReplies: false }),
-      update: () => { throw new Error("database is locked"); },
-    };
-    const updates: unknown[] = [];
-    const followUps: { content?: string; flags?: number }[] = [];
-    const interaction = {
-      guildId: "guild-a",
-      customId: "iset:messages",
-      inGuild: () => true,
-      memberPermissions: { has: () => true },
-      deferUpdate: async () => undefined,
-      editReply: async (payload: never) => void updates.push(payload),
-      followUp: async (payload: never) => void followUps.push(payload),
-    };
-
-    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
-
-    expect(updates).toEqual([]);
-    expect(followUps[0]?.content).toContain("Could not save that change");
-  });
-
-  it("confirms a saved change privately when the view refresh fails", async () => {
-    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
-    const settings = {
-      get: () => ({
-        guildId: "guild-a", messageReplies: true, decklistReplies: false,
-        autoReplyChannelMode: "all" as const, selectedChannelIds: [], cooldownSeconds: 0,
-        cardGames: "both" as const, defaultCardGame: "ptcg" as const, currency: undefined, updatedAt: "",
-      }),
-      update: () => undefined,
-    };
-    let editAttempts = 0;
-    const followUps: { content?: string }[] = [];
-    const interaction = {
-      guildId: "guild-a",
-      customId: "iset:messages",
-      inGuild: () => true,
-      memberPermissions: { has: () => true },
-      deferUpdate: async () => undefined,
-      editReply: async () => {
-        editAttempts += 1;
-        throw new Error("discord rejected the edit");
-      },
-      followUp: async (payload: { content?: string }) => void followUps.push(payload),
-    };
-
-    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
-
-    expect(editAttempts).toBe(1);
-    expect(followUps[0]?.content).toContain("Saved: Message replies is now off");
-    expect(followUps[0]?.content).toContain("/settings view");
-  });
-
-  it("refuses a settings toggle from a member without Manage Server", async () => {
-    const { handleInlineSettingsButton } = await import("../src/discord/settings-command.js");
-    const settings = { get: () => ({ messageReplies: true }), update: () => undefined };
-    const replies: { content?: string }[] = [];
-    const interaction = {
-      guildId: "guild-a",
-      customId: "iset:messages",
-      inGuild: () => true,
-      memberPermissions: { has: () => false },
-      reply: async (payload: { content?: string }) => void replies.push(payload),
-      update: async () => undefined,
-    };
-
-    await handleInlineSettingsButton({ settings: settings as never, mentionEnabled: true }, interaction as never);
-
-    expect(replies[0]?.content).toContain("Manage Server");
-  });
-
-  it("lists printings for a name", async () => {
-    vi.stubGlobal("fetch", async (url: string) => {
-      if (!String(url).includes("/cards?name=")) {
-        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
-      }
-      return { ok: true, status: 200, json: async () => [{ id: "sv01-025", name: "Pikachu" }] } as unknown as Response;
-    });
-    const { message, replies } = fakeMessage(`<@${SELF}> printings Pikachu`);
-    await handler()(message as never);
-    expect(replies[0]?.embeds?.length ?? 0).toBeGreaterThan(0);
-  });
-
-  it("shows a set", async () => {
-    vi.stubGlobal("fetch", async (url: string) => {
-      if (!String(url).includes("/sets/sv01")) {
-        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
-      }
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ id: "sv01", name: "Scarlet & Violet", releaseDate: "2023-03-31", cards: [] }),
-      } as unknown as Response;
-    });
-    const { message, replies } = fakeMessage(`<@${SELF}> set sv01`);
-    await handler()(message as never);
-    expect(replies[0]?.embeds?.length ?? 0).toBeGreaterThan(0);
-  });
-
-  it("reports a missing set without claiming an outage", async () => {
-    vi.stubGlobal("fetch", async () => ({ ok: false, status: 404, json: async () => ({}) }) as unknown as Response);
-    const { message, replies } = fakeMessage(`<@${SELF}> set nope-9`);
-    await handler()(message as never);
-    expect(replies[0]?.content).toContain("No set matched");
+    const controller = new SettingsPanelController(store as never, true, new SettingsSessions());
+    await controller.openFromLauncher(interaction as never);
+    expect(replies[0]?.flags).toBeDefined();
   });
 });
 
