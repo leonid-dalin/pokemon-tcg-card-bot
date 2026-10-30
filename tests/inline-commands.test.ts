@@ -230,12 +230,19 @@ describe("inline cleanup scope", () => {
     expect(fixture.recorded).toHaveLength(1);
   });
 
-  it("leaves a card list readable", async () => {
+  it("schedules cleanup for a version exchange", async () => {
     const fixture = cleanupFixture();
     const { message } = fakeMessage(`<@${SELF}> version`);
     await handler(fixture.context as never)(message as never);
-    expect(fixture.scheduled).toHaveLength(0);
+    expect(fixture.scheduled).toHaveLength(1);
     expect(fixture.recorded).toHaveLength(1);
+  });
+
+  it("leaves a card list readable", async () => {
+    const fixture = cleanupFixture();
+    const { message } = fakeMessage(`<@${SELF}> printings Dragapult ex`);
+    await handler(fixture.context as never)(message as never);
+    expect(fixture.scheduled).toHaveLength(0);
   });
 });
 
