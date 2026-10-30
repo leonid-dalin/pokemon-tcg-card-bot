@@ -179,7 +179,9 @@ describe("settings panel channels draft", () => {
     const sessionId = openServerPanel(fx);
     await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
     await fx.controller.handleComponent(fx.interaction(`st:ch:save:${sessionId}`, { admin: true }).interaction as never);
-    expect(fx.recorded).toEqual([["guild-a", "channel-1", "Automatic-reply channels: Everywhere -> 1 selected"]]);
+    expect(fx.recorded).toEqual([
+      ["guild-a", "channel-1", "Automatic-reply channels: Everywhere -> 1 selected", "Added: <#ch-1>"],
+    ]);
     expect(fxStore(fx).selectedChannelIds).toEqual(["ch-1"]);
   });
 });
@@ -423,6 +425,12 @@ describe("settings panel audit regressions", () => {
     await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-3", "ch-4"], admin: true }).interaction as never);
     await fx.controller.handleComponent(fx.interaction(`st:ch:save:${sessionId}`, { admin: true }).interaction as never);
     expect(fx.recorded).toHaveLength(1);
+    // The record must name the channels that changed, not just the count.
+    const record = fx.recorded[0]!.join(" ");
+    expect(record).toContain("<#ch-3>");
+    expect(record).toContain("<#ch-4>");
+    expect(record).toContain("<#ch-1>");
+    expect(record).toContain("<#ch-2>");
   });
 
   it("announces a custom cooldown change", async () => {

@@ -523,8 +523,16 @@ export class SettingsPanelController {
     session.draftChannelIds = [...after.selectedChannelIds];
     this.sessions.update(session);
     await this.render(session, interaction, isAdminNow(interaction), undefined, `Saved: replies are allowed in ${after.selectedChannelIds.length} channel${after.selectedChannelIds.length === 1 ? "" : "s"}.`);
-    if (previous !== `${after.selectedChannelIds.length} selected` || previousIds !== [...after.selectedChannelIds].sort().join(",")) {
-      await this.announceChange(interaction as PanelInteraction & { guildId: string }, [`Automatic-reply channels: ${previous} -> ${after.selectedChannelIds.length} selected`]);
+    const savedIds = [...after.selectedChannelIds].sort().join(",");
+    if (previousIds !== savedIds) {
+      // A same-count swap must still name the channels it replaced, or the record says nothing.
+      const added = after.selectedChannelIds.filter((id) => !before.selectedChannelIds.includes(id));
+      const removed = before.selectedChannelIds.filter((id) => !after.selectedChannelIds.includes(id));
+      await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
+        `Automatic-reply channels: ${previous} -> ${after.selectedChannelIds.length} selected`,
+        ...(added.length > 0 ? [`Added: ${added.map((id) => `<#${id}>`).join(", ")}`] : []),
+        ...(removed.length > 0 ? [`Removed: ${removed.map((id) => `<#${id}>`).join(", ")}`] : []),
+      ]);
     }
   }
 
