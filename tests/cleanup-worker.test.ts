@@ -212,6 +212,8 @@ describe("cleanup worker deadline arming", () => {
       nextCleanupAt: () => (due.length > 0 ? Math.min(...due.map((job) => job.deleteAfter)) : undefined),
       completeCleanup: (id: string) => {
         deletions.push(`completed:${id}`);
+        const index = due.findIndex((job) => job.messageId === id);
+        if (index >= 0) due.splice(index, 1);
       },
       deferCleanup: () => undefined,
     };
