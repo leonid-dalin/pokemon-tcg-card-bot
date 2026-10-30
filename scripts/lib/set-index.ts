@@ -42,7 +42,7 @@ export function setIndexOutcome(results: SetDetailResult[]): SetIndexOutcome {
 }
 
 export function describeChanges(entries: SetIndexEntry[], known: Map<string, SetIndexEntry>): string[] {
-  return entries.flatMap((entry) => {
+  const lines = entries.flatMap((entry) => {
     const before = known.get(entry.id);
     if (!before) return entry.code || entry.releaseDate ? [`added ${entry.id}`] : [];
     const fields = [
@@ -52,6 +52,9 @@ export function describeChanges(entries: SetIndexEntry[], known: Map<string, Set
     ].filter((line) => line !== undefined);
     return fields.length > 0 ? [`changed ${entry.id}: ${fields.join("; ")}`] : [];
   });
+  const kept = new Set(entries.map((entry) => entry.id));
+  for (const [id] of known) if (!kept.has(id)) lines.push(`removed ${id}`);
+  return lines;
 }
 
 export function sortEntries(entries: SetIndexEntry[]): SetIndexEntry[] {

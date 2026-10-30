@@ -138,7 +138,7 @@ describe("changed-field report", () => {
 
   it("reports a name-only change without a code pair", () => {
     const lines = describeChanges([{ id: "base1", name: "Base Set (new)", code: "BS", releaseDate: "1999-01-09" }], known);
-    expect(lines).toEqual(['changed base1: name "Base Set" -> "Base Set (new)"']);
+    expect(lines).toEqual(['changed base1: name "Base Set" -> "Base Set (new)"', 'removed gone']);
   });
 
   it("reports each changed field and a removal", () => {
@@ -151,21 +151,29 @@ describe("changed-field report", () => {
     );
     expect(lines).toContain("changed base1: code BS -> B1");
     expect(lines).toContain("added new1");
+    expect(lines).toContain("removed gone");
   });
 
   it("prints nothing when nothing changed", () => {
-    const lines = describeChanges([{ id: "base1", name: "Base Set", code: "BS", releaseDate: "1999-01-09" }], known);
+    const lines = describeChanges(
+      [{ id: "base1", name: "Base Set", code: "BS", releaseDate: "1999-01-09" }],
+      new Map([["base1", { id: "base1", name: "Base Set", code: "BS", releaseDate: "1999-01-09" }]]),
+    );
     expect(lines).toEqual([]);
   });
 });
 
 describe("the generated shape feeds the production text search", () => {
-  it("carries every field the consumer reads", () => {
-    // TextHit: id, name, text, optional category and named parts.
-    const generated = { id: "a-1", name: "Alpha", text: "Flip a coin.", category: "Pokemon", parts: [{ kind: "attack", name: "Strike", text: "Flip a coin." }] };
-    const hits: TextHit[] = [generated];
-    expect(hits[0]?.id).toBe("a-1");
-    expect(hits[0]?.parts?.[0]?.kind).toBe("attack");
+  it("produces entries the consumer reads", async () => {
+    const outcome = await buildTextIndex([{ id: "a-1", name: "Alpha" }], async () => card());
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") return;
+    const generated = outcome.entries[0] as unknown as TextHit;
+    expect(generated.id).toBe("a-1");
+    expect(generated.text).toContain("Flip a coin.");
+    expect(generated.category).toBe("Pokemon");
+    expect(generated.parts?.[0]?.kind).toBe("attack");
+    expect(generated.parts?.[0]?.name).toBe("Strike");
   });
 
   it("searches the committed index through the production consumer", () => {

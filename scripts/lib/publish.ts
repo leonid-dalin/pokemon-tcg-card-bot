@@ -73,12 +73,8 @@ export function upsertEntry(manifest: Manifest | undefined, source: string, entr
     (held) => held.path === entry.path && held.sha256 === entry.sha256 && held.records === entry.records,
   );
   const stored = unchanged ? { ...entry, generatedAt: unchanged.generatedAt } : entry;
-  // Replace in place so an unchanged update rewrites no bytes at all.
-  const replaced = existing.some((held, index) => {
-    if (held.path !== entry.path) return false;
-    existing[index] = stored;
-    return true;
-  });
-  const entries = replaced ? existing : [...existing, stored];
+  // Replace at the same position so an unchanged update rewrites no bytes at all.
+  const index = existing.findIndex((held) => held.path === entry.path);
+  const entries = index < 0 ? [...existing, stored] : existing.map((held, at) => (at === index ? stored : held));
   return { version: 1, source: manifest?.source ?? source, entries };
 }
