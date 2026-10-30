@@ -66,11 +66,10 @@ export class CleanupWorker {
   }
 
   private wakeAtNext(): void {
-    const pending = this.store.dueCleanup(Date.now());
-    if (pending.length === 0 && this.armedAt !== undefined) return;
-    const next = pending.length > 0
-      ? Math.min(...pending.map((job) => job.deleteAfter))
-      : Date.now() + DRAIN_INTERVAL_MS;
+    // The queue is queried for its earliest deadline, not just the due ones, or a
+    // later job becomes invisible after the first completes and falls back to polling.
+    const next = this.store.nextCleanupAt() ?? Date.now() + DRAIN_INTERVAL_MS;
+    if (this.timer && this.armedAt !== undefined && this.armedAt <= next) return;
     this.armedAt = next;
     this.arm(next);
   }

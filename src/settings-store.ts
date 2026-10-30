@@ -383,6 +383,12 @@ export class SettingsStore {
       .all(now, limit) as unknown as CleanupJob[];
   }
 
+  /** The earliest queued deadline, including jobs that are not yet due. */
+  nextCleanupAt(): number | undefined {
+    const row = this.db.prepare("SELECT MIN(delete_after) AS next FROM cleanup_jobs").get() as { next: number | null } | undefined;
+    return row?.next ?? undefined;
+  }
+
   completeCleanup(messageId: string): void {
     this.db.prepare("DELETE FROM cleanup_jobs WHERE message_id = ?").run(messageId);
   }

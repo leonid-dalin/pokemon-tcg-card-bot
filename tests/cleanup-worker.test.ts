@@ -152,6 +152,7 @@ describe("cleanup worker scheduling", () => {
       store: {
         scheduleCleanup: (job: Job) => void (due = [{ ...job }]),
         dueCleanup: (now: number) => due.filter((job) => job.deleteAfter <= now),
+        nextCleanupAt: () => (due.length > 0 ? Math.min(...due.map((job) => job.deleteAfter)) : undefined),
         completeCleanup: (id: string) => {
           completed.push(id);
           due = due.filter((job) => job.messageId !== id);
@@ -208,6 +209,7 @@ describe("cleanup worker deadline arming", () => {
     const store = {
       scheduleCleanup: (job: Job) => void due.push({ ...job }),
       dueCleanup: (now: number) => due.filter((job) => job.deleteAfter <= now),
+      nextCleanupAt: () => (due.length > 0 ? Math.min(...due.map((job) => job.deleteAfter)) : undefined),
       completeCleanup: (id: string) => {
         deletions.push(`completed:${id}`);
       },
@@ -221,6 +223,36 @@ describe("cleanup worker deadline arming", () => {
     worker.schedule({ botMessageId: "reply-2", channelId: "channel-1", invokeMessageId: "invoke-2" });
     await vi.advanceTimersByTimeAsync(10_000);
     expect(deletions).toContain("completed:reply-1");
+    worker.stop();
+    vi.useRealTimers();
+  });
+});
+
+describe("cleanup worker future deadlines", () => {
+  it("keeps a later job's exact deadline after the first completes", async () => {
+    vi.useFakeTimers();
+    const deletions: string[] = [];
+    type Job = typeof JOB & { deleteAfter: number };
+    let due: Job[] = [];
+    const store = {
+      scheduleCleanup: (job: Job) => void due.push({ ...job }),
+      dueCleanup: (now: number) => due.filter((job) => job.deleteAfter <= now),
+      nextCleanupAt: () => (due.length > 0 ? Math.min(...due.map((job) => job.deleteAfter)) : undefined),
+      completeCleanup: (id: string) => {
+        due = due.filter((job) => job.messageId !== id);
+      },
+      deferCleanup: () => undefined,
+    };
+    const client = { user: { id: "bot" }, channels: { fetch: async () => channel(deletions) } };
+    const worker = new CleanupWorker(client as never, store as never);
+    worker.schedule({ botMessageId: "a", channelId: "channel-1", invokeMessageId: "a-invoke" });
+    await vi.advanceTimersByTimeAsync(80_000);
+    worker.schedule({ botMessageId: "b", channelId: "channel-1", invokeMessageId: "b-invoke" });
+    // A is due at 90s; B at 170s. Neither may slip to a 30-second poll tick.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(deletions).toContain("a");
+    await vi.advanceTimersByTimeAsync(80_000);
+    expect(deletions).toContain("b");
     worker.stop();
     vi.useRealTimers();
   });
