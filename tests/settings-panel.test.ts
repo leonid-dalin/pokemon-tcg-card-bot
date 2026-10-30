@@ -217,6 +217,8 @@ describe("settings panel routing", () => {
       clearCurrency: () => undefined,
       delete: () => undefined,
     };
+    const deferrals: { flags?: number }[] = [];
+    const edits: { flags?: number; components?: never[] }[] = [];
     const interaction = (customId: string, values?: string[]) => ({
       customId,
       values,
@@ -226,11 +228,12 @@ describe("settings panel routing", () => {
       inGuild: () => (options.guildId ?? "guild-a") !== null,
       memberPermissions: { has: () => options.admin === true },
       reply: async (payload: never) => void replies.push(payload),
+      deferReply: async (options?: { flags?: number }) => void deferrals.push(options ?? {}),
       update: async (payload: never) => void updates.push(payload),
-      editReply: async (payload: never) => void updates.push(payload),
+      editReply: async (payload: never) => void edits.push(payload),
     });
     const controller = new SettingsPanelController(store as never, true, new SettingsSessions());
-    return { controller, interaction, replies, updates };
+    return { controller, interaction, replies, updates, deferrals, edits };
   }
 
   function panelText(payload: { components?: { components: { data?: { content?: string } }[] }[] }): string {
@@ -249,9 +252,9 @@ describe("settings panel routing", () => {
   }
 
   it("renders every control with the opening session id", async () => {
-    const { controller, interaction, replies } = panelFixture({ admin: true });
+    const { controller, interaction, edits } = panelFixture({ admin: true });
     await controller.openForCommand(interaction("x") as never);
-    const ids = renderedIds(replies[0] as never);
+    const ids = renderedIds(edits[0] as never);
     expect(ids.length).toBeGreaterThan(3);
     const sessionId = ids.find((id) => id.startsWith("st:refresh:"))?.split(":").pop();
     expect(sessionId && sessionId.length > 8).toBe(true);
@@ -259,27 +262,27 @@ describe("settings panel routing", () => {
   });
 
   it("routes a refresh built from the rendered id", async () => {
-    const { controller, interaction, replies, updates } = panelFixture({ admin: true });
+    const { controller, interaction, edits, updates } = panelFixture({ admin: true });
     await controller.openForCommand(interaction("x") as never);
-    const refreshId = renderedIds(replies[0] as never).find((id) => id.startsWith("st:refresh:"))!;
+    const refreshId = renderedIds(edits[0] as never).find((id) => id.startsWith("st:refresh:"))!;
     await controller.handleComponent(interaction(refreshId) as never);
     expect(updates.length).toBe(1);
   });
 
   it("opens in a direct message without a server", async () => {
-    const { controller, interaction, replies } = panelFixture({ guildId: null, admin: false });
+    const { controller, interaction, edits, deferrals } = panelFixture({ guildId: null, admin: false });
     await controller.openForCommand(interaction("x") as never);
-    const flags = replies[0]?.flags ?? 0;
-    expect(flags & MessageFlags.Ephemeral).toBe(MessageFlags.Ephemeral);
+    expect(deferrals[0]?.flags).toBe(MessageFlags.Ephemeral);
+    const flags = edits[0]?.flags ?? 0;
     expect(flags & MessageFlags.IsComponentsV2).toBe(MessageFlags.IsComponentsV2);
-    const ids = renderedIds(replies[0] as never);
+    const ids = renderedIds(edits[0] as never);
     expect(ids.some((id) => id.startsWith("st:scope:"))).toBe(false);
   });
 
   it("refuses the server scope for a member without Manage Server", async () => {
-    const { controller, interaction, replies, updates } = panelFixture({ admin: false });
+    const { controller, interaction, edits, updates } = panelFixture({ admin: false });
     await controller.openForCommand(interaction("x") as never);
-    const scopeId = renderedIds(replies[0] as never).find((id) => id.startsWith("st:scope:server"));
+    const scopeId = renderedIds(edits[0] as never).find((id) => id.startsWith("st:scope:server"));
     expect(scopeId).toBeDefined();
     await controller.handleComponent(interaction(scopeId!) as never);
     expect(panelText(updates[0] as never)).toContain("Manage Server");

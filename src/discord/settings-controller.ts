@@ -41,6 +41,7 @@ export interface PanelInteraction {
   editReply(payload: unknown): Promise<unknown>;
   followUp(payload: unknown): Promise<unknown>;
   deferUpdate(): Promise<unknown>;
+  deferReply(options?: { flags?: number }): Promise<unknown>;
   showModal(modal: unknown): unknown;
 }
 
@@ -177,18 +178,17 @@ export class SettingsPanelController {
     const session = this.sessions.open(interaction.user.id, guildId, scope, screen, baselineOf(server));
     const model = this.model(session, server, isAdmin, staleClient ? "The /settings subcommands were replaced by this panel." : undefined);
     const payload = {
-      flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+      flags: MessageFlags.IsComponentsV2,
       components: [renderPanel(model)],
     };
-    console.log(
-      `settings panel payload flags=${payload.flags} rows=${payload.components[0] ? (payload.components[0] as { components?: unknown[] }).components?.length ?? 0 : 0} body=${JSON.stringify(payload).length}`,
-    );
     try {
-      await interaction.reply(payload as never);
-      console.log("settings panel reply resolved");
+      // Deferring first keeps the panel a follow-up message: an initial ephemeral
+      // response with the V2 flag is stored by Discord but renders blank on the client.
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      await interaction.editReply(payload as never);
     } catch (error) {
       console.error(`settings panel reply failed (${errorCategory(error)})`);
-      await interaction.reply({ content: "The settings panel could not be opened. Try /settings again.", flags: MessageFlags.Ephemeral }).catch(() => {});
+      await interaction.followUp({ content: "The settings panel could not be opened. Try /settings again.", flags: MessageFlags.Ephemeral }).catch(() => {});
       throw error;
     }
   }

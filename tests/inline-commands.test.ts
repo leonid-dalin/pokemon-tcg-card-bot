@@ -92,13 +92,15 @@ describe("inline counterparts answer like their slash commands", () => {
   it("opens a private panel from the launcher button", async () => {
     const { SettingsPanelController } = await import("../src/discord/settings-controller.js");
     const { SettingsSessions } = await import("../src/discord/settings-session.js");
+    const deferrals: { flags?: number }[] = [];
     const replies: { flags?: number }[] = [];
     const interaction = {
       user: { id: "member-1" },
       guildId: "guild-a",
       inGuild: () => true,
       memberPermissions: { has: () => true },
-      reply: async (payload: never) => void replies.push(payload),
+      deferReply: async (options: { flags?: number }) => void deferrals.push(options ?? {}),
+      editReply: async (payload: never) => void replies.push(payload),
     };
     const store = {
       get: () => ({
@@ -111,23 +113,27 @@ describe("inline counterparts answer like their slash commands", () => {
     };
     const controller = new SettingsPanelController(store as never, true, new SettingsSessions());
     await controller.openFromLauncher(interaction as never);
+    // The panel is deferred as private, then edited in as a follow-up: an initial
+    // ephemeral response carrying the V2 flag is stored but renders blank.
+    expect(deferrals[0]?.flags).toBe(MessageFlags.Ephemeral);
     const flags = replies[0]?.flags ?? 0;
-    expect(flags & MessageFlags.Ephemeral).toBe(MessageFlags.Ephemeral);
     expect(flags & MessageFlags.IsComponentsV2).toBe(MessageFlags.IsComponentsV2);
+    expect(flags & MessageFlags.Ephemeral).toBe(0);
   });
 
   it("opens a private panel in a direct message", async () => {
     const { SettingsPanelController } = await import("../src/discord/settings-controller.js");
     const { SettingsSessions } = await import("../src/discord/settings-session.js");
+    const deferrals: { flags?: number }[] = [];
     const replies: { flags?: number }[] = [];
     const interaction = {
       user: { id: "member-1" },
       guildId: null,
       inGuild: () => false,
       memberPermissions: null,
-      reply: async (payload: never) => void replies.push(payload),
+      deferReply: async (options: { flags?: number }) => void deferrals.push(options ?? {}),
+      editReply: async (payload: never) => void replies.push(payload),
       update: async () => undefined,
-      editReply: async () => undefined,
     };
     const store = {
       get: () => undefined,
