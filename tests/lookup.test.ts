@@ -137,8 +137,18 @@ describe("lookupCard", () => {
   it("returns undefined for a one-character name without querying the API", async () => {
     const { calls } = stubFetch({ "/cards?name=": { body: summaries } });
     const client = new TcgdexClient();
-    await expect(lookupCard(client, "N")).resolves.toBeUndefined();
+    await expect(lookupCard(client, "q")).resolves.toBeUndefined();
     expect(calls).toEqual([]);
+  });
+
+  it("resolves N, which is a real card name", async () => {
+    stubFetch({
+      "/cards?name=N": { body: [{ ...dragapult, id: "bw3-101", name: "N" }] },
+      "/cards/bw3-101": { body: { ...dragapult, id: "bw3-101", name: "N", localId: "101" } },
+    });
+    const client = new TcgdexClient();
+    const lookup = await lookupCard(client, "N");
+    expect(lookup?.card.name).toBe("N");
   });
 
   it("honours the set hint from a mention", async () => {

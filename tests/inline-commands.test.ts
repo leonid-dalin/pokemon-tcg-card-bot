@@ -140,11 +140,10 @@ describe("inline counterparts answer like their slash commands", () => {
   });
 });
 
-describe("inline printings guards short and bang-prefixed names", () => {
+describe("inline printings guards short strings that name no card", () => {
   it.each([
-    ["printings !n", "n"],
-    ["printings N", "N"],
-    ["printings !N", "N"],
+    ["printings q", "q"],
+    ["printings !q", "q"],
   ])("answers %s with the too-short explanation", async (content, echoed) => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {
@@ -155,6 +154,17 @@ describe("inline printings guards short and bang-prefixed names", () => {
     await handler()(message as never);
     expect(replies[0]?.content).toBe(`No card matched \`${echoed}\`. A single letter is too little to search on.`);
     expect(calls).toEqual([]);
+  });
+
+  it.each(["printings N", "printings !N"])("does not refuse %s, because N is a card", async (content) => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+    });
+    const { message, replies } = fakeMessage(`<@${SELF}> ${content}`);
+    await handler()(message as never);
+    expect(replies[0]?.content ?? "").not.toContain("single letter is too little");
   });
 });
 
@@ -211,5 +221,41 @@ describe("inline cleanup scope", () => {
     await handler(fixture.context as never)(message as never);
     expect(fixture.scheduled).toHaveLength(0);
     expect(fixture.recorded).toHaveLength(1);
+  });
+});
+
+describe("short names that are real cards", () => {
+  it("admits N because a card carries exactly that name", async () => {
+    const { hasExactCardName } = await import("../src/text-search.js");
+    expect(hasExactCardName("N")).toBe(true);
+    expect(hasExactCardName("n")).toBe(true);
+  });
+
+  it("still rejects a short string that names no card", async () => {
+    const { hasExactCardName } = await import("../src/text-search.js");
+    expect(hasExactCardName("q")).toBe(false);
+    expect(hasExactCardName("zz")).toBe(false);
+  });
+
+  it("does not answer N with the single-letter refusal", async () => {
+    const replies: { content?: string }[] = [];
+    const message = {
+      guildId: "guild-a", id: "invoke-n", author: { id: "member-1", bot: false },
+      webhookId: null, system: false, content: `<@${SELF}> printings N`,
+      mentions: { has: () => true, users: { has: () => false } },
+      reference: null, channel: { isThread: () => false, parentId: null },
+      member: { permissions: { has: () => true } },
+      reply: async (payload: { content?: string }) => { replies.push(payload); return { id: "r" }; },
+    };
+    const context = {
+      api: { searchByName: async () => [], getCard: async () => undefined },
+      pages: undefined,
+      config: { attribution: "", energyEmoji: {}, mentionCooldownSeconds: 0 },
+      settings: undefined,
+      requests: undefined,
+    };
+    await handler(context as never)(message as never);
+    const text = (replies[0]?.content ?? "").toString();
+    expect(text).not.toContain("single letter is too little");
   });
 });

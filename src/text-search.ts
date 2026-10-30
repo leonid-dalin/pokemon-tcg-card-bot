@@ -189,6 +189,16 @@ export function searchCardText(query: string, limit = Number.POSITIVE_INFINITY):
     .map(({ card }) => ({ id: card.id, name: card.name, text: card.text, category: card.category, parts: card.parts }));
 }
 
+/**
+ * True when a card in the index carries exactly this name. Used to admit short
+ * names such as "N", which upstream search would otherwise drown in noise.
+ */
+export function hasExactCardName(query: string): boolean {
+  const wanted = query.trim().toLowerCase();
+  if (!wanted) return false;
+  return load().some((entry) => entry.name.trim().toLowerCase() === wanted);
+}
+
 /** Groups matching index records by normalised card name. */
 export function searchCardGroups(query: string): TextGroup[] {
   return searchGroupsIn(load(), query);

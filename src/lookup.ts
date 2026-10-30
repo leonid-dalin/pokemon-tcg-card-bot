@@ -5,6 +5,7 @@ import { printedNumber } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
+import { hasExactCardName } from "./text-search.js";
 import { isPocketCard, isPocketSet } from "./prizes.js";
 import { isPocketHint, packageSetId, resolveSetHint, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
@@ -216,8 +217,11 @@ export async function lookupCard(
   }
 
   // A one-character name cannot be resolved by upstream search: TCGdex treats it
-  // as a substring filter and returns thousands of unrelated cards.
-  if (normaliseName(query).length < 2 && !getPocketCard(query.trim())) return undefined;
+  // as a substring filter and returns thousands of unrelated cards. A real card
+  // with that exact name ("N") still resolves through the local index.
+  if (normaliseName(query).length < 2 && !getPocketCard(query.trim()) && !hasExactCardName(query)) {
+    return undefined;
+  }
 
   // A Pocket alias selects the package catalogue; forcing a game always wins.
   const pocketOnly = setHint ? isPocketHint(setHint) : false;
