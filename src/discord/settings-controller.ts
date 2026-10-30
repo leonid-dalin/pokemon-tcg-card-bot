@@ -143,14 +143,20 @@ function serverPatch(field: string, value: string): Partial<GuildSettings> | und
   }
 }
 
+/** Describes what a reset changed; an empty list means the row already held the defaults. */
 function resetLines(before: GuildSettings, after: GuildSettings): string[] {
   const lines: string[] = [];
   if (before.messageReplies !== after.messageReplies) lines.push(`Message replies: ${before.messageReplies ? "On" : "Off"} -> ${after.messageReplies ? "On" : "Off"}`);
   if (before.decklistReplies !== after.decklistReplies) lines.push(`Decklist replies: ${before.decklistReplies ? "On" : "Off"} -> ${after.decklistReplies ? "On" : "Off"}`);
   if (before.cooldownSeconds !== after.cooldownSeconds) lines.push(`Reply cooldown: ${before.cooldownSeconds}s -> ${after.cooldownSeconds}s`);
   if (before.cardGames !== after.cardGames) lines.push(`Card games: ${before.cardGames} -> ${after.cardGames}`);
+  if (before.defaultCardGame !== after.defaultCardGame) lines.push(`Preferred game: ${before.defaultCardGame} -> ${after.defaultCardGame}`);
   if (before.currency !== after.currency) lines.push(`Server currency: ${before.currency ?? "EUR"} -> ${after.currency ?? "EUR"}`);
-  return lines.length > 0 ? lines : ["No server field differed from the deployment defaults."];
+  if (before.autoReplyChannelMode !== after.autoReplyChannelMode || before.selectedChannelIds.length !== after.selectedChannelIds.length) {
+    const count = (settings: GuildSettings) => (settings.autoReplyChannelMode === "all" ? "Everywhere" : `${settings.selectedChannelIds.length} selected`);
+    lines.push(`Automatic-reply channels: ${count(before)} -> ${count(after)}`);
+  }
+  return lines;
 }
 
 export class SettingsPanelController {
@@ -165,7 +171,6 @@ export class SettingsPanelController {
     await this.open(interaction, staleClient === true);
   }
 
-  /** Opens a private panel for whoever presses a public launcher button. */
   async openFromLauncher(interaction: PanelInteraction): Promise<void> {
     await this.open(interaction, false);
   }
@@ -230,7 +235,6 @@ export class SettingsPanelController {
     await interaction.editReply(payload);
   }
 
-  /** Routes one st:* component or modal interaction. */
   async handleComponent(interaction: PanelInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
     const [namespace, action] = parts;
@@ -592,10 +596,13 @@ export class SettingsPanelController {
     session.baseline = baselineOf(after);
     this.sessions.update(session);
     await this.renderCommitted(session, interaction, isAdmin, "Server settings were reset.");
-    await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
-      "Server settings were reset to the deployment defaults.",
-      ...resetLines(before, after),
-    ]);
+    const changed = resetLines(before, after);
+    if (changed.length > 0) {
+      await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
+        "Server settings were reset to the deployment defaults.",
+        ...changed,
+      ]);
+    }
   }
 
   private async announceChange(interaction: PanelInteraction & { guildId: string }, lines: string[]): Promise<void> {

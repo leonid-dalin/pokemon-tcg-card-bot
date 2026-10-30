@@ -543,7 +543,8 @@ describe("settings panel remaining sibling paths", () => {
   });
 
   it("acknowledges a reset before the announcement", async () => {
-    const fx = fixture();
+    // A real change, so the reset announces and the ordering is observable.
+    const fx = fixture({ currency: "USD" });
     const { controller, order } = ordered(fx);
     const session = fx.sessions.open("member-1", "guild-a", "server", "overview", baselineOf(fxStoreState(fx)));
     const confirm = fx.interaction(`st:reset:confirm:${session.id}`, { admin: true });
@@ -569,4 +570,40 @@ describe("settings panel remaining sibling paths", () => {
   async function controller_safe(fx: Fixture, interaction: unknown): Promise<unknown> {
     return fx.controller.handleComponent(interaction as never);
   }
+});
+
+describe("settings panel reset announcements", () => {
+  async function reset(fx: Fixture) {
+    const session = fx.sessions.open("member-1", "guild-a", "server", "overview", baselineOf(fxStoreState(fx)));
+    await fx.controller.handleComponent(fx.interaction(`st:reset:confirm:${session.id}`, { admin: true }).interaction as never);
+  }
+
+  it("keeps an unchanged reset private", async () => {
+    const fx = fixture();
+    await reset(fx);
+    expect(fx.recorded).toEqual([]);
+  });
+
+  it("reports a currency reset", async () => {
+    const fx = fixture({ currency: "USD" });
+    await reset(fx);
+    expect(fx.recorded).toHaveLength(1);
+    expect(fx.recorded[0]!.join(" ")).toContain("USD -> EUR");
+  });
+
+  it("reports a preferred-game reset", async () => {
+    const fx = fixture({ cardGames: "both", defaultCardGame: "pocket" });
+    await reset(fx);
+    expect(fx.recorded).toHaveLength(1);
+    expect(fx.recorded[0]!.join(" ")).toContain("Preferred game: pocket -> ptcg");
+  });
+
+  it("reports a channel-scope reset without naming channels", async () => {
+    const fx = fixture({ autoReplyChannelMode: "selected", selectedChannelIds: ["private-channel-1"] });
+    await reset(fx);
+    expect(fx.recorded).toHaveLength(1);
+    const record = fx.recorded[0]!.join(" ");
+    expect(record).toContain("Automatic-reply channels: 1 selected -> Everywhere");
+    expect(record).not.toContain("private-channel-1");
+  });
 });
