@@ -137,8 +137,38 @@ describe("lookupCard", () => {
   it("returns undefined for a one-character name without querying the API", async () => {
     const { calls } = stubFetch({ "/cards?name=": { body: summaries } });
     const client = new TcgdexClient();
-    await expect(lookupCard(client, "N")).resolves.toBeUndefined();
+    await expect(lookupCard(client, "q")).resolves.toBeUndefined();
     expect(calls).toEqual([]);
+  });
+
+  it("resolves N by id, because a name search returns unrelated cards", async () => {
+    // Recorded from api.tcgdex.net: ?name=N returns 10379 rows with unrelated
+    // cards first, so the id comes from the index rather than the search order.
+    const { calls } = stubFetch({
+      "/cards?name=N": {
+        body: [
+          { id: "30th-c-021", localId: "021", name: "N" },
+          { id: "bw3-92", localId: "92", name: "N" },
+          { id: "xy10-105a", localId: "105a", name: "N" },
+        ],
+      },
+      "/cards/xy10-105a": {
+        body: {
+          id: "xy10-105a",
+          localId: "105a",
+          name: "N",
+          category: "Trainer",
+          rarity: "Ultra Rare",
+          illustrator: "Megumi Mizutani",
+          set: { id: "xy10", name: "Fates Collide" },
+        },
+      },
+    });
+    const client = new TcgdexClient();
+    const lookup = await lookupCard(client, "N");
+    expect(lookup?.card.id).toBe("xy10-105a");
+    expect(lookup?.card.name).toBe("N");
+    expect(calls[0]).toContain("/cards/xy10-105a");
   });
 
   it("honours the set hint from a mention", async () => {

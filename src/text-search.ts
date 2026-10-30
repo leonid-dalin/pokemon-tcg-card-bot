@@ -189,6 +189,31 @@ export function searchCardText(query: string, limit = Number.POSITIVE_INFINITY):
     .map(({ card }) => ({ id: card.id, name: card.name, text: card.text, category: card.category, parts: card.parts }));
 }
 
+/**
+ * The newest card that carries exactly this name, if any. A short name such as
+ * "N" cannot be searched upstream: the service treats it as a substring filter
+ * and returns unrelated cards first, so the id comes from the local index.
+ */
+export function findExactCardName(query: string): TextHit | undefined {
+  const wanted = query.trim().toLowerCase();
+  if (!wanted) return undefined;
+  let best: TextHit | undefined;
+  for (const entry of load()) {
+    if (entry.name.trim().toLowerCase() !== wanted) continue;
+    if (!best || entry.id > best.id) best = entry;
+  }
+  return best;
+}
+
+/** Every card carrying exactly this name, newest id first. */
+export function findExactNames(query: string): TextHit[] {
+  const wanted = query.trim().toLowerCase();
+  if (!wanted) return [];
+  return load()
+    .filter((entry) => entry.name.trim().toLowerCase() === wanted)
+    .sort((a, b) => b.id.localeCompare(a.id));
+}
+
 /** Groups matching index records by normalised card name. */
 export function searchCardGroups(query: string): TextGroup[] {
   return searchGroupsIn(load(), query);

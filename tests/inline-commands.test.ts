@@ -140,11 +140,10 @@ describe("inline counterparts answer like their slash commands", () => {
   });
 });
 
-describe("inline printings guards short and bang-prefixed names", () => {
+describe("inline printings guards short strings that name no card", () => {
   it.each([
-    ["printings !n", "n"],
-    ["printings N", "N"],
-    ["printings !N", "N"],
+    ["printings q", "q"],
+    ["printings !q", "q"],
   ])("answers %s with the too-short explanation", async (content, echoed) => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {
@@ -155,6 +154,26 @@ describe("inline printings guards short and bang-prefixed names", () => {
     await handler()(message as never);
     expect(replies[0]?.content).toBe(`No card matched \`${echoed}\`. A single letter is too little to search on.`);
     expect(calls).toEqual([]);
+  });
+
+  it.each(["printings N", "printings !N"])("lists the printings of %s", async (content) => {
+    // The upstream name search cannot reach "N" inside its result cap, so the
+    // index supplies the ids and the API only fills in the summaries.
+    const responses: Record<string, unknown> = {
+      "/cards?name=N": [],
+      "/cards/xy10-105a": { id: "xy10-105a", localId: "105a", name: "N" },
+    };
+    vi.stubGlobal("fetch", async (url: string) => {
+      const path = String(url).replace(/^https?:\/\/[^/]+\/(v2\/)?/, "/").replace(/^\/en/, "");
+      const body = responses[path];
+      if (body === undefined) return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+      return { ok: true, status: 200, json: async () => body } as unknown as Response;
+    });
+    const { message, replies } = fakeMessage(`<@${SELF}> ${content}`);
+    await handler({ mentionEnabled: true })(message as never);
+    const text = JSON.stringify(replies[0] ?? {});
+    expect(text).not.toContain("single letter is too little");
+    expect(text).toContain("N");
   });
 });
 
@@ -211,5 +230,41 @@ describe("inline cleanup scope", () => {
     await handler(fixture.context as never)(message as never);
     expect(fixture.scheduled).toHaveLength(0);
     expect(fixture.recorded).toHaveLength(1);
+  });
+});
+
+describe("short names that are real cards", () => {
+  it("finds the card N by its exact name", async () => {
+    const { findExactCardName } = await import("../src/text-search.js");
+    expect(findExactCardName("N")?.name).toBe("N");
+    expect(findExactCardName("n")?.name).toBe("N");
+  });
+
+  it("returns nothing for a short string that names no card", async () => {
+    const { findExactCardName } = await import("../src/text-search.js");
+    expect(findExactCardName("q")).toBeUndefined();
+    expect(findExactCardName("zz")).toBeUndefined();
+  });
+
+  it("does not answer N with the single-letter refusal", async () => {
+    const replies: { content?: string }[] = [];
+    const message = {
+      guildId: "guild-a", id: "invoke-n", author: { id: "member-1", bot: false },
+      webhookId: null, system: false, content: `<@${SELF}> printings N`,
+      mentions: { has: () => true, users: { has: () => false } },
+      reference: null, channel: { isThread: () => false, parentId: null },
+      member: { permissions: { has: () => true } },
+      reply: async (payload: { content?: string }) => { replies.push(payload); return { id: "r" }; },
+    };
+    const context = {
+      api: { searchByName: async () => [], getCard: async () => undefined },
+      pages: undefined,
+      config: { attribution: "", energyEmoji: {}, mentionCooldownSeconds: 0 },
+      settings: undefined,
+      requests: undefined,
+    };
+    await handler(context as never)(message as never);
+    const text = (replies[0]?.content ?? "").toString();
+    expect(text).not.toContain("single letter is too little");
   });
 });

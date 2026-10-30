@@ -86,28 +86,46 @@ client.once(Events.ClientReady, (ready) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  const kind = interaction.isButton()
+    ? "button"
+    : interaction.isStringSelectMenu()
+      ? "select"
+      : interaction.isModalSubmit()
+        ? "modal"
+        : interaction.isChatInputCommand()
+          ? "command"
+          : "other";
+  const label = "customId" in interaction ? interaction.customId : interaction.commandName;
+  console.log(`interaction ${kind} ${label} received (${interaction.id})`);
+  let handled = false;
   try {
     if (interaction.isAutocomplete()) {
+      handled = true;
       await handleAutocomplete(context, interaction);
       return;
     }
     if (interaction.isButton() && interaction.customId.startsWith("v:")) {
+      handled = true;
       await handleVersionAction(interaction);
       return;
     }
     if (interaction.isButton() && interaction.customId === "st:launcher") {
+      handled = true;
       await settingsPanel.openFromLauncher(interaction as never);
       return;
     }
     if (interaction.isModalSubmit() && interaction.customId.startsWith("st:")) {
+      handled = true;
       await settingsPanel.handleComponent(interaction as never);
       return;
     }
     if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith("st:")) {
+      handled = true;
       await settingsPanel.handleComponent(interaction as never);
       return;
     }
     if (interaction.isButton()) {
+      handled = true;
       if (interaction.customId.startsWith("iset:")) {
         await interaction.reply({ content: "The settings toggles moved into the settings panel. Run /settings to open it.", flags: MessageFlags.Ephemeral }).catch(() => {});
       } else if (interaction.customId.startsWith("details:")) {
@@ -120,14 +138,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("open:")) {
+      handled = true;
       await handleOpenCardMenu(context, interaction);
       return;
     }
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith("filter:")) {
+      handled = true;
       await handleFilterMenu(context, interaction);
       return;
     }
     if (!interaction.isChatInputCommand()) return;
+    handled = true;
     if (interaction.commandName === "card") {
       await handleCardCommand(context, interaction);
     } else if (interaction.commandName === "set") {
@@ -145,8 +166,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await settingsPanel.openForCommand(interaction as never, stale);
     }
   } catch (error) {
-    console.error(`interaction failed (${errorCategory(error)})`);
+    console.error(`interaction failed (${errorCategory(error)}): ${error instanceof Error ? error.message : String(error)}`);
     await reportInteractionFailure(interaction, error).catch(() => {});
+  } finally {
+    console.log(`interaction ${kind} ${label} ${handled ? "handled" : "unhandled"}`);
   }
 });
 
