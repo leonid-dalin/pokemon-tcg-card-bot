@@ -164,9 +164,10 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         trigger: redactUserMentions(message.content),
         reply: redactUserMentions(replyText(payload)),
       };
-      await message.reply(payload as never).then(() => {
+      return message.reply(payload as never).then((sent) => {
         context.invocations?.record(entry);
-      }).catch(() => {});
+        return sent;
+      }).catch(() => undefined);
     };
 
     let activeBudget = budget;
@@ -202,8 +203,9 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       const cleanup = context.cleanup;
       const commandMessageId = message.id;
       const finish = async (payload: ReplyPayload): Promise<void> => {
-        const sent = await message.reply(payload as never).catch(() => undefined);
-        if (cleanup && sent) {
+        const sent = await logReply(payload);
+        // Only the settings launcher announces a 90-second lifetime; a paginated card list stays readable.
+        if (cleanup && sent && inline.command === "settings") {
           cleanup.schedule({ botMessageId: sent.id, channelId: message.channelId, invokeMessageId: commandMessageId });
         }
       };

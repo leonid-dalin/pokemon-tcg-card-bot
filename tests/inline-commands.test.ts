@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { EmbedBuilder } from "discord.js";
+import { MessageFlags, type EmbedBuilder } from "discord.js";
 import { TcgdexClient } from "../src/api/tcgdex.js";
 import { parseInlineCommand } from "../src/mentions.js";
 import { createMessageHandler } from "../src/discord/messages.js";
@@ -29,6 +29,7 @@ function fakeMessage(content: string) {
   const replies: { content?: string; embeds?: unknown[] }[] = [];
   const message = {
     guildId: "guild-a",
+    id: "invoke-1",
     author: { id: "member-1", bot: false },
     webhookId: null,
     system: false,
@@ -37,7 +38,10 @@ function fakeMessage(content: string) {
     reference: null,
     channel: { isThread: () => false, parentId: null },
     member: { permissions: { has: () => true } },
-    reply: async (payload: { content?: string; embeds?: unknown[]; components?: unknown[] }) => void replies.push(payload),
+    reply: async (payload: { content?: string; embeds?: unknown[]; components?: unknown[] }) => {
+      replies.push(payload);
+      return { id: "reply-1" };
+    },
   };
   return { message, replies };
 }
@@ -107,6 +111,31 @@ describe("inline counterparts answer like their slash commands", () => {
     };
     const controller = new SettingsPanelController(store as never, true, new SettingsSessions());
     await controller.openFromLauncher(interaction as never);
+    const flags = replies[0]?.flags ?? 0;
+    expect(flags & MessageFlags.Ephemeral).toBe(MessageFlags.Ephemeral);
+    expect(flags & MessageFlags.IsComponentsV2).toBe(MessageFlags.IsComponentsV2);
+  });
+
+  it("opens a private panel in a direct message", async () => {
+    const { SettingsPanelController } = await import("../src/discord/settings-controller.js");
+    const { SettingsSessions } = await import("../src/discord/settings-session.js");
+    const replies: { flags?: number }[] = [];
+    const interaction = {
+      user: { id: "member-1" },
+      guildId: null,
+      inGuild: () => false,
+      memberPermissions: null,
+      reply: async (payload: never) => void replies.push(payload),
+      update: async () => undefined,
+      editReply: async () => undefined,
+    };
+    const store = {
+      get: () => undefined,
+      messageRepliesFor: () => undefined,
+      currencyFor: () => undefined,
+    };
+    const controller = new SettingsPanelController(store as never, true, new SettingsSessions());
+    await controller.openForCommand(interaction as never);
     expect(replies[0]?.flags).toBeDefined();
   });
 });
@@ -151,5 +180,36 @@ describe("inline printings and set spend the member allowance", () => {
       requests: { take: (key: string) => { keys.push(key); return { allowed: true as const }; } },
     })(message as never);
     expect(keys[0]).toBe("guild-a:member-1");
+  });
+});
+
+describe("inline cleanup scope", () => {
+  function cleanupFixture() {
+    const scheduled: string[] = [];
+    const recorded: string[] = [];
+    return {
+      scheduled,
+      recorded,
+      context: {
+        cleanup: { schedule: (job: { botMessageId: string }) => void scheduled.push(job.botMessageId) },
+        invocations: { record: () => void recorded.push("entry") },
+      },
+    };
+  }
+
+  it("schedules cleanup for a settings launcher only", async () => {
+    const fixture = cleanupFixture();
+    const { message } = fakeMessage(`<@${SELF}> settings`);
+    await handler(fixture.context as never)(message as never);
+    expect(fixture.scheduled).toHaveLength(1);
+    expect(fixture.recorded).toHaveLength(1);
+  });
+
+  it("leaves a card list readable", async () => {
+    const fixture = cleanupFixture();
+    const { message } = fakeMessage(`<@${SELF}> version`);
+    await handler(fixture.context as never)(message as never);
+    expect(fixture.scheduled).toHaveLength(0);
+    expect(fixture.recorded).toHaveLength(1);
   });
 });

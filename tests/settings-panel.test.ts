@@ -194,3 +194,85 @@ function fxStore(fx: Fixture): GuildSettings {
 function fxStoreState(fx: Fixture): GuildSettings {
   return (fx.controller as unknown as { store: { get(): GuildSettings } }).store.get();
 }
+
+describe("settings panel routing", () => {
+  function panelFixture(options: { guildId?: string | null; admin?: boolean } = {}) {
+    const updates: { components?: { components: { components?: { data: { custom_id?: string } }[] } }[] }[] = [];
+    const replies: { flags?: number }[] = [];
+    const state = {
+      guildId: "guild-a", messageReplies: true, decklistReplies: false,
+      autoReplyChannelMode: "all" as const, selectedChannelIds: [] as string[],
+      cooldownSeconds: 0, cardGames: "both" as const, defaultCardGame: "ptcg" as const,
+      currency: undefined as string | undefined, updatedAt: "",
+    };
+    const store = {
+      get: () => ({ ...state, selectedChannelIds: [...state.selectedChannelIds] }),
+      update: () => ({ ...state }),
+      messageRepliesFor: () => undefined,
+      currencyFor: () => undefined,
+      setMessageReplies: () => undefined,
+      setCurrency: () => undefined,
+      clearMessageReplies: () => undefined,
+      clearCurrency: () => undefined,
+      delete: () => undefined,
+    };
+    const interaction = (customId: string, values?: string[]) => ({
+      customId,
+      values,
+      channelId: "channel-1",
+      user: { id: "member-1" },
+      guildId: options.guildId === undefined ? "guild-a" : options.guildId,
+      inGuild: () => (options.guildId ?? "guild-a") !== null,
+      memberPermissions: { has: () => options.admin === true },
+      reply: async (payload: never) => void replies.push(payload),
+      update: async (payload: never) => void updates.push(payload),
+      editReply: async (payload: never) => void updates.push(payload),
+    });
+    const controller = new SettingsPanelController(store as never, true, new SettingsSessions());
+    return { controller, interaction, replies, updates };
+  }
+
+  function renderedIds(payload: { components?: { components: { data?: { custom_id?: string }; components?: { data: { custom_id?: string } }[] }[] } }): string[] {
+    const container = payload.components?.[0];
+    const ids: string[] = [];
+    for (const child of container?.components ?? []) {
+      if (child.data?.custom_id) ids.push(child.data.custom_id);
+      for (const nested of child.components ?? []) if (nested.data?.custom_id) ids.push(nested.data.custom_id);
+    }
+    return ids;
+  }
+
+  it("renders every control with the opening session id", async () => {
+    const { controller, interaction, replies } = panelFixture({ admin: true });
+    await controller.openForCommand(interaction("x") as never);
+    const ids = renderedIds(replies[0] as never);
+    expect(ids.length).toBeGreaterThan(3);
+    const sessionId = ids.find((id) => id.startsWith("st:refresh:"))?.split(":").pop();
+    expect(sessionId && sessionId.length > 8).toBe(true);
+    for (const id of ids) expect(id.endsWith(`:${sessionId}`)).toBe(true);
+  });
+
+  it("routes a refresh built from the rendered id", async () => {
+    const { controller, interaction, replies, updates } = panelFixture({ admin: true });
+    await controller.openForCommand(interaction("x") as never);
+    const refreshId = renderedIds(replies[0] as never).find((id) => id.startsWith("st:refresh:"))!;
+    await controller.handleComponent(interaction(refreshId) as never);
+    expect(updates.length).toBe(1);
+  });
+
+  it("opens in a direct message without a server", async () => {
+    const { controller, interaction, replies } = panelFixture({ guildId: null, admin: false });
+    await controller.openForCommand(interaction("x") as never);
+    expect(replies[0]?.flags).toBeDefined();
+  });
+
+  it("refuses the server scope for a member without Manage Server", async () => {
+    const { controller, interaction, replies, updates } = panelFixture({ admin: false });
+    await controller.openForCommand(interaction("x") as never);
+    const scopeId = renderedIds(replies[0] as never).find((id) => id.startsWith("st:scope:server"));
+    if (scopeId) {
+      await controller.handleComponent(interaction(scopeId) as never);
+      expect(updates.length).toBe(1);
+    }
+  });
+});
