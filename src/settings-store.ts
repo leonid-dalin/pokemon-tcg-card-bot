@@ -49,6 +49,7 @@ export interface CleanupJob {
   channelId: string;
   invokeMessageId: string;
   deleteAfter: number;
+  attempts: number;
 }
 
 const MAX_CLEANUP_JOBS = 5000;
@@ -218,7 +219,8 @@ export class SettingsStore {
             message_id TEXT PRIMARY KEY,
             channel_id TEXT NOT NULL,
             invoke_message_id TEXT NOT NULL,
-            delete_after INTEGER NOT NULL
+            delete_after INTEGER NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0
           )
         `);
         this.db.exec("CREATE INDEX IF NOT EXISTS cleanup_jobs_due ON cleanup_jobs (delete_after)");
@@ -372,17 +374,22 @@ export class SettingsStore {
       )
         .run(count - MAX_CLEANUP_JOBS + 1);
     }
-    this.db.prepare("INSERT OR REPLACE INTO cleanup_jobs (message_id, channel_id, invoke_message_id, delete_after) VALUES (?, ?, ?, ?)")
+    this.db.prepare("INSERT OR REPLACE INTO cleanup_jobs (message_id, channel_id, invoke_message_id, delete_after, attempts) VALUES (?, ?, ?, ?, 0)")
       .run(job.messageId, job.channelId, job.invokeMessageId, job.deleteAfter);
   }
 
   dueCleanup(now: number, limit = 50): CleanupJob[] {
-    return this.db.prepare("SELECT message_id AS messageId, channel_id AS channelId, invoke_message_id AS invokeMessageId, delete_after AS deleteAfter FROM cleanup_jobs WHERE delete_after <= ? ORDER BY delete_after LIMIT ?")
+    return this.db.prepare("SELECT message_id AS messageId, channel_id AS channelId, invoke_message_id AS invokeMessageId, delete_after AS deleteAfter, attempts FROM cleanup_jobs WHERE delete_after <= ? ORDER BY delete_after, message_id LIMIT ?")
       .all(now, limit) as unknown as CleanupJob[];
   }
 
   completeCleanup(messageId: string): void {
     this.db.prepare("DELETE FROM cleanup_jobs WHERE message_id = ?").run(messageId);
+  }
+
+  /** Moves a job that could not finish to its next attempt. */
+  deferCleanup(messageId: string, nextAttemptAt: number): void {
+    this.db.prepare("UPDATE cleanup_jobs SET delete_after = ?, attempts = attempts + 1 WHERE message_id = ?").run(nextAttemptAt, messageId);
   }
 
   cleanupSize(): number {
