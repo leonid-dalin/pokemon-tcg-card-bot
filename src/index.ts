@@ -29,6 +29,7 @@ import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
 import { createShardReadiness } from "./discord/shard-readiness.js";
 import { EmbedBuilder } from "discord.js";
+import { settingsAnnouncementChunks } from "./discord/announcement.js";
 import { SettingsPanelController } from "./discord/settings-controller.js";
 import { handleVersionAction } from "./discord/commands.js";
 import { SettingsSessions } from "./discord/settings-session.js";
@@ -69,11 +70,10 @@ const context: CommandContext = {
   typing: typingBudget,
 };
 
-/** The permanent record a server settings change leaves in the channel that made it. */
-function settingsAnnouncement(lines: string[]): EmbedBuilder {
+function settingsAnnouncement(description: string): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle("Server settings changed")
-    .setDescription(lines.join("\n"))
+    .setDescription(description)
     .setColor(0x4f9cff);
 }
 
@@ -83,9 +83,19 @@ const settingsPanel = new SettingsPanelController(
   config.mentionEnabled,
   settingsSessions,
   async (guildId, channelId, lines) => {
-    const channel = await client.channels.fetch(channelId).catch(() => undefined);
+    const channel = await client.channels.fetch(channelId).catch((error: unknown) => {
+      console.error(`settings announcement could not reach ${guildId}/${channelId} (${errorCategory(error)})`);
+      return undefined;
+    });
     if (!channel || !channel.isTextBased() || channel.isDMBased()) return;
-    await channel.send({ embeds: [settingsAnnouncement(lines)] }).catch(() => undefined);
+    for (const description of settingsAnnouncementChunks(lines)) {
+      try {
+        await channel.send({ embeds: [settingsAnnouncement(description)] });
+      } catch (error) {
+        console.error(`settings announcement failed in ${guildId}/${channelId} (${errorCategory(error)})`);
+        return;
+      }
+    }
   },
 );
 

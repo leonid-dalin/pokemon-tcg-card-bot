@@ -26,6 +26,8 @@ function isGone(error: unknown): boolean {
  */
 export class CleanupWorker {
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private armedAt: number | undefined;
+  private stopped = false;
 
   constructor(
     private readonly client: Client,
@@ -46,43 +48,48 @@ export class CleanupWorker {
 
   /** Drains at the job's own deadline, so polling never adds a whole interval of delay. */
   private wakeAt(deadline: number): void {
+    if (this.timer && this.armedAt !== undefined && this.armedAt <= deadline) return;
     if (this.timer) clearTimeout(this.timer);
+    this.armedAt = deadline;
+    this.arm(deadline);
+  }
+
+  private arm(deadline: number): void {
     const wait = Math.min(Math.max(deadline - Date.now(), 0), MAX_TIMER_MS);
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      void this.drain();
-      this.wakeAtNext();
+      this.armedAt = undefined;
+      void this.drain().finally(() => {
+        if (!this.stopped) this.wakeAtNext();
+      });
     }, wait);
     this.timer.unref?.();
   }
 
   private wakeAtNext(): void {
-    const next = this.store.dueCleanup(Date.now());
-    if (next.length > 0) return;
-    this.timer = setTimeout(() => {
-      this.timer = undefined;
-      void this.drain();
-      this.wakeAtNext();
-    }, DRAIN_INTERVAL_MS);
-    this.timer.unref?.();
+    const next = this.store.nextCleanupAt() ?? Date.now() + DRAIN_INTERVAL_MS;
+    if (this.timer && this.armedAt !== undefined && this.armedAt <= next) return;
+    if (this.timer) clearTimeout(this.timer);
+    this.armedAt = next;
+    this.arm(next);
   }
 
   start(): void {
-    // Overdue jobs from an outage are picked up as soon as the bot comes back.
-    void this.drain();
-    this.timer = setInterval(() => {
-      void this.drain();
-    }, DRAIN_INTERVAL_MS);
+    this.stopped = false;
+    void this.drain().finally(() => {
+      if (!this.stopped) this.wakeAtNext();
+    });
   }
 
   stop(): void {
+    this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
+    this.armedAt = undefined;
   }
 
   async drain(): Promise<void> {
-    const now = Date.now();
-    for (const job of this.store.dueCleanup(now)) {
+    for (const job of this.store.dueCleanup(Date.now())) {
       const reply = await this.deleteMessage(job.channelId, job.messageId, false);
       const invoked = await this.deleteMessage(job.channelId, job.invokeMessageId, true);
       if (reply !== "failed" && invoked !== "failed") {
@@ -94,7 +101,7 @@ export class CleanupWorker {
         this.store.completeCleanup(job.messageId);
         continue;
       }
-      this.store.deferCleanup(job.messageId, now + RETRY_BASE_MS * 2 ** job.attempts);
+      this.store.deferCleanup(job.messageId, Date.now() + RETRY_BASE_MS * 2 ** job.attempts);
     }
   }
 

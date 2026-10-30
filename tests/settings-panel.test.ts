@@ -179,7 +179,9 @@ describe("settings panel channels draft", () => {
     const sessionId = openServerPanel(fx);
     await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
     await fx.controller.handleComponent(fx.interaction(`st:ch:save:${sessionId}`, { admin: true }).interaction as never);
-    expect(fx.recorded).toEqual([["guild-a", "channel-1", "Automatic-reply channels: Everywhere -> 1 selected"]]);
+    expect(fx.recorded).toEqual([
+      ["guild-a", "channel-1", "Automatic-reply channels: Everywhere -> 1 selected", "Added: <#ch-1>"],
+    ]);
     expect(fxStore(fx).selectedChannelIds).toEqual(["ch-1"]);
   });
 });
@@ -418,9 +420,17 @@ describe("settings panel audit regressions", () => {
   it("announces a channel swap that keeps the same count", async () => {
     const fx = fixture({ autoReplyChannelMode: "selected", selectedChannelIds: ["ch-1", "ch-2"] });
     const sessionId = openServerPanel(fx);
+    // A two-for-two replacement: remove both originals, then add two different ones.
+    await fx.controller.handleComponent(fx.interaction(`st:ch:remove-submit:${sessionId}`, { values: ["ch-1", "ch-2"], admin: true }).interaction as never);
     await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-3", "ch-4"], admin: true }).interaction as never);
     await fx.controller.handleComponent(fx.interaction(`st:ch:save:${sessionId}`, { admin: true }).interaction as never);
     expect(fx.recorded).toHaveLength(1);
+    // The record must name the channels that changed, not just the count.
+    const record = fx.recorded[0]!.join(" ");
+    expect(record).toContain("<#ch-3>");
+    expect(record).toContain("<#ch-4>");
+    expect(record).toContain("<#ch-1>");
+    expect(record).toContain("<#ch-2>");
   });
 
   it("announces a custom cooldown change", async () => {
@@ -431,5 +441,169 @@ describe("settings panel audit regressions", () => {
     await fx.controller.handleComponent(modal.interaction as never);
     expect(fx.recorded).toHaveLength(1);
     expect(fx.recorded[0]?.join(" ")).toContain("Reply cooldown");
+  });
+});
+
+describe("settings panel committed channel saves", () => {
+  it("announces a mode change even when the saved ids are unchanged", async () => {
+    // Everywhere is active and "ch-1" is already stored: saving it switches to Selected.
+    const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: ["ch-1"] });
+    const sessionId = openChannelsPanel(fx);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:save:${sessionId}`, { admin: true }).interaction as never);
+    expect(fxStore(fx).autoReplyChannelMode).toBe("selected");
+    expect(fx.recorded).toHaveLength(1);
+  });
+
+  it("keeps the channel change announced when the panel refresh fails", async () => {
+    const fx = fixture();
+    const sessionId = openChannelsPanel(fx);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
+    const failing = fx.interaction(`st:ch:save:${sessionId}`, { admin: true });
+    (failing.interaction as { editReply: () => Promise<never> }).editReply = async () => {
+      throw new Error("Discord update failed");
+    };
+    await expect(fx.controller.handleComponent(failing.interaction as never)).resolves.toBeUndefined();
+    expect(fxStore(fx).selectedChannelIds).toEqual(["ch-1"]);
+    expect(fx.recorded).toHaveLength(1);
+  });
+});
+
+describe("settings panel acknowledgement order", () => {
+  it("acknowledges the channel save before awaiting the announcement", async () => {
+    const order: string[] = [];
+    const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: [] });
+    const controller = new SettingsPanelController(
+      (fx.controller as unknown as { store: never }).store,
+      true,
+      fx.sessions,
+      async () => {
+        order.push("announce");
+      },
+    );
+    const session = fx.sessions.open("member-1", "guild-a", "server", "channels", baselineOf(fxStoreState(fx)));
+    await controller.handleComponent(fx.interaction(`st:ch:add:${session.id}`, { values: ["ch-1"], admin: true }).interaction as never);
+    const save = fx.interaction(`st:ch:save:${session.id}`, { admin: true });
+    (save.interaction as { editReply: () => Promise<void> }).editReply = async () => {
+      order.push("edit");
+    };
+    await controller.handleComponent(save.interaction as never);
+    expect(order).toEqual(["edit", "announce"]);
+  });
+
+  it("acknowledges the cooldown modal before awaiting the announcement", async () => {
+    const order: string[] = [];
+    const fx = fixture();
+    const controller = new SettingsPanelController(
+      (fx.controller as unknown as { store: never }).store,
+      true,
+      fx.sessions,
+      async () => {
+        order.push("announce");
+      },
+    );
+    const session = fx.sessions.open("member-1", "guild-a", "server", "overview", baselineOf(fxStoreState(fx)));
+    const modal = fx.interaction(`st:cooldown-modal:${session.id}`, { admin: true }) as unknown as {
+      interaction: { fields: unknown; editReply: () => Promise<void> };
+    };
+    modal.interaction.fields = { getTextInputValue: () => "45" };
+    (modal.interaction as unknown as { editReply: unknown }).editReply = async () => {
+      order.push("edit");
+    };
+    await controller.handleComponent(modal.interaction as never);
+    // Both steps must happen, in this order.
+    expect(order).toEqual(["edit", "announce"]);
+  });
+});
+
+describe("settings panel remaining sibling paths", () => {
+  function ordered(fx: Fixture) {
+    const order: string[] = [];
+    const controller = new SettingsPanelController(
+      (fx.controller as unknown as { store: never }).store,
+      true,
+      fx.sessions,
+      async () => {
+        order.push("announce");
+      },
+    );
+    return { controller, order };
+  }
+
+  it("acknowledges an ordinary field change before the announcement", async () => {
+    const fx = fixture();
+    const { controller, order } = ordered(fx);
+    const session = fx.sessions.open("member-1", "guild-a", "server", "replies", baselineOf(fxStoreState(fx)));
+    const click = fx.interaction(`st:set:messages:off:${session.id}`, { admin: true });
+    (click.interaction as { editReply: unknown }).editReply = async () => {
+      order.push("edit");
+    };
+    await controller.handleComponent(click.interaction as never);
+    expect(order).toEqual(["edit", "announce"]);
+  });
+
+  it("acknowledges a reset before the announcement", async () => {
+    // A real change, so the reset announces and the ordering is observable.
+    const fx = fixture({ currency: "USD" });
+    const { controller, order } = ordered(fx);
+    const session = fx.sessions.open("member-1", "guild-a", "server", "overview", baselineOf(fxStoreState(fx)));
+    const confirm = fx.interaction(`st:reset:confirm:${session.id}`, { admin: true });
+    (confirm.interaction as { editReply: unknown }).editReply = async () => {
+      order.push("edit");
+    };
+    await controller.handleComponent(confirm.interaction as never);
+    expect(order).toEqual(["edit", "announce"]);
+  });
+
+  it("keeps a mode-button change announced when the refresh fails", async () => {
+    const fx = fixture();
+    const session = fx.sessions.open("member-1", "guild-a", "server", "channels", baselineOf(fxStoreState(fx)));
+    const click = fx.interaction(`st:ch:selected:${session.id}`, { admin: true });
+    (click.interaction as { editReply: unknown }).editReply = async () => {
+      throw new Error("update failed");
+    };
+    await expect(controller_safe(fx, click.interaction)).resolves.toBeUndefined();
+    expect(fxStore(fx).autoReplyChannelMode).toBe("selected");
+    expect(fx.recorded).toHaveLength(1);
+  });
+
+  async function controller_safe(fx: Fixture, interaction: unknown): Promise<unknown> {
+    return fx.controller.handleComponent(interaction as never);
+  }
+});
+
+describe("settings panel reset announcements", () => {
+  async function reset(fx: Fixture) {
+    const session = fx.sessions.open("member-1", "guild-a", "server", "overview", baselineOf(fxStoreState(fx)));
+    await fx.controller.handleComponent(fx.interaction(`st:reset:confirm:${session.id}`, { admin: true }).interaction as never);
+  }
+
+  it("keeps an unchanged reset private", async () => {
+    const fx = fixture();
+    await reset(fx);
+    expect(fx.recorded).toEqual([]);
+  });
+
+  it("reports a currency reset", async () => {
+    const fx = fixture({ currency: "USD" });
+    await reset(fx);
+    expect(fx.recorded).toHaveLength(1);
+    expect(fx.recorded[0]!.join(" ")).toContain("USD -> EUR");
+  });
+
+  it("reports a preferred-game reset", async () => {
+    const fx = fixture({ cardGames: "both", defaultCardGame: "pocket" });
+    await reset(fx);
+    expect(fx.recorded).toHaveLength(1);
+    expect(fx.recorded[0]!.join(" ")).toContain("Preferred game: pocket -> ptcg");
+  });
+
+  it("reports a channel-scope reset without naming channels", async () => {
+    const fx = fixture({ autoReplyChannelMode: "selected", selectedChannelIds: ["private-channel-1"] });
+    await reset(fx);
+    expect(fx.recorded).toHaveLength(1);
+    const record = fx.recorded[0]!.join(" ");
+    expect(record).toContain("Automatic-reply channels: 1 selected -> Everywhere");
+    expect(record).not.toContain("private-channel-1");
   });
 });

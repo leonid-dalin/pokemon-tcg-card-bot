@@ -42,6 +42,8 @@ export interface PanelInteraction {
   followUp(payload: unknown): Promise<unknown>;
   deferUpdate(): Promise<unknown>;
   deferReply(options?: { flags?: number }): Promise<unknown>;
+  readonly deferred?: boolean;
+  readonly replied?: boolean;
   showModal(modal: unknown): unknown;
 }
 
@@ -141,14 +143,20 @@ function serverPatch(field: string, value: string): Partial<GuildSettings> | und
   }
 }
 
+/** Describes what a reset changed; an empty list means the row already held the defaults. */
 function resetLines(before: GuildSettings, after: GuildSettings): string[] {
   const lines: string[] = [];
   if (before.messageReplies !== after.messageReplies) lines.push(`Message replies: ${before.messageReplies ? "On" : "Off"} -> ${after.messageReplies ? "On" : "Off"}`);
   if (before.decklistReplies !== after.decklistReplies) lines.push(`Decklist replies: ${before.decklistReplies ? "On" : "Off"} -> ${after.decklistReplies ? "On" : "Off"}`);
   if (before.cooldownSeconds !== after.cooldownSeconds) lines.push(`Reply cooldown: ${before.cooldownSeconds}s -> ${after.cooldownSeconds}s`);
   if (before.cardGames !== after.cardGames) lines.push(`Card games: ${before.cardGames} -> ${after.cardGames}`);
+  if (before.defaultCardGame !== after.defaultCardGame) lines.push(`Preferred game: ${before.defaultCardGame} -> ${after.defaultCardGame}`);
   if (before.currency !== after.currency) lines.push(`Server currency: ${before.currency ?? "EUR"} -> ${after.currency ?? "EUR"}`);
-  return lines.length > 0 ? lines : ["No server field differed from the deployment defaults."];
+  if (before.autoReplyChannelMode !== after.autoReplyChannelMode || before.selectedChannelIds.length !== after.selectedChannelIds.length) {
+    const count = (settings: GuildSettings) => (settings.autoReplyChannelMode === "all" ? "Everywhere" : `${settings.selectedChannelIds.length} selected`);
+    lines.push(`Automatic-reply channels: ${count(before)} -> ${count(after)}`);
+  }
+  return lines;
 }
 
 export class SettingsPanelController {
@@ -159,12 +167,10 @@ export class SettingsPanelController {
     private readonly announce?: (guildId: string, channelId: string, lines: string[]) => Promise<void>,
   ) {}
 
-  /** Opens the panel for a slash invocation: private, no channel message. */
   async openForCommand(interaction: PanelInteraction, staleClient?: boolean): Promise<void> {
     await this.open(interaction, staleClient === true);
   }
 
-  /** Opens a private panel for whoever presses a public launcher button. */
   async openFromLauncher(interaction: PanelInteraction): Promise<void> {
     await this.open(interaction, false);
   }
@@ -182,8 +188,6 @@ export class SettingsPanelController {
       components: [renderPanel(model)],
     };
     try {
-      // Deferring first keeps the panel a follow-up message: an initial ephemeral
-      // response with the V2 flag is stored by Discord but renders blank on the client.
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await interaction.editReply(payload as never);
     } catch (error) {
@@ -231,7 +235,6 @@ export class SettingsPanelController {
     await interaction.editReply(payload);
   }
 
-  /** Routes one st:* component or modal interaction. */
   async handleComponent(interaction: PanelInteraction): Promise<void> {
     const parts = interaction.customId.split(":");
     const [namespace, action] = parts;
@@ -360,6 +363,7 @@ export class SettingsPanelController {
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
+      session.draftChannelIds = [...before.selectedChannelIds];
       this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed while you were here. This screen shows the current values; make your choice again.");
       return;
@@ -372,28 +376,32 @@ export class SettingsPanelController {
     const current = describeField(after, field);
     session.baseline = baselineOf(after);
     this.sessions.update(session);
+    await this.renderCommitted(session, interaction, isAdmin, `Saved: ${current}`);
     if (previous !== current) {
       await this.announceChange(interaction as PanelInteraction & { guildId: string }, [`${fieldName(field)}: ${previous} -> ${current}`]);
     }
-    await this.renderCommitted(session, interaction, isAdmin, `Saved: ${current}`, current);
   }
 
-  /**
-   * The store has already committed, so a failed panel refresh must not be reported
-   * as an ordinary failure. A private notice carries the outcome either way.
-   */
   private async renderCommitted(
     session: SettingsSession,
     interaction: PanelInteraction,
     isAdmin: boolean,
     savedNotice: string,
-    committedValue: string,
   ): Promise<void> {
     try {
       await this.render(session, interaction, isAdmin, undefined, savedNotice);
     } catch (error) {
       console.error(`settings panel refresh failed after a committed change (${errorCategory(error)})`);
-      await interaction.followUp({ content: `${savedNotice}. The panel could not refresh; reopen it to see the new state.`, flags: MessageFlags.Ephemeral }).catch(() => {});
+      const notice = {
+        content: `${savedNotice}. The panel could not refresh; reopen it to see the new state.`,
+        flags: MessageFlags.Ephemeral,
+      };
+      // An unacknowledged interaction must be answered first, or Discord rejects the follow-up.
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp(notice).catch(() => {});
+        return;
+      }
+      await interaction.reply(notice).catch(() => {});
     }
   }
 
@@ -468,6 +476,7 @@ export class SettingsPanelController {
     if (sub === "all" || sub === "selected") {
       if (baselineOf(before) !== session.baseline) {
         session.baseline = baselineOf(before);
+        session.draftChannelIds = [...before.selectedChannelIds];
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin, "These settings changed while you were here. Choose again.");
         return;
@@ -479,7 +488,7 @@ export class SettingsPanelController {
       this.sessions.update(session);
       const previous = before.autoReplyChannelMode === "all" ? "Everywhere" : "Selected channels";
       const current = sub === "all" ? "Everywhere" : "Selected channels";
-      await this.render(session, interaction, isAdmin, undefined, `Saved: replies are allowed ${current.toLowerCase()}.`);
+      await this.renderCommitted(session, interaction, isAdmin, `Saved: replies are allowed ${current.toLowerCase()}.`);
       if (previous !== current) {
         await this.announceChange(interaction as PanelInteraction & { guildId: string }, [`Automatic-reply channels: ${previous} -> ${current}`]);
       }
@@ -509,9 +518,19 @@ export class SettingsPanelController {
     session.baseline = baselineOf(after);
     session.draftChannelIds = [...after.selectedChannelIds];
     this.sessions.update(session);
-    await this.render(session, interaction, isAdminNow(interaction), undefined, `Saved: replies are allowed in ${after.selectedChannelIds.length} channel${after.selectedChannelIds.length === 1 ? "" : "s"}.`);
-    if (previous !== `${after.selectedChannelIds.length} selected` || previousIds !== [...after.selectedChannelIds].sort().join(",")) {
-      await this.announceChange(interaction as PanelInteraction & { guildId: string }, [`Automatic-reply channels: ${previous} -> ${after.selectedChannelIds.length} selected`]);
+    const savedIds = [...after.selectedChannelIds].sort().join(",");
+    const modeChanged = before.autoReplyChannelMode !== after.autoReplyChannelMode;
+    const changed = modeChanged || previousIds !== savedIds;
+    const saved = `Saved: replies are allowed in ${after.selectedChannelIds.length} channel${after.selectedChannelIds.length === 1 ? "" : "s"}.`;
+    await this.renderCommitted(session, interaction, isAdminNow(interaction), saved);
+    if (changed) {
+      const added = after.selectedChannelIds.filter((id) => !before.selectedChannelIds.includes(id));
+      const removed = before.selectedChannelIds.filter((id) => !after.selectedChannelIds.includes(id));
+      await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
+        `Automatic-reply channels: ${previous} -> ${after.selectedChannelIds.length} selected`,
+        ...(added.length > 0 ? [`Added: ${added.map((id) => `<#${id}>`).join(", ")}`] : []),
+        ...(removed.length > 0 ? [`Removed: ${removed.map((id) => `<#${id}>`).join(", ")}`] : []),
+      ]);
     }
   }
 
@@ -535,6 +554,7 @@ export class SettingsPanelController {
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
+      session.draftChannelIds = [...before.selectedChannelIds];
       this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed while you were here. Choose again.");
       return;
@@ -543,7 +563,8 @@ export class SettingsPanelController {
     const after = this.store.get(session.guildId);
     session.baseline = baselineOf(after);
     this.sessions.update(session);
-    await this.render(session, interaction, isAdmin, undefined, `Saved: reply cooldown is ${seconds === 0 ? "off" : `${seconds}s`}.`);
+    const saved = `Saved: reply cooldown is ${seconds === 0 ? "off" : `${seconds}s`}.`;
+    await this.renderCommitted(session, interaction, isAdmin, saved);
     if (before.cooldownSeconds !== seconds) {
       await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
         `Reply cooldown: ${before.cooldownSeconds === 0 ? "off" : `${before.cooldownSeconds}s`} -> ${seconds === 0 ? "off" : `${seconds}s`}`,
@@ -565,6 +586,7 @@ export class SettingsPanelController {
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
+      session.draftChannelIds = [...before.selectedChannelIds];
       this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed since you opened the reset confirmation. Review them and confirm the reset again.");
       return;
@@ -573,11 +595,14 @@ export class SettingsPanelController {
     const after = this.store.get(session.guildId);
     session.baseline = baselineOf(after);
     this.sessions.update(session);
-    await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
-      "Server settings were reset to the deployment defaults.",
-      ...resetLines(before, after),
-    ]);
-    await this.render(session, interaction, isAdmin, "Server settings were reset.");
+    await this.renderCommitted(session, interaction, isAdmin, "Server settings were reset.");
+    const changed = resetLines(before, after);
+    if (changed.length > 0) {
+      await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
+        "Server settings were reset to the deployment defaults.",
+        ...changed,
+      ]);
+    }
   }
 
   private async announceChange(interaction: PanelInteraction & { guildId: string }, lines: string[]): Promise<void> {
