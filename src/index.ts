@@ -86,6 +86,17 @@ client.once(Events.ClientReady, (ready) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  const kind = interaction.isButton()
+    ? "button"
+    : interaction.isStringSelectMenu()
+      ? "select"
+      : interaction.isModalSubmit()
+        ? "modal"
+        : interaction.isChatInputCommand()
+          ? "command"
+          : "other";
+  const label = "customId" in interaction ? interaction.customId : interaction.commandName;
+  console.log(`interaction ${kind} ${label} -> routed`);
   try {
     if (interaction.isAutocomplete()) {
       await handleAutocomplete(context, interaction);
@@ -97,6 +108,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     if (interaction.isButton() && interaction.customId === "st:launcher") {
       await settingsPanel.openFromLauncher(interaction as never);
+      console.log("settings launcher -> panel opened");
       return;
     }
     if (interaction.isModalSubmit() && interaction.customId.startsWith("st:")) {
@@ -145,7 +157,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await settingsPanel.openForCommand(interaction as never, stale);
     }
   } catch (error) {
-    console.error(`interaction failed (${errorCategory(error)})`);
+    console.error(`interaction failed (${errorCategory(error)}): ${error instanceof Error ? error.message : String(error)}`);
     await reportInteractionFailure(interaction, error).catch(() => {});
   }
 });
