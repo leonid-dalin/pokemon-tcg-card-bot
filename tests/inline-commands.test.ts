@@ -156,15 +156,24 @@ describe("inline printings guards short strings that name no card", () => {
     expect(calls).toEqual([]);
   });
 
-  it.each(["printings N", "printings !N"])("does not refuse %s, because N is a card", async (content) => {
-    const calls: string[] = [];
+  it.each(["printings N", "printings !N"])("lists the printings of %s", async (content) => {
+    // The upstream name search cannot reach "N" inside its result cap, so the
+    // index supplies the ids and the API only fills in the summaries.
+    const responses: Record<string, unknown> = {
+      "/cards?name=N": [],
+      "/cards/xy10-105a": { id: "xy10-105a", localId: "105a", name: "N" },
+    };
     vi.stubGlobal("fetch", async (url: string) => {
-      calls.push(String(url));
-      return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+      const path = String(url).replace(/^https?:\/\/[^/]+\/(v2\/)?/, "/").replace(/^\/en/, "");
+      const body = responses[path];
+      if (body === undefined) return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+      return { ok: true, status: 200, json: async () => body } as unknown as Response;
     });
     const { message, replies } = fakeMessage(`<@${SELF}> ${content}`);
-    await handler()(message as never);
-    expect(replies[0]?.content ?? "").not.toContain("single letter is too little");
+    await handler({ mentionEnabled: true })(message as never);
+    const text = JSON.stringify(replies[0] ?? {});
+    expect(text).not.toContain("single letter is too little");
+    expect(text).toContain("N");
   });
 });
 

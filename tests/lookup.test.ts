@@ -142,16 +142,32 @@ describe("lookupCard", () => {
   });
 
   it("resolves N by id, because a name search returns unrelated cards", async () => {
-    // Upstream returns Venusaur first for ?name=N; the index id decides instead.
+    // Recorded from api.tcgdex.net: ?name=N returns 10379 rows with unrelated
+    // cards first, so the id comes from the index rather than the search order.
     const { calls } = stubFetch({
-      "/cards?name=N": { body: [{ ...dragapult, id: "a1-003", name: "Venusaur" }] },
-      "/cards/xy10-105a": { body: { ...dragapult, id: "xy10-105a", name: "N", localId: "105a" } },
+      "/cards?name=N": {
+        body: [
+          { id: "30th-c-021", localId: "021", name: "N" },
+          { id: "bw3-92", localId: "92", name: "N" },
+          { id: "xy10-105a", localId: "105a", name: "N" },
+        ],
+      },
+      "/cards/xy10-105a": {
+        body: {
+          id: "xy10-105a",
+          localId: "105a",
+          name: "N",
+          category: "Trainer",
+          rarity: "Ultra Rare",
+          illustrator: "Megumi Mizutani",
+          set: { id: "xy10", name: "Fates Collide" },
+        },
+      },
     });
     const client = new TcgdexClient();
     const lookup = await lookupCard(client, "N");
     expect(lookup?.card.id).toBe("xy10-105a");
     expect(lookup?.card.name).toBe("N");
-    // The name search still runs, but only to collect alternates for the card the id selected.
     expect(calls[0]).toContain("/cards/xy10-105a");
   });
 
