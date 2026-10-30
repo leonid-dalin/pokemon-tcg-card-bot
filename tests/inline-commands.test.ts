@@ -240,8 +240,10 @@ describe("inline cleanup scope", () => {
 
   it("leaves a card list readable", async () => {
     const fixture = cleanupFixture();
-    const { message } = fakeMessage(`<@${SELF}> printings Dragapult ex`);
+    const { message, replies } = fakeMessage(`<@${SELF}> printings Dragapult ex`);
     await handler(fixture.context as never)(message as never);
+    // The reply must be the card list itself, so an error reply cannot satisfy this.
+    expect(JSON.stringify(replies[0] ?? {})).toContain("Dragapult ex");
     expect(fixture.scheduled).toHaveLength(0);
   });
 });

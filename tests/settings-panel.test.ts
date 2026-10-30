@@ -418,6 +418,8 @@ describe("settings panel audit regressions", () => {
   it("announces a channel swap that keeps the same count", async () => {
     const fx = fixture({ autoReplyChannelMode: "selected", selectedChannelIds: ["ch-1", "ch-2"] });
     const sessionId = openServerPanel(fx);
+    // A two-for-two replacement: remove both originals, then add two different ones.
+    await fx.controller.handleComponent(fx.interaction(`st:ch:remove-submit:${sessionId}`, { values: ["ch-1", "ch-2"], admin: true }).interaction as never);
     await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-3", "ch-4"], admin: true }).interaction as never);
     await fx.controller.handleComponent(fx.interaction(`st:ch:save:${sessionId}`, { admin: true }).interaction as never);
     expect(fx.recorded).toHaveLength(1);
