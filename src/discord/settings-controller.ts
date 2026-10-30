@@ -42,6 +42,8 @@ export interface PanelInteraction {
   followUp(payload: unknown): Promise<unknown>;
   deferUpdate(): Promise<unknown>;
   deferReply(options?: { flags?: number }): Promise<unknown>;
+  readonly deferred?: boolean;
+  readonly replied?: boolean;
   showModal(modal: unknown): unknown;
 }
 
@@ -360,6 +362,7 @@ export class SettingsPanelController {
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
+      session.draftChannelIds = [...before.selectedChannelIds];
       this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed while you were here. This screen shows the current values; make your choice again.");
       return;
@@ -393,7 +396,16 @@ export class SettingsPanelController {
       await this.render(session, interaction, isAdmin, undefined, savedNotice);
     } catch (error) {
       console.error(`settings panel refresh failed after a committed change (${errorCategory(error)})`);
-      await interaction.followUp({ content: `${savedNotice}. The panel could not refresh; reopen it to see the new state.`, flags: MessageFlags.Ephemeral }).catch(() => {});
+      const notice = {
+        content: `${savedNotice}. The panel could not refresh; reopen it to see the new state.`,
+        flags: MessageFlags.Ephemeral,
+      };
+      // An unacknowledged interaction must be answered first, or Discord rejects the follow-up.
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp(notice).catch(() => {});
+        return;
+      }
+      await interaction.reply(notice).catch(() => {});
     }
   }
 
@@ -468,6 +480,7 @@ export class SettingsPanelController {
     if (sub === "all" || sub === "selected") {
       if (baselineOf(before) !== session.baseline) {
         session.baseline = baselineOf(before);
+        session.draftChannelIds = [...before.selectedChannelIds];
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin, "These settings changed while you were here. Choose again.");
         return;
@@ -535,6 +548,7 @@ export class SettingsPanelController {
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
+      session.draftChannelIds = [...before.selectedChannelIds];
       this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed while you were here. Choose again.");
       return;
@@ -565,6 +579,7 @@ export class SettingsPanelController {
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
+      session.draftChannelIds = [...before.selectedChannelIds];
       this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed since you opened the reset confirmation. Review them and confirm the reset again.");
       return;
