@@ -4,13 +4,14 @@ import type { SettingsStore } from "../settings-store.js";
 
 const DELETE_AFTER_MS = 90_000;
 const DRAIN_INTERVAL_MS = 30_000;
+const MAX_TIMER_MS = 2_147_483_647;
 const RETRY_BASE_MS = 60_000;
 const MAX_ATTEMPTS = 5;
 
 type Deletion = "deleted" | "absent" | "failed";
 
 /** Discord codes that mean the message or its channel is already gone. */
-const GONE_CODES = new Set([10003, 10008, 50001, 50003]);
+const GONE_CODES = new Set([10003, 10008, 50003]);
 
 function isGone(error: unknown): boolean {
   const code = (error as { code?: unknown } | null)?.code;
@@ -24,7 +25,7 @@ function isGone(error: unknown): boolean {
  * channel; the bot's reply in a direct message needs nothing but the channel.
  */
 export class CleanupWorker {
-  private timer: ReturnType<typeof setInterval> | undefined;
+  private timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly client: Client,
@@ -32,13 +33,38 @@ export class CleanupWorker {
   ) {}
 
   schedule(job: { botMessageId: string; channelId: string; invokeMessageId: string }): void {
+    const deleteAfter = Date.now() + DELETE_AFTER_MS;
     this.store.scheduleCleanup({
       messageId: job.botMessageId,
       channelId: job.channelId,
       invokeMessageId: job.invokeMessageId,
-      deleteAfter: Date.now() + DELETE_AFTER_MS,
+      deleteAfter,
       attempts: 0,
     });
+    this.wakeAt(deleteAfter);
+  }
+
+  /** Drains at the job's own deadline, so polling never adds a whole interval of delay. */
+  private wakeAt(deadline: number): void {
+    if (this.timer) clearTimeout(this.timer);
+    const wait = Math.min(Math.max(deadline - Date.now(), 0), MAX_TIMER_MS);
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      void this.drain();
+      this.wakeAtNext();
+    }, wait);
+    this.timer.unref?.();
+  }
+
+  private wakeAtNext(): void {
+    const next = this.store.dueCleanup(Date.now());
+    if (next.length > 0) return;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      void this.drain();
+      this.wakeAtNext();
+    }, DRAIN_INTERVAL_MS);
+    this.timer.unref?.();
   }
 
   start(): void {
@@ -50,7 +76,7 @@ export class CleanupWorker {
   }
 
   stop(): void {
-    if (this.timer) clearInterval(this.timer);
+    if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
   }
 
@@ -80,8 +106,9 @@ export class CleanupWorker {
       if (!direct) {
         if (!("permissionsFor" in channel)) return "absent";
         const permissions = channel.permissionsFor(this.client.user?.id ?? "");
-        if (needsManage && permissions && !permissions.has(PermissionFlagsBits.ManageMessages)) return "absent";
-        if (!needsManage && permissions && !permissions.has(PermissionFlagsBits.ViewChannel)) return "absent";
+        // A missing permission is not a deletion: keep the job retryable and surface it.
+        if (permissions && !permissions.has(PermissionFlagsBits.ViewChannel)) return "failed";
+        if (needsManage && permissions && !permissions.has(PermissionFlagsBits.ManageMessages)) return "failed";
       } else if (needsManage) {
         // A member's direct message is their own; only the bot reply is ours to remove.
         return "absent";
