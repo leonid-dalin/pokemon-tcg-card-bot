@@ -96,7 +96,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           ? "command"
           : "other";
   const label = "customId" in interaction ? interaction.customId : interaction.commandName;
-  console.log(`interaction ${kind} ${label} received (${interaction.id})`);
+  console.log(`interaction ${kind} ${label} received (${interaction.id}) token=${"token" in interaction ? interaction.token : "none"}`);
   let handled = false;
   try {
     if (interaction.isAutocomplete()) {
