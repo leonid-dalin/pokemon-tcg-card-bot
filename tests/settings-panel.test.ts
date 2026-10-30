@@ -443,3 +443,28 @@ describe("settings panel audit regressions", () => {
     expect(fx.recorded[0]?.join(" ")).toContain("Reply cooldown");
   });
 });
+
+describe("settings panel committed channel saves", () => {
+  it("announces a mode change even when the saved ids are unchanged", async () => {
+    // Everywhere is active and "ch-1" is already stored: saving it switches to Selected.
+    const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: ["ch-1"] });
+    const sessionId = openChannelsPanel(fx);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:save:${sessionId}`, { admin: true }).interaction as never);
+    expect(fxStore(fx).autoReplyChannelMode).toBe("selected");
+    expect(fx.recorded).toHaveLength(1);
+  });
+
+  it("keeps the channel change announced when the panel refresh fails", async () => {
+    const fx = fixture();
+    const sessionId = openChannelsPanel(fx);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
+    const failing = fx.interaction(`st:ch:save:${sessionId}`, { admin: true });
+    (failing.interaction as { editReply: () => Promise<never> }).editReply = async () => {
+      throw new Error("Discord update failed");
+    };
+    await expect(fx.controller.handleComponent(failing.interaction as never)).resolves.toBeUndefined();
+    expect(fxStore(fx).selectedChannelIds).toEqual(["ch-1"]);
+    expect(fx.recorded).toHaveLength(1);
+  });
+});
