@@ -93,7 +93,6 @@ const settingsPanel = new SettingsPanelController(
       try {
         await channel.send({ embeds: [settingsAnnouncement(description)] });
       } catch (error) {
-        // A failed embed must not stop the caller's committed-save notice.
         console.error(`settings announcement failed in ${guildId}/${channelId} (${errorCategory(error)})`);
         return;
       }
