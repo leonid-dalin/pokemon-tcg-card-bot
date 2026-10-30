@@ -161,7 +161,6 @@ export class SettingsPanelController {
     private readonly announce?: (guildId: string, channelId: string, lines: string[]) => Promise<void>,
   ) {}
 
-  /** Opens the panel for a slash invocation: private, no channel message. */
   async openForCommand(interaction: PanelInteraction, staleClient?: boolean): Promise<void> {
     await this.open(interaction, staleClient === true);
   }
@@ -184,8 +183,6 @@ export class SettingsPanelController {
       components: [renderPanel(model)],
     };
     try {
-      // Deferring first keeps the panel a follow-up message: an initial ephemeral
-      // response with the V2 flag is stored by Discord but renders blank on the client.
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await interaction.editReply(payload as never);
     } catch (error) {
@@ -375,22 +372,17 @@ export class SettingsPanelController {
     const current = describeField(after, field);
     session.baseline = baselineOf(after);
     this.sessions.update(session);
+    await this.renderCommitted(session, interaction, isAdmin, `Saved: ${current}`);
     if (previous !== current) {
       await this.announceChange(interaction as PanelInteraction & { guildId: string }, [`${fieldName(field)}: ${previous} -> ${current}`]);
     }
-    await this.renderCommitted(session, interaction, isAdmin, `Saved: ${current}`, current);
   }
 
-  /**
-   * The store has already committed, so a failed panel refresh must not be reported
-   * as an ordinary failure. A private notice carries the outcome either way.
-   */
   private async renderCommitted(
     session: SettingsSession,
     interaction: PanelInteraction,
     isAdmin: boolean,
     savedNotice: string,
-    committedValue: string,
   ): Promise<void> {
     try {
       await this.render(session, interaction, isAdmin, undefined, savedNotice);
@@ -492,7 +484,7 @@ export class SettingsPanelController {
       this.sessions.update(session);
       const previous = before.autoReplyChannelMode === "all" ? "Everywhere" : "Selected channels";
       const current = sub === "all" ? "Everywhere" : "Selected channels";
-      await this.render(session, interaction, isAdmin, undefined, `Saved: replies are allowed ${current.toLowerCase()}.`);
+      await this.renderCommitted(session, interaction, isAdmin, `Saved: replies are allowed ${current.toLowerCase()}.`);
       if (previous !== current) {
         await this.announceChange(interaction as PanelInteraction & { guildId: string }, [`Automatic-reply channels: ${previous} -> ${current}`]);
       }
@@ -526,10 +518,8 @@ export class SettingsPanelController {
     const modeChanged = before.autoReplyChannelMode !== after.autoReplyChannelMode;
     const changed = modeChanged || previousIds !== savedIds;
     const saved = `Saved: replies are allowed in ${after.selectedChannelIds.length} channel${after.selectedChannelIds.length === 1 ? "" : "s"}.`;
-    // The panel refresh acknowledges the interaction, so it runs before any slow send.
-    await this.renderCommitted(session, interaction, isAdminNow(interaction), saved, saved);
+    await this.renderCommitted(session, interaction, isAdminNow(interaction), saved);
     if (changed) {
-      // A same-count swap must still name the channels it replaced, or the record says nothing.
       const added = after.selectedChannelIds.filter((id) => !before.selectedChannelIds.includes(id));
       const removed = before.selectedChannelIds.filter((id) => !after.selectedChannelIds.includes(id));
       await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
@@ -570,8 +560,7 @@ export class SettingsPanelController {
     session.baseline = baselineOf(after);
     this.sessions.update(session);
     const saved = `Saved: reply cooldown is ${seconds === 0 ? "off" : `${seconds}s`}.`;
-    // The modal submission is acknowledged before the announcement is sent.
-    await this.renderCommitted(session, interaction, isAdmin, saved, saved);
+    await this.renderCommitted(session, interaction, isAdmin, saved);
     if (before.cooldownSeconds !== seconds) {
       await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
         `Reply cooldown: ${before.cooldownSeconds === 0 ? "off" : `${before.cooldownSeconds}s`} -> ${seconds === 0 ? "off" : `${seconds}s`}`,
@@ -602,11 +591,11 @@ export class SettingsPanelController {
     const after = this.store.get(session.guildId);
     session.baseline = baselineOf(after);
     this.sessions.update(session);
+    await this.renderCommitted(session, interaction, isAdmin, "Server settings were reset.");
     await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
       "Server settings were reset to the deployment defaults.",
       ...resetLines(before, after),
     ]);
-    await this.render(session, interaction, isAdmin, "Server settings were reset.");
   }
 
   private async announceChange(interaction: PanelInteraction & { guildId: string }, lines: string[]): Promise<void> {

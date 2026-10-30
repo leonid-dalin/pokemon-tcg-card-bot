@@ -515,3 +515,58 @@ describe("settings panel acknowledgement order", () => {
     expect(order).toEqual(["edit", "announce"]);
   });
 });
+
+describe("settings panel remaining sibling paths", () => {
+  function ordered(fx: Fixture) {
+    const order: string[] = [];
+    const controller = new SettingsPanelController(
+      (fx.controller as unknown as { store: never }).store,
+      true,
+      fx.sessions,
+      async () => {
+        order.push("announce");
+      },
+    );
+    return { controller, order };
+  }
+
+  it("acknowledges an ordinary field change before the announcement", async () => {
+    const fx = fixture();
+    const { controller, order } = ordered(fx);
+    const session = fx.sessions.open("member-1", "guild-a", "server", "replies", baselineOf(fxStoreState(fx)));
+    const click = fx.interaction(`st:set:messages:off:${session.id}`, { admin: true });
+    (click.interaction as { editReply: unknown }).editReply = async () => {
+      order.push("edit");
+    };
+    await controller.handleComponent(click.interaction as never);
+    expect(order).toEqual(["edit", "announce"]);
+  });
+
+  it("acknowledges a reset before the announcement", async () => {
+    const fx = fixture();
+    const { controller, order } = ordered(fx);
+    const session = fx.sessions.open("member-1", "guild-a", "server", "overview", baselineOf(fxStoreState(fx)));
+    const confirm = fx.interaction(`st:reset:confirm:${session.id}`, { admin: true });
+    (confirm.interaction as { editReply: unknown }).editReply = async () => {
+      order.push("edit");
+    };
+    await controller.handleComponent(confirm.interaction as never);
+    expect(order).toEqual(["edit", "announce"]);
+  });
+
+  it("keeps a mode-button change announced when the refresh fails", async () => {
+    const fx = fixture();
+    const session = fx.sessions.open("member-1", "guild-a", "server", "channels", baselineOf(fxStoreState(fx)));
+    const click = fx.interaction(`st:ch:selected:${session.id}`, { admin: true });
+    (click.interaction as { editReply: unknown }).editReply = async () => {
+      throw new Error("update failed");
+    };
+    await expect(controller_safe(fx, click.interaction)).resolves.toBeUndefined();
+    expect(fxStore(fx).autoReplyChannelMode).toBe("selected");
+    expect(fx.recorded).toHaveLength(1);
+  });
+
+  async function controller_safe(fx: Fixture, interaction: unknown): Promise<unknown> {
+    return fx.controller.handleComponent(interaction as never);
+  }
+});
