@@ -2,6 +2,10 @@ import { REST } from "discord.js";
 import { loadConfig } from "../src/config.js";
 import { loadDotEnv } from "../src/env.js";
 
+// The reply cooldown takes MentionBudget's default burst (cooldown.ts), which is
+// independent of MEMBER_LOOKUP_BURST, the upstream request cap.
+const REPLY_BURST = 3;
+
 // Check the configured token and list guilds and registered commands through REST.
 // Usage: npm run doctor
 loadDotEnv();
@@ -20,9 +24,11 @@ try {
 
 console.log(`client id: ${config.clientId}`);
 console.log(`mention replies: ${config.mentionEnabled ? "on" : "off (set MENTION_ENABLED=true)"}`);
+// The reply cooldown uses MentionBudget's default burst, not MEMBER_LOOKUP_BURST,
+// which caps upstream requests.
 console.log(
     config.mentionCooldownSeconds > 0
-      ? `throttle: burst of ${config.memberLookupBurst}, then one per ${config.mentionCooldownSeconds}s per member`
+      ? `throttle: burst of ${REPLY_BURST}, then one per ${config.mentionCooldownSeconds}s per member`
       : "throttle: off",
   );
 console.log("");
