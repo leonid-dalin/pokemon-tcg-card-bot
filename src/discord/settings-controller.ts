@@ -535,10 +535,15 @@ export class SettingsPanelController {
     if (changed) {
       const added = after.selectedChannelIds.filter((id) => !before.selectedChannelIds.includes(id));
       const removed = before.selectedChannelIds.filter((id) => !after.selectedChannelIds.includes(id));
+      // The announcement is public, so it reports how many channels changed rather
+      // than naming them; channel identities are restricted information.
+      const deltas = [
+        ...(added.length > 0 ? [`Added ${added.length}`] : []),
+        ...(removed.length > 0 ? [`removed ${removed.length}`] : []),
+      ];
       await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
         `Automatic-reply channels: ${previous} -> ${after.selectedChannelIds.length} selected`,
-        ...(added.length > 0 ? [`Added: ${added.map((id) => `<#${id}>`).join(", ")}`] : []),
-        ...(removed.length > 0 ? [`Removed: ${removed.map((id) => `<#${id}>`).join(", ")}`] : []),
+        ...(deltas.length > 0 ? [deltas.join(", ")] : []),
       ]);
     }
   }
