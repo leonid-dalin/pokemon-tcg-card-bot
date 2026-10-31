@@ -91,12 +91,27 @@ const LOCAL_ID = /^[a-z0-9.!%]{1,8}$/i;
 export const CARD_ID = /^[a-z0-9.]+(?:-[a-z0-9.]+)*-[a-z0-9.!%]{1,8}$/i;
 /** The printed code, such as "C1 168", addresses the same card as "c1-168". */
 const printedAsId = (value: string): string => {
-  const printed = /^([a-z]{1,3}[0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(value.trim());
-  if (printed) return `${printed[1]}-${printed[2]}`;
+  const trimmed = value.trim();
+  const printed = /^([a-z]{1,3}[0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
   // A physical set code, such as "NVI 101", addresses the same card as "bw3-101".
-  const coded = /^([a-z0-9:.]{2,6})\s+([0-9]{1,3}[a-z]?)$/i.exec(value.trim());
-  const setId = coded ? setIdForCode(coded[1]!) : undefined;
-  return setId && coded ? `${setId}-${coded[2]}` : value;
+  const coded = /^([a-z0-9:.]{2,6})\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
+  // A printed promo form, such as "P-C 1", addresses the same card as "pc-001".
+  const promo = /^p[-\s]?([a-c])\s+([0-9]{1,3})$/i.exec(trimmed);
+  const derived = printed
+    ? `${printed[1]}-${printed[2]}`
+    : promo
+      ? `p${promo[1]}-${promo[2]}`
+      : coded && setIdForCode(coded[1]!)
+        ? `${setIdForCode(coded[1]!)}-${coded[2]}`
+        : trimmed;
+  const at = derived.lastIndexOf("-");
+  const number = derived.slice(at + 1);
+  // Package records zero-pad three-digit numbers, so "A1 36" addresses "a1-036".
+  if (/^\d{1,2}$/.test(number)) {
+    const padded = `${derived.slice(0, at)}-${number.padStart(3, "0")}`;
+    if (getPocketCard(derived) === undefined && getPocketCard(padded) !== undefined) return padded;
+  }
+  return derived;
 };
 
 export const isCardId = (value: string): boolean => {

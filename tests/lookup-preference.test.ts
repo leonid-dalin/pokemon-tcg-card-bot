@@ -182,3 +182,17 @@ vi.restoreAllMocks();
   it("still rejects an unknown set code", () => {
     expect(isCardId("ZZZ 1")).toBe(false);
   });
+
+  it("addresses a padded package record through its printed number", async () => {
+    const client = clientReturning([{ id: "a1-036", name: "Charizard ex", localId: "036" }]);
+    const byPrinted = await lookupCard(client, "Charizard", "A1 36", {});
+    expect(byPrinted?.card.id.toLowerCase()).toBe("a1-036");
+    expect(await lookupCard(client, "Charizard", "A1 036", {})).toBeDefined();
+  });
+
+  it("addresses a printed promo code and number", async () => {
+    const client = clientReturning([]);
+    const byPrinted = await lookupCard(client, "Pikachu", "P-C 1", {});
+    expect(byPrinted?.card.id.toLowerCase()).toBe("pc-001");
+    expect(isCardId("P-C 1")).toBe(true);
+  });
