@@ -430,8 +430,9 @@ describe("settings panel audit regressions", () => {
     const record = fx.recorded[0]!.join(" ");
     expect(record).toContain("2 selected");
     expect(record).toContain("Added 2, removed 2");
+    // No channel may appear in any form, bare or as a mention.
     expect(record).not.toMatch(/<#\d+>/);
-    expect(record).not.toContain("<#ch-1>");
+    for (const id of ["ch-1", "ch-2", "ch-3", "ch-4"]) expect(record, id).not.toContain(id);
   });
 
   it("announces a custom cooldown change", async () => {

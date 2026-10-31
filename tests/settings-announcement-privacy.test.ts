@@ -48,7 +48,12 @@ describe("settings announcements", () => {
 
     const announced = announcements.flat().join("\n");
     expect(announcements).toHaveLength(1);
+    // Reject an id however it could appear: a mention or a bare value.
     expect(announced).not.toMatch(/<#\d+>/);
+    for (const id of ["111111111111111111", "222222222222222222", "333333333333333333", "444444444444444444"]) {
+      expect(announced, id).not.toContain(id);
+    }
     expect(announced).toContain("2 selected");
+    expect(announced).toContain("Added 2, removed 1");
   });
 });
