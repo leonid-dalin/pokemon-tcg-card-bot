@@ -36,6 +36,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Lock race check
+        run: npm run check:lock
+
       - name: Deployment tests
         run: python3 -m unittest discover -s deploy/tests -v
 

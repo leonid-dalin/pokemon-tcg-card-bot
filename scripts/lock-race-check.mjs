@@ -21,7 +21,6 @@ let doubleWinners = 0;
 for (let round = 0; round < rounds; round += 1) {
   const dir = mkdtempSync(join(tmpdir(), "lock-race-"));
   const lock = join(dir, ".bot.pid");
-  // A dead pid so every process must go through the stale-clear path.
   writeFileSync(lock, "999999");
   const racerPath = join(dir, "racer.mjs");
   writeFileSync(racerPath, racer);
