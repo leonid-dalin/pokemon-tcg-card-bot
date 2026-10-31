@@ -327,6 +327,7 @@ export class SettingsPanelController {
               new TextInputBuilder()
                 .setCustomId("seconds")
                 .setLabel("Seconds between replies (0 to 86400)")
+                .setMaxLength(5)
                 .setStyle(TextInputStyle.Short)
                 .setRequired(true),
             ),
