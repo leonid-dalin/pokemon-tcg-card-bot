@@ -258,25 +258,27 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
   for (const attack of card.attacks ?? []) {
     fields.push({ name: attackName(attack, options.energyEmoji ?? {}), value: attackValue(attack) || "\u200b", inline: false });
   }
-  // These three stay visible on every card so the stat block keeps a stable shape.
-  fields.push({ name: "Weakness", value: combatEntry(card.weaknesses), inline: true });
-  fields.push({ name: "Resistance", value: combatEntry(card.resistances), inline: true });
-  fields.push({ name: "Retreat", value: retreatValue(card.retreat), inline: true });
+  if (isPokemon(card)) {
+    fields.push({ name: "Weakness", value: combatEntry(card.weaknesses), inline: true });
+    fields.push({ name: "Resistance", value: combatEntry(card.resistances), inline: true });
+    fields.push({ name: "Retreat", value: retreatValue(card.retreat), inline: true });
+  }
 
   return sharedCardView(card, options, fields, cardDescription(card));
 }
 
-/** A value the card data uses to mean "this stat does not exist". */
+/** Trainers and Energy carry no weakness, resistance or retreat cost. */
+function isPokemon(card: Card): boolean {
+  const category = card.category?.trim().toLowerCase() ?? "";
+  return category === "pokemon" || category === "pokémon";
+}
+
 const ABSENT = new Set(["none", "n/a", "null", "undefined", "-"]);
 
 function isAbsent(value: string | undefined): boolean {
   return value === undefined || ABSENT.has(value.trim().toLowerCase());
 }
 
-/**
- * Formats a weakness or resistance as `Fire (×2)`; the multiplier sits in
- * parentheses so it reads apart from the type. An absent stat says "none".
- */
 export function combatEntry(entries: { type: string; value?: string }[] | undefined): string {
   const parts: string[] = [];
   for (const entry of entries ?? []) {
@@ -287,7 +289,6 @@ export function combatEntry(entries: { type: string; value?: string }[] | undefi
   return parts.length > 0 ? parts.join(", ") : "none";
 }
 
-/** Retreat cost as a bare number, or "none" when the card has no cost recorded. */
 export function retreatValue(retreat: number | undefined): string {
   return retreat === undefined || Number.isNaN(retreat) ? "none" : String(retreat);
 }

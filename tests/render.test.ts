@@ -267,7 +267,13 @@ describe("combat fields", () => {
   const combat = (card: Card) =>
     (renderCard(card).fields ?? []).filter((field) => ["Weakness", "Resistance", "Retreat"].includes(field.name));
 
-  it("keeps all three fields on a card with neither stat", () => {
+  it("keeps no combat fields on a trainer", () => {
+    const trainer = { ...dragapult, category: "Trainer", weaknesses: undefined, resistances: undefined, retreat: undefined };
+    const fields = combat(trainer);
+    expect(fields).toEqual([]);
+  });
+
+  it("keeps all three fields on a Pokemon with neither stat", () => {
     const fields = combat({ ...dragapult, weaknesses: undefined, resistances: undefined });
     expect(fields.map((field) => field.name)).toEqual(["Weakness", "Resistance", "Retreat"]);
     expect(fields.find((field) => field.name === "Weakness")?.value).toBe("none");
