@@ -26,6 +26,17 @@ export function setIdForCode(code: string): string | undefined {
   return setIdByCode.get(code.toLowerCase());
 }
 
+// Subset codes carry their own suffix (BRS:TG, SHF:SV), which the footer drops.
+const setIdBySubset = new Map(
+  SET_INDEX.filter((entry) => entry.code && entry.code.includes(":"))
+    .map((entry) => [(entry.code as string).toLowerCase(), entry.id]),
+);
+
+/** The subset set a gallery footer addresses, such as "BRS:TG" to swsh9tg. */
+export function setIdForSubsetCode(code: string): string | undefined {
+  return setIdBySubset.get(code.toLowerCase());
+}
+
 /**
  * Formats a printing with its indexed set code and card number.
  * Pocket sets use their own codes; unknown physical sets retain the raw ID.

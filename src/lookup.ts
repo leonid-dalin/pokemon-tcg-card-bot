@@ -1,7 +1,7 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
-import { printedNumber, setIdForCode } from "./printed.js";
+import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
@@ -97,9 +97,14 @@ const printedCandidates = (value: string): string[] => {
   // Pocket series ids, such as "A1 36" or "B4B 133".
   const pocket = /^([abc][0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
   // A physical set code, such as "NVI 101" or "G1 5", addresses its set's id.
-  const coded = /^([a-z0-9:.]{2,7})\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
+  const coded = /^([a-z0-9:.]{2,7})\s+([a-z]{0,3}[0-9]{1,3}[a-z]?)$/i.exec(trimmed);
   const candidates = [promo ? `p${promo[1]}-${promo[2]}` : "", pocket ? `${pocket[1]}-${pocket[2]}` : ""];
   if (coded) {
+    // Gallery footers drop the subset suffix ("BRS TG23" for swsh9tg), so the
+    // number's own prefix identifies the subset the card lives in.
+    const gallery = /^([a-z]+)([0-9]{1,3})$/i.exec(coded[2]!);
+    const subset = gallery ? setIdForSubsetCode(`${coded[1]}:${gallery[1]}`) : undefined;
+    if (subset) candidates.push(`${subset}-${coded[2]}`);
     const setId = setIdForCode(coded[1]!) ?? (SET_IDS.has(normaliseName(coded[1]!)) ? coded[1]! : undefined);
     if (setId) candidates.push(`${setId}-${coded[2]}`);
   }
