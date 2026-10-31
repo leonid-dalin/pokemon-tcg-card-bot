@@ -70,7 +70,7 @@ export class CleanupWorker {
           } catch (error) {
             // A store failure here must not stop the clock: retry on the next interval.
             console.error(`cleanup reschedule failed (${errorCategory(error)})`);
-            this.arm(Date.now() + DRAIN_INTERVAL_MS);
+            this.armRecovery();
           }
         });
     }, wait);
@@ -83,6 +83,14 @@ export class CleanupWorker {
     if (this.timer) clearTimeout(this.timer);
     this.armedAt = next;
     this.arm(next);
+  }
+
+  /** Arms a retry wake-up that keeps its deadline, like any other scheduled timer. */
+  private armRecovery(): void {
+    const deadline = Date.now() + DRAIN_INTERVAL_MS;
+    if (this.timer) clearTimeout(this.timer);
+    this.armedAt = deadline;
+    this.arm(deadline);
   }
 
   start(): void {
@@ -98,7 +106,7 @@ export class CleanupWorker {
         } catch (error) {
           // A store failure here must not stop the clock: retry on the next interval.
           console.error(`cleanup reschedule failed (${errorCategory(error)})`);
-          this.arm(Date.now() + DRAIN_INTERVAL_MS);
+          this.armRecovery();
         }
       });
   }

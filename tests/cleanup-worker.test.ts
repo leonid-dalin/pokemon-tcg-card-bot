@@ -198,9 +198,47 @@ describe("cleanup worker scheduling", () => {
     worker.stop();
     vi.useRealTimers();
   });
+  it("does not let a later job cancel the wake-up armed after a store failure", async () => {
+    vi.useFakeTimers();
+    const deletions: string[] = [];
+    type Job = typeof JOB & { deleteAfter: number };
+    let due: Job[] = [];
+    let failNext = true;
+    const store = {
+      scheduleCleanup: (job: Job) => void (due = [...due, { ...job }]),
+      dueCleanup: (now: number) => due.filter((job) => job.deleteAfter <= now),
+      nextCleanupAt: () => {
+        if (failNext) throw new Error("store unavailable");
+        return due.length > 0 ? Math.min(...due.map((job) => job.deleteAfter)) : undefined;
+      },
+      completeCleanup: (id: string) => void (due = due.filter((job) => job.messageId !== id)),
+      deferCleanup: (id: string, at: number) => {
+        due = due.map((job) => (job.messageId === id ? { ...job, deleteAfter: at, attempts: job.attempts + 1 } : job));
+      },
+    };
+    const client = { user: { id: "bot" }, channels: { fetch: async () => channel(deletions) } };
+    const worker = new CleanupWorker(client as never, store as never);
+
+    // Job A is due at 90s; the reschedule after it fails once, arming a recovery wake-up.
+    worker.schedule({ botMessageId: "reply-1", channelId: "channel-1", invokeMessageId: "invoke-1" });
+    failNext = false;
+    await vi.advanceTimersByTimeAsync(90_000);
+
+    // A later exchange is scheduled while the recovery wake-up is pending.
+    worker.schedule({ botMessageId: "reply-2", channelId: "channel-2", invokeMessageId: "invoke-2" });
+
+    // Job B must not push the pending wake-up out: B is not due for 90s.
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(deletions).not.toContain("reply-2");
+
+    worker.stop();
+    vi.useRealTimers();
+  });
+
 });
 
 describe("cleanup worker deadline arming", () => {
+
   it("keeps the earlier armed deadline when a later job arrives", async () => {
     vi.useFakeTimers();
     const deletions: string[] = [];
