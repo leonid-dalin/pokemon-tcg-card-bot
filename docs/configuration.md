@@ -21,7 +21,7 @@ The bot reads process environment variables and a local `.env`. The user-facing 
 | `INVOCATION_LOG_DIR` | Optional directory for full triggering-message and reply logs; disabled when unset |
 | `INVOCATION_LOG_RETENTION_DAYS` | Log retention setting; defaults to `60`, capped at `60` |
 
-The cooldown allows a burst of three automatic replies per member and channel, then replenishes one reply per configured interval. Zero disables it. Slash commands do not use that budget
+The cooldown allows a burst of five automatic replies per member and channel, then replenishes one reply per configured interval. Zero disables it. Slash commands do not use that budget
 
 Invocation logging is optional and can retain message content. Read the [privacy policy](../PRIVACY.md) before enabling it. Pocket replies use their own source credit regardless of `ATTRIBUTION`
 

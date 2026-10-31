@@ -22,7 +22,7 @@ console.log(`client id: ${config.clientId}`);
 console.log(`mention replies: ${config.mentionEnabled ? "on" : "off (set MENTION_ENABLED=true)"}`);
 console.log(
     config.mentionCooldownSeconds > 0
-      ? `throttle: burst of 3, then one per ${config.mentionCooldownSeconds}s per member`
+      ? `throttle: burst of ${config.memberLookupBurst}, then one per ${config.mentionCooldownSeconds}s per member`
       : "throttle: off",
   );
 console.log("");
