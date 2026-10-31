@@ -90,7 +90,14 @@ const SET_IDS = new Set(SET_INDEX.map((entry) => normaliseName(entry.id)));
 const LOCAL_ID = /^[a-z0-9.!%]{1,8}$/i;
 export const CARD_ID = /^[a-z0-9.]+(?:-[a-z0-9.]+)*-[a-z0-9.!%]{1,8}$/i;
 /** Recognises IDs from indexed sets or exact records in the Pocket package. */
+/** The printed code, such as "C1 168", addresses the same card as "c1-168". */
+const printedAsId = (value: string): string => {
+  const printed = /^([a-z]{1,3}[0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(value.trim());
+  return printed ? `${printed[1]}-${printed[2]}` : value;
+};
+
 export const isCardId = (value: string): boolean => {
+  value = printedAsId(value);
   const at = value.lastIndexOf("-");
   if (at <= 0 || at === value.length - 1) return false;
   if (!LOCAL_ID.test(value.slice(at + 1))) return false;
@@ -213,7 +220,7 @@ export async function lookupCard(
 ): Promise<CardLookup | undefined> {
   // Exact card IDs bypass name and set matching.
   if (setHint && isCardId(setHint.trim())) {
-    return lookupById(client, setHint.trim(), options);
+    return lookupById(client, printedAsId(setHint.trim()), options);
   }
 
   // A one-character name cannot be resolved by upstream search: TCGdex treats it
@@ -225,6 +232,10 @@ export async function lookupCard(
     const exact = findExactCardName(query);
     if (!exact) return undefined;
     return lookupById(client, exact.id, options);
+  }
+
+  if (isCardId(query.trim()) && printedAsId(query.trim()) !== query.trim()) {
+    return lookupById(client, printedAsId(query.trim()), options);
   }
 
   // A Pocket alias selects the package catalogue; forcing a game always wins.

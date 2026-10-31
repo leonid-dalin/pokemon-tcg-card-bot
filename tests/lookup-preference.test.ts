@@ -157,3 +157,16 @@ vi.restoreAllMocks();
     expect(byId?.card.id.toLowerCase()).toBe("pc-001");
     expect(byName?.card.id.toLowerCase()).toBe("pc-001");
   });
+
+  it("accepts the printed set code and number as a card id", async () => {
+    const client = clientReturning([]);
+    const asHint = await lookupCard(client, "Rika", "C1 168", {});
+    const asQuery = await lookupCard(client, "c1 168", "pocket", {});
+    expect(asHint?.card.id.toLowerCase()).toBe("c1-168");
+    expect(asQuery?.card.id.toLowerCase()).toBe("c1-168");
+  });
+
+  it("still rejects a printed form that names no card", async () => {
+    const client = clientReturning([]);
+    expect(await lookupCard(client, "Rika", "C1 999", {})).toBeUndefined();
+  });
