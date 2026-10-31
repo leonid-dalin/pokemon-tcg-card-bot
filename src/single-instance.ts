@@ -185,14 +185,28 @@ function takeMarker(marker: string, candidate: string): number | undefined {
 export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
   const candidate = `${path}.${process.pid}`;
   try {
-    claimExclusive(candidate);
+    if (!claimExclusive(candidate)) {
+      // A crash between create and write leaves an empty candidate for this pid,
+      // which a container restart reuses. Replace it and claim again.
+      unlinkSync(candidate);
+      if (!claimExclusive(candidate)) {
+        console.error(`could not claim the lock candidate at ${candidate}`);
+        return false;
+      }
+    }
   } catch (error) {
     console.error(`could not write the lock candidate at ${candidate} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
     return false;
   }
   try {
-    if (createLock(candidate, path)) return claim(path);
-    return takeStale(candidate, path);
+    try {
+      if (createLock(candidate, path)) return claim(path);
+      return takeStale(candidate, path);
+    } catch (error) {
+      // Acquisition reports and declines rather than crashing startup.
+      console.error(`could not acquire the lock at ${path} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+      return false;
+    }
   } finally {
     try {
       unlinkSync(candidate);
@@ -256,7 +270,14 @@ function clearStale(candidate: string, path: string, pid: number | undefined): b
     return false;
   }
 
-  if (holder(aside) !== pid) {
+  let asidePid: number | undefined;
+  try {
+    asidePid = holder(aside);
+  } catch (error) {
+    console.error(`could not read the moved lock at ${aside} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+    return false;
+  }
+  if (asidePid !== pid) {
     // The file changed since it was read, so a live claim now owns the path.
     try {
       linkSync(aside, path);
