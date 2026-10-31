@@ -263,7 +263,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         return;
       }
       try {
-        const reply = searchReply(searchQuery, searchCardGroups(searchQuery), config.attribution, message.author.id, context.pages);
+        const reply = searchReply(searchQuery, searchCardGroups(searchQuery, guild ? guild.cardGames : "both"), config.attribution, message.author.id, context.pages);
         await logReply(reply as ReplyPayload);
       } catch (error) {
         console.error(`mention search failed (${errorCategory(error)})`);

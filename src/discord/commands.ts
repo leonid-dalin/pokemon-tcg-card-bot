@@ -175,7 +175,10 @@ export async function handleAutocomplete(
   }
 
   const summaries = await context.client.searchByName(query);
-  const ranked = rankPrintings(summaries, query).slice(0, 25);
+  // Offer only the games this server allows, matching the card command.
+  const scope = gamePreference(context, interaction.guildId)?.allowed ?? "both";
+  const allowed = scope === "both" ? summaries : summaries.filter((card) => isPocketCardId(card.id) === (scope === "pocket"));
+  const ranked = rankPrintings(allowed, query).slice(0, 25);
   await interaction.respond(
     ranked.map((card) => ({ name: `${card.name} · ${printedNumber(card.id)}`.slice(0, 100), value: card.id })),
   );
@@ -340,7 +343,9 @@ export async function handleSearchCommand(
 ): Promise<void> {
   const query = interaction.options.getString("text", true).trim();
   await interaction.deferReply();
-  await interaction.editReply(searchReply(query, searchCardGroups(query), context.attribution, interaction.user.id, context.pages));
+  // Search honours the server's Card games setting, as card lookups already do.
+  const scope = gamePreference(context, interaction.guildId)?.allowed ?? "both";
+  await interaction.editReply(searchReply(query, searchCardGroups(query, scope), context.attribution, interaction.user.id, context.pages));
 }
 
 export async function handleSetCommand(

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { normaliseName } from "./resolve.js";
 import { setRecency } from "./set-index.js";
+import { isPocketCardId } from "./prizes.js";
 
 export interface TextPart {
   kind: "ability" | "attack" | "effect";
@@ -214,9 +215,19 @@ export function findExactNames(query: string): TextHit[] {
     .sort((a, b) => b.id.localeCompare(a.id));
 }
 
+/** Which games a search may return, matching the server's Card games setting. */
+export type GameScope = "ptcg" | "pocket" | "both";
+
+/** Keeps entries the scope allows; "both" filters nothing. */
+function withinScope(entries: TextHit[], scope: GameScope): TextHit[] {
+  if (scope === "both") return entries;
+  const pocket = scope === "pocket";
+  return entries.filter((entry) => isPocketCardId(entry.id) === pocket);
+}
+
 /** Groups matching index records by normalised card name. */
-export function searchCardGroups(query: string): TextGroup[] {
-  return searchGroupsIn(load(), query);
+export function searchCardGroups(query: string, scope: GameScope = "both"): TextGroup[] {
+  return searchGroupsIn(withinScope(load(), scope), query);
 }
 
 /** Searches supplied entries and groups matches by name using their newest printing. */
