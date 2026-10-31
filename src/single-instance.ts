@@ -38,6 +38,7 @@ const registered = new Set<string>();
 function claim(path: string): boolean {
   if (registered.has(path)) return true;
   registered.add(path);
+  // Lock cleanup is best-effort: the process is exiting either way.
   const release = () => {
     try {
       if (holder(path) === process.pid) unlinkSync(path);
