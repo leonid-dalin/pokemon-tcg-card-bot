@@ -140,7 +140,7 @@ The native service suits a small single-board computer that also runs DNS or gat
 Place a private `.env` beside `compose.yaml`, set `INVOCATION_LOG_DIR=/data/invocations` if logging is wanted, then run:
 
 ```bash
-docker compose build
+BUILD_SHA=$(git rev-parse --short HEAD) BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) docker compose build
 docker compose up -d
 docker compose ps
 docker compose logs --tail=30

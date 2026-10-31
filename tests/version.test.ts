@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildIdentity, formatUptime, resolveIdentity } from "../src/version.js";
 
@@ -64,5 +65,20 @@ describe("image build identity", () => {
 
     expect(identity.source).toBe("env");
     expect(identity.packageVersion).toBeDefined();
+  });
+});
+
+describe("documented Compose build", () => {
+  it("supplies both build arguments the Compose file declares", () => {
+    const compose = readFileSync("compose.yaml", "utf8");
+    expect(compose).toContain("BUILD_SHA:");
+    expect(compose).toContain("BUILD_DATE:");
+
+    // The documented command must hand both values to the build.
+    const deployment = readFileSync("docs/deployment.md", "utf8");
+    const command = deployment.split("\n").find((line) => line.includes("docker compose build"));
+    expect(command).toBeDefined();
+    expect(command).toContain("BUILD_SHA=");
+    expect(command).toContain("BUILD_DATE=");
   });
 });
