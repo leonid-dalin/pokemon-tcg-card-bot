@@ -165,10 +165,19 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         trigger: redactUserMentions(message.content),
         reply: redactUserMentions(replyText(payload)),
       };
-      return message.reply(payload as never).then((sent) => {
+      let sent;
+      try {
+        sent = await message.reply(payload as never);
+      } catch {
+        return undefined;
+      }
+      // Recording is best-effort and must not hide the reply from cleanup.
+      try {
         context.invocations?.record(entry);
-        return sent;
-      }).catch(() => undefined);
+      } catch {
+        // Invocation logging stays optional; the reply was delivered.
+      }
+      return sent;
     };
 
     let activeBudget = budget;
@@ -207,7 +216,13 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         const sent = await logReply(payload);
         // Settings and version are exchanges; a paginated card list stays readable.
         if (cleanup && sent && (inline.command === "settings" || inline.command === "version")) {
-          cleanup.schedule({ botMessageId: sent.id, channelId: message.channelId, invokeMessageId: commandMessageId });
+          // Deletion is best-effort: the reply already went out, so a store
+          // failure must not reject the message handler.
+          try {
+            cleanup.schedule({ botMessageId: sent.id, channelId: message.channelId, invokeMessageId: commandMessageId });
+          } catch {
+            // The exchange stays readable past 90 seconds until the next drain.
+          }
         }
       };
       await runInline(inline, {

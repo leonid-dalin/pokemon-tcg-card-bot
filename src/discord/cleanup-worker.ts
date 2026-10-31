@@ -59,9 +59,17 @@ export class CleanupWorker {
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.armedAt = undefined;
-      void this.drain().finally(() => {
-        if (!this.stopped) this.wakeAtNext();
-      });
+      void this.drain()
+        .catch(() => undefined)
+        .finally(() => {
+          if (this.stopped) return;
+          try {
+            this.wakeAtNext();
+          } catch {
+            // A store failure here must not stop the clock: retry on the next interval.
+            this.arm(Date.now() + DRAIN_INTERVAL_MS);
+          }
+        });
     }, wait);
     this.timer.unref?.();
   }
@@ -76,9 +84,17 @@ export class CleanupWorker {
 
   start(): void {
     this.stopped = false;
-    void this.drain().finally(() => {
-      if (!this.stopped) this.wakeAtNext();
-    });
+    void this.drain()
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.stopped) return;
+        try {
+          this.wakeAtNext();
+        } catch {
+          // A store failure here must not stop the clock: retry on the next interval.
+          this.arm(Date.now() + DRAIN_INTERVAL_MS);
+        }
+      });
   }
 
   stop(): void {
