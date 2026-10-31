@@ -241,11 +241,6 @@ export class SettingsPanelController {
     if (namespace !== "st") return;
     const isAdmin = isAdminNow(interaction);
 
-    if (action === "launcher") {
-      await this.open(interaction, false);
-      return;
-    }
-
     if (action === "cooldown-modal") {
       await this.handleCooldownModal(interaction, isAdmin);
       return;
