@@ -1,4 +1,3 @@
-/** Default burst for a budget built without an explicit capacity. */
 export const DEFAULT_BURST = 3;
 
 export interface BucketOptions {

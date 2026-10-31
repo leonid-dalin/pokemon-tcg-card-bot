@@ -68,7 +68,6 @@ export class CleanupWorker {
           try {
             this.wakeAtNext();
           } catch (error) {
-            // A store failure here must not stop the clock: retry on the next interval.
             console.error(`cleanup reschedule failed (${errorCategory(error)})`);
             this.armRecovery();
           }

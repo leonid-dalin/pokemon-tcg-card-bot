@@ -92,11 +92,8 @@ export const CARD_ID = /^[a-z0-9.]+(?:-[a-z0-9.]+)*-[a-z0-9.!%]{1,8}$/i;
 /** Candidate ids a printed form may address, in data-backed precedence. */
 const printedCandidates = (value: string): string[] => {
   const trimmed = value.trim();
-  // A printed promo form, such as "P-C 1", addresses the same card as "pc-001".
   const promo = /^p[-\s]?([a-c])\s+([0-9]{1,3})$/i.exec(trimmed);
-  // Pocket series ids, such as "A1 36" or "B4B 133".
   const pocket = /^([abc][0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
-  // A physical set code, such as "NVI 101" or "G1 5", addresses its set's id.
   const coded = /^([a-z0-9:.]{2,7})\s+([a-z]{0,3}[0-9]{1,3}[a-z]?)$/i.exec(trimmed);
   const candidates = [promo ? `p${promo[1]}-${promo[2]}` : "", pocket ? `${pocket[1]}-${pocket[2]}` : ""];
   if (coded) {

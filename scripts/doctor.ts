@@ -3,9 +3,6 @@ import { loadConfig } from "../src/config.js";
 import { loadDotEnv } from "../src/env.js";
 import { DEFAULT_BURST } from "../src/cooldown.js";
 
-// The reply cooldown takes MentionBudget's default burst (cooldown.ts), which is
-// independent of MEMBER_LOOKUP_BURST, the upstream request cap.
-
 // Check the configured token and list guilds and registered commands through REST.
 // Usage: npm run doctor
 loadDotEnv();
