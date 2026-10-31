@@ -217,11 +217,12 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         // Settings and version are exchanges; a paginated card list stays readable.
         if (cleanup && sent && (inline.command === "settings" || inline.command === "version")) {
           // Deletion is best-effort: the reply already went out, so a store
-          // failure must not reject the message handler.
+          // failure must not reject the message handler. Without a stored job the
+          // exchange simply stays in the channel.
           try {
             cleanup.schedule({ botMessageId: sent.id, channelId: message.channelId, invokeMessageId: commandMessageId });
-          } catch {
-            // The exchange stays readable past 90 seconds until the next drain.
+          } catch (error) {
+            console.error(`cleanup schedule failed (${errorCategory(error)})`);
           }
         }
       };
