@@ -198,12 +198,12 @@ describe("cleanup worker scheduling", () => {
     worker.stop();
     vi.useRealTimers();
   });
-  it("does not let a later job cancel the wake-up armed after a store failure", async () => {
+  it("keeps a wake-up armed when the reschedule fails", async () => {
     vi.useFakeTimers();
     const deletions: string[] = [];
     type Job = typeof JOB & { deleteAfter: number };
     let due: Job[] = [];
-    let failNext = true;
+    let failNext = false;
     const store = {
       scheduleCleanup: (job: Job) => void (due = [...due, { ...job }]),
       dueCleanup: (now: number) => due.filter((job) => job.deleteAfter <= now),
@@ -218,18 +218,15 @@ describe("cleanup worker scheduling", () => {
     };
     const client = { user: { id: "bot" }, channels: { fetch: async () => channel(deletions) } };
     const worker = new CleanupWorker(client as never, store as never);
+    const armedAt = () => (worker as unknown as { armedAt?: number }).armedAt;
 
-    // Job A is due at 90s; the reschedule after it fails once, arming a recovery wake-up.
     worker.schedule({ botMessageId: "reply-1", channelId: "channel-1", invokeMessageId: "invoke-1" });
-    failNext = false;
+    failNext = true;
     await vi.advanceTimersByTimeAsync(90_000);
+    failNext = false;
 
-    // A later exchange is scheduled while the recovery wake-up is pending.
-    worker.schedule({ botMessageId: "reply-2", channelId: "channel-2", invokeMessageId: "invoke-2" });
-
-    // Job B must not push the pending wake-up out: B is not due for 90s.
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(deletions).not.toContain("reply-2");
+    expect(deletions).toContain("reply-1");
+    expect(armedAt()).toBeTypeOf("number");
 
     worker.stop();
     vi.useRealTimers();

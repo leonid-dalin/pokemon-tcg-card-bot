@@ -85,12 +85,9 @@ export class CleanupWorker {
     this.arm(next);
   }
 
-  /** Arms a retry wake-up that keeps its deadline, like any other scheduled timer. */
+  /** Arms a retry wake-up without cancelling an earlier timer that will fire first. */
   private armRecovery(): void {
-    const deadline = Date.now() + DRAIN_INTERVAL_MS;
-    if (this.timer) clearTimeout(this.timer);
-    this.armedAt = deadline;
-    this.arm(deadline);
+    this.wakeAt(Date.now() + DRAIN_INTERVAL_MS);
   }
 
   start(): void {
