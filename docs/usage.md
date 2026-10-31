@@ -26,7 +26,7 @@ Mention the bot's actual account for the `@bot` examples. A bare mention or `@bo
 
 ## Decklists
 
-Pasted decklists can show card counts, Standard legality and available Cardmarket prices. A server administrator must enable [decklist replies](server-settings.md#replies) first
+Pasted decklists can show card counts, Standard legality and available Cardmarket prices. A member with the Manage Server permission must enable [decklist replies](server-settings.md#replies) first
 
 ## Reply controls
 
@@ -42,8 +42,8 @@ Prices appear only when the source provides them. Default reply settings allow b
 
 ## If a reply is missing
 
-- For ordinary-message replies, ask a server administrator to check reply switches and selected channels
+- For ordinary-message replies, ask someone with the Manage Server permission to check reply switches and selected channels
 - In a thread, the bot needs Send Messages in Threads and uses the parent channel's selection
 - For missing or outdated slash commands, the operator must register the command definitions again
 
-[Server settings](server-settings.md) explains what administrators can change. [Setup](setup.md) covers host-side checks
+[Server settings](server-settings.md) explains what members with the Manage Server permission can change. [Setup](setup.md) covers host-side checks

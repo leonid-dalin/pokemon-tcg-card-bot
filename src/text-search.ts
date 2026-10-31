@@ -63,7 +63,6 @@ function load(): TextHit[] {
   return cache;
 }
 
-/** Returns the number of records in the loaded index. */
 /** Sets whose card ids zero-pad the number, so the padded form is the real one. */
 let paddedPrefixes: Set<string> | undefined;
 
@@ -81,6 +80,7 @@ export function setUsesPaddedNumbers(prefix: string): boolean {
   return paddedPrefixes.has(prefix);
 }
 
+/** Returns the number of records in the loaded index. */
 export function textIndexSize(): number {
   return load().length;
 }
