@@ -267,7 +267,6 @@ export function renderCard(card: Card, options: RenderOptions = {}): EmbedView {
   return sharedCardView(card, options, fields, cardDescription(card));
 }
 
-/** Trainers and Energy carry no weakness, resistance or retreat cost. */
 function isPokemon(card: Card): boolean {
   const category = card.category?.trim().toLowerCase() ?? "";
   return category === "pokemon" || category === "pokémon";
