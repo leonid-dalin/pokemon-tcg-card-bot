@@ -8,9 +8,10 @@ function isRunning(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    // A dead pid, or one this process may not signal, cannot be running.
-    return false;
+  } catch (error) {
+    // Only ESRCH proves the process is gone. Without permission to signal it the
+    // holder may well be alive, so the lock must not be taken over.
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
   }
 }
 
@@ -18,9 +19,10 @@ function holder(path: string): number | undefined {
   try {
     const pid = Number.parseInt(readFileSync(path, "utf8").trim(), 10);
     return Number.isFinite(pid) ? pid : undefined;
-  } catch {
-    // A missing or unreadable file has no holder to report.
-    return undefined;
+  } catch (error) {
+    // A missing file has no holder; anything else leaves the answer unknown.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
   }
 }
 
@@ -104,6 +106,15 @@ function isEmptyMarker(path: string): boolean {
   }
 }
 
+/** True while a start that created the lock empty is still writing its pid. */
+function isFreshEmptyLock(path: string): boolean {
+  try {
+    return readFileSync(path, "utf8").trim() === "" && Date.now() - statSync(path).mtimeMs <= MARKER_WRITE_GRACE_MS;
+  } catch {
+    return false;
+  }
+}
+
 /** True for an empty marker old enough that its writer is not coming back. */
 function isAbandonedMarker(path: string): boolean {
   try {
@@ -138,11 +149,17 @@ function takeMarker(marker: string, candidate: string): number | undefined {
   // case it belongs to a live process and goes back untouched.
   const moved = holder(recovered);
   const movedIsHeld = isEmptyMarker(recovered) ? !isAbandonedMarker(recovered) : !isStale(moved);
-  if (movedIsHeld && moved !== undefined) {
+  if (movedIsHeld) {
     try {
       linkSync(recovered, marker);
     } catch {
-      // A newer marker already took the path, which is the better outcome.
+      // A newer marker owns the path, so the moved copy is no longer needed.
+      try {
+        unlinkSync(recovered);
+      } catch {
+        // The moved marker is gone already.
+      }
+      return undefined;
     }
     try {
       unlinkSync(recovered);
@@ -167,7 +184,12 @@ function takeMarker(marker: string, candidate: string): number | undefined {
  */
 export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
   const candidate = `${path}.${process.pid}`;
-  claimExclusive(candidate);
+  try {
+    claimExclusive(candidate);
+  } catch (error) {
+    console.error(`could not write the lock candidate at ${candidate} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+    return false;
+  }
   try {
     if (createLock(candidate, path)) return claim(path);
     return takeStale(candidate, path);
@@ -182,12 +204,33 @@ export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
 
 function takeStale(candidate: string, path: string): boolean {
   const takeover = `${path}.takeover`;
-  if (takeMarker(takeover, candidate) === undefined) {
+  let taken: number | undefined;
+  try {
+    taken = takeMarker(takeover, candidate);
+  } catch (error) {
+    // A marker that cannot be created or written must not crash startup.
+    console.error(`could not take the takeover marker at ${takeover} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+    return false;
+  }
+  if (taken === undefined) {
     console.error(`another instance is clearing the lock at ${path}; try again`);
     return false;
   }
   try {
-    const pid = holder(path);
+    let pid: number | undefined;
+    try {
+      pid = holder(path);
+    } catch (error) {
+      // An unreadable lock cannot be judged stale, so the start stands down.
+      console.error(`could not read the lock at ${path} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+      return false;
+    }
+    // The no-hard-link fallback creates the lock empty and then writes the pid,
+    // so an empty lock that is still fresh belongs to a start in progress.
+    if (pid === undefined && isFreshEmptyLock(path)) {
+      console.error(`another instance is starting with the lock at ${path}; try again`);
+      return false;
+    }
     if (!isStale(pid)) {
       console.error(`another instance is already running as pid ${pid}; stop it first`);
       return false;

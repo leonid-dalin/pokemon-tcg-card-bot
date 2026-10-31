@@ -48,24 +48,25 @@ describe("a takeover marker that is still empty", () => {
 
   it("lets a start through after the marker write itself failed", async () => {
     writeFileSync(lock, "2147483646");
+    let injected = false;
     vi.doMock("node:fs", async () => {
       const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
-      let failed = false;
       return {
         ...actual,
-        // Only the marker's write fails; the lock and candidate write normally.
-        writeSync: (fd: never, data: never) => {
-          if (!failed && String(data) === String(process.pid) && existsSync(`${lock}.takeover`)) {
-            failed = true;
+        // Creating the marker fails once, as a full disk would.
+        linkSync: (from: string, to: string) => {
+          if (!injected && String(to).endsWith(".takeover")) {
+            injected = true;
             throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" });
           }
-          return actual.writeSync(fd, data);
+          return actual.linkSync(from, to);
         },
       };
     });
     const { acquireSingleInstanceLock } = await load();
 
     expect(() => acquireSingleInstanceLock(lock)).not.toThrow();
+    expect(injected).toBe(true);
     expect(existsSync(`${lock}.takeover`)).toBe(false);
     expect(acquireSingleInstanceLock(lock)).toBe(true);
     expect(readFileSync(lock, "utf8")).toBe(String(process.pid));
