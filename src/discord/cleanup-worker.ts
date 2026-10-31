@@ -67,8 +67,9 @@ export class CleanupWorker {
           if (this.stopped) return;
           try {
             this.wakeAtNext();
-          } catch {
+          } catch (error) {
             // A store failure here must not stop the clock: retry on the next interval.
+            console.error(`cleanup reschedule failed (${errorCategory(error)})`);
             this.arm(Date.now() + DRAIN_INTERVAL_MS);
           }
         });
@@ -87,13 +88,16 @@ export class CleanupWorker {
   start(): void {
     this.stopped = false;
     void this.drain()
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        console.error(`cleanup drain failed (${errorCategory(error)})`);
+      })
       .finally(() => {
         if (this.stopped) return;
         try {
           this.wakeAtNext();
-        } catch {
+        } catch (error) {
           // A store failure here must not stop the clock: retry on the next interval.
+          console.error(`cleanup reschedule failed (${errorCategory(error)})`);
           this.arm(Date.now() + DRAIN_INTERVAL_MS);
         }
       });
