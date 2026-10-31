@@ -278,21 +278,60 @@ describe("lookupCard", () => {
     expect(lookup?.card.id).toBe("sv03-125");
   });
 
-  it("prefers a newer Mega printing over an older plain one", async () => {
-    // Both printings are Charizard, so recency decides and the Mega wins.
+  it("answers ho-oh ex with the newest printing of the same card", async () => {
     stubFetch({
       "/cards?name=": {
         body: [
-          { id: "swsh10.5-010", name: "Charizard", localId: "010", image: "https://assets.tcgdex.net/en/swsh/swsh10.5/010" },
-          { id: "me02-013", name: "Mega Charizard X ex", localId: "013", image: "https://assets.tcgdex.net/en/me/me02/013" },
+          { id: "xy9-92", name: "Ho-Oh EX", localId: "92", image: "https://assets.tcgdex.net/en/xy/xy9/92" },
+          { id: "sv10-039", name: "Ethan's Ho-Oh ex", localId: "039", image: "https://assets.tcgdex.net/en/sv/sv10/039" },
         ],
       },
-      "/cards/me02-013": { body: { ...dragapult, id: "me02-013", name: "Mega Charizard X ex", localId: "013" } },
-      "/cards/swsh10.5-010": { body: { ...dragapult, id: "swsh10.5-010", name: "Charizard", localId: "010" } },
+      "/cards/sv10-039": { body: { ...dragapult, id: "sv10-039", name: "Ethan's Ho-Oh ex", localId: "039" } },
+      "/cards/xy9-92": { body: { ...dragapult, id: "xy9-92", name: "Ho-Oh EX", localId: "92" } },
     });
     const client = new TcgdexClient({ retries: 0 });
-    const lookup = await lookupCard(client, "Charizard");
-    expect(lookup?.card.id).toBe("me02-013");
+    const lookup = await lookupCard(client, "ho-oh ex");
+    expect(lookup?.card.id).toBe("sv10-039");
+  });
+
+  it("answers moltres with the newest printing and keeps the regionals out", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "30th-011", name: "Moltres", localId: "011", image: "https://assets.tcgdex.net/en/30th/011" },
+          { id: "me02-014", name: "Moltres", localId: "014", image: "https://assets.tcgdex.net/en/me/me02/014" },
+          { id: "sv10-031", name: "Team Rocket's Moltres ex", localId: "031", image: "https://assets.tcgdex.net/en/sv/sv10/031" },
+          { id: "swsh6-97", name: "Galarian Moltres V", localId: "097", image: "https://assets.tcgdex.net/en/swsh/swsh6/097" },
+        ],
+      },
+      "/cards/30th-011": { body: { ...dragapult, id: "30th-011", name: "Moltres", localId: "011" } },
+      "/cards/me02-014": { body: { ...dragapult, id: "me02-014", name: "Moltres", localId: "014" } },
+      "/cards/sv10-031": { body: { ...dragapult, id: "sv10-031", name: "Team Rocket's Moltres ex", localId: "031" } },
+      "/cards/swsh6-97": { body: { ...dragapult, id: "swsh6-97", name: "Galarian Moltres V", localId: "097" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "moltres");
+    expect(lookup?.card.id.startsWith("30th-")).toBe(true);
+    const alternates = lookup?.alternates.map((card) => card.id) ?? [];
+    expect(alternates).toContain("me02-014");
+    expect(alternates).toContain("sv10-031");
+    expect(alternates).not.toContain("swsh6-97");
+  });
+
+  it("lets a set hint override the ranking", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "30th-011", name: "Moltres", localId: "011", image: "https://assets.tcgdex.net/en/30th/011" },
+          { id: "me02-014", name: "Moltres", localId: "014", image: "https://assets.tcgdex.net/en/me/me02/014" },
+        ],
+      },
+      "/cards/me02-014": { body: { ...dragapult, id: "me02-014", name: "Moltres", localId: "014" } },
+      "/cards/30th-011": { body: { ...dragapult, id: "30th-011", name: "Moltres", localId: "011" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "moltres", "PFL");
+    expect(lookup?.card.id).toBe("me02-014");
   });
 
   it("prefers the newest series among art-bearing printings", async () => {

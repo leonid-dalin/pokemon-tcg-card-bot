@@ -51,31 +51,55 @@ export function scoreCandidate(query: string, candidate: string): number {
 }
 
 
-/** Words that may sit before a card name without making it a different card. */
-const NAME_QUALIFIERS = new Set(["mega", "ethan's", "blaine's", "brock's", "misty's", "erika's", "sabrina's", "giovanni's", "surge's", "rocket's", "team"]);
+/** Prefixes the data uses ahead of a card name without changing which Pokémon it is. */
+const NAME_PREFIXES = new Set(["mega", "team", "radiant", "shining", "dark", "light"]);
 
-/** Suffixes that mark a card as the stronger print of the same Pokémon. */
-const NAME_SUFFIXES = new Set(["ex", "x", "y", "v", "vmax", "vstar"]);
+/** Possessive tokens such as "Cynthia's" and "N's" are owner prefixes. */
+const POSSESSIVE = /^[\p{L}\p{N}.\-]+'s$/u;
 
-function nameCore(name: string): string[] {
-  const words = normaliseName(name).split(" ").filter(Boolean);
-  let start = 0;
-  while (start < words.length - 1 && NAME_QUALIFIERS.has(words[start]!)) start += 1;
-  let end = words.length;
-  while (end > start + 1 && NAME_SUFFIXES.has(words[end - 1]!)) end -= 1;
-  return words.slice(start, end);
+/** Mechanics that may trail a name, so "charizard ex" and "Charizard GX" differ. */
+const NAME_SUFFIXES = new Set(["ex", "gx", "v", "vmax", "vstar", "v-union", "break", "lv.x", "lv. x", "prime"]);
+
+/** Splits a hyphen-attached mechanic onto its own token: "Moltres-EX" to "moltres ex". */
+function nameTokens(name: string): string[] {
+  return normaliseName(name)
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .flatMap((token) => {
+      const attached = /^(.+)-((?:ex|gx|v|vmax|vstar|v-union|break|prime))$/.exec(token);
+      return attached ? [attached[1]!, attached[2]!] : [token];
+    })
+    .filter(Boolean);
 }
 
 /**
- * True when both names address the same Pokémon, differing only by qualifiers
- * around it, so "Mega Charizard X ex" and "Ethan's Ho-Oh ex" are other printings
- * of "Charizard" and "ho-oh ex" rather than different cards.
+ * True when the candidate is a printing of what the query asked for: the query's
+ * words appear whole, in order and contiguous, with only an owner or mechanic
+ * prefix before them and at most one mechanic suffix after. Words are never
+ * removed or swapped, so "mega charizard x ex" cannot match Mega Charizard Y ex,
+ * and "mew" cannot match Mewtwo.
  */
-export function sameCardName(a: string, b: string): boolean {
-  const x = nameCore(a);
-  const y = nameCore(b);
-  if (x.length === 0 || x.length !== y.length) return false;
-  return x.every((word, index) => word === y[index]);
+export function isPrintingOf(query: string, candidate: string): boolean {
+  const wanted = nameTokens(query);
+  const words = nameTokens(candidate);
+  if (wanted.length === 0 || words.length < wanted.length) return false;
+
+  let start = 0;
+  while (start < words.length && start < words.length - wanted.length) {
+    const token = words[start]!;
+    if (!POSSESSIVE.test(token) && !NAME_PREFIXES.has(token)) break;
+    start += 1;
+  }
+  const core = words.slice(start, start + wanted.length);
+  if (core.length !== wanted.length || core.some((token, index) => token !== wanted[index])) return false;
+
+  // A Mega letter follows the name only when the query did not name one itself.
+  const rest = words.slice(start + wanted.length);
+  if (rest[0] && /^[xy]$/.test(rest[0]) && words.slice(0, start).includes("mega") && !/^[xy]$/.test(wanted.at(-1)!)) {
+    rest.shift();
+  }
+  if (rest.length === 0) return true;
+  return rest.length === 1 && NAME_SUFFIXES.has(rest[0]!);
 }
 
 /**
