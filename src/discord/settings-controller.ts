@@ -193,7 +193,7 @@ export class SettingsPanelController {
     } catch (error) {
       console.error(`settings panel reply failed (${errorCategory(error)})`);
       await interaction.followUp({ content: "The settings panel could not be opened. Try /settings again.", flags: MessageFlags.Ephemeral }).catch(() => {});
-      throw error;
+      return;
     }
   }
 
@@ -364,7 +364,10 @@ export class SettingsPanelController {
       return;
     }
     const patch = serverPatch(field, value);
-    if (!patch) return;
+    if (!patch) {
+      await this.render(session, interaction, isAdmin);
+      return;
+    }
     const previous = describeField(before, field);
     this.store.update(session.guildId, patch);
     const after = this.store.get(session.guildId);
@@ -487,7 +490,11 @@ export class SettingsPanelController {
       if (previous !== current) {
         await this.announceChange(interaction as PanelInteraction & { guildId: string }, [`Automatic-reply channels: ${previous} -> ${current}`]);
       }
+      return;
     }
+
+    // Unknown sub-actions must still acknowledge, or Discord shows a failure.
+    await this.render(session, interaction, isAdmin);
   }
 
   private async saveChannels(

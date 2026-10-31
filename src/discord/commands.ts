@@ -458,7 +458,10 @@ export async function handleVersionAction(
     await interaction.reply({ embeds: [versionDetailsEmbed(startedAt, now)], flags: MessageFlags.Ephemeral });
     return;
   }
-  if (action !== "refresh") return;
+  if (action !== "refresh") {
+    await interaction.reply({ content: "Unknown action.", flags: MessageFlags.Ephemeral }).catch(() => {});
+    return;
+  }
   const key = interaction.channelId ?? interaction.id;
   const previous = lastPublicRefresh.get(key);
   if (previous !== undefined && now - previous < PUBLIC_REFRESH_INTERVAL_MS) {
