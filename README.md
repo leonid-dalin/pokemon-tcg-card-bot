@@ -29,7 +29,7 @@ Use `/card name:Dragapult ex` for the same lookup through a slash command. Add `
 | Compare versions of a card | `/printings name:Dragapult ex` |
 | Browse a set | `/set id:sv08.5 checklist:true` |
 | Find cards with a phrase in their wording | `/search text:"search your deck"` |
-| Choose reply channels or a preferred card game | `/settings` (administrators change server-wide values) |
+| Choose reply channels or a preferred card game | `/settings` (members with Manage Server change server-wide values) |
 
 Pasted decklists can show card counts, Standard legality and available Cardmarket prices when a server administrator enables decklist replies. The [usage guide](docs/usage.md) explains the commands, printing hints and reply controls
 

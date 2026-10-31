@@ -1,6 +1,6 @@
 # Using the bot
 
-Use these commands in a Discord server where the bot is installed. The bot also answers in a direct message with it. Ordinary-message replies depend on the host and [server settings](server-settings.md)
+Use these commands in a Discord server where the bot is installed, or in a direct message with the bot. Ordinary-message replies depend on the host and [server settings](server-settings.md)
 
 ## Commands
 
