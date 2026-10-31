@@ -1,4 +1,4 @@
-import { EmbedBuilder, type Message } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, type Message } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import type { Config } from "../config.js";
 import { MentionBudget } from "../cooldown.js";
@@ -9,19 +9,15 @@ import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
 import { extractMentions, parseHelpCommand, parseInlineCommand, parseSearchCommand } from "../mentions.js";
 import { listReply, type ListPage } from "./pages.js";
 import { printingsOf, printingItems } from "../printings.js";
-import { renderSet } from "../render.js";
+import { renderDecklist, renderSet } from "../render.js";
 import { resolveSetHint } from "../set-index.js";
 import { normaliseName } from "../resolve.js";
-import { findExactCardName } from "../text-search.js";
+import { findExactCardName, searchCardGroups } from "../text-search.js";
 import { footerFor } from "./commands.js";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
-import { toEmbed } from "./embeds.js";
+import { toEmbed, toEmbeds } from "./embeds.js";
 import { versionActions, versionEmbed, versionLines } from "./version-view.js";
 import { busyMessage, overloadHint } from "./interaction-failure.js";
-import { renderDecklist } from "../render.js";
-import { searchCardGroups } from "../text-search.js";
 import { helpView } from "../help.js";
-import { toEmbeds } from "./embeds.js";
 import { MAX_EMBEDS_PER_MESSAGE, mentionReply, searchReply, type MentionMiss } from "./replies.js";
 
 export interface MessageContext {

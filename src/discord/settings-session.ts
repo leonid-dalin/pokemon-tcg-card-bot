@@ -2,6 +2,8 @@
  * Bounded in-memory store for open settings panels. Sessions hold no personal
  * data beyond the owner id; expiry discards only unsaved navigation state.
  */
+import { randomUUID } from "node:crypto";
+
 export interface SettingsSession {
   id: string;
   ownerId: string;
@@ -35,8 +37,9 @@ export class SettingsSessions {
       const oldest = [...this.sessions.values()].sort((a, b) => a.expiresAt - b.expiresAt)[0];
       if (oldest) this.sessions.delete(oldest.id);
     }
-    // Dashes, not colons: component ids are colon-delimited.
-    const id = [ownerId, this.now().toString(36), Math.floor(Math.random() * 1e6).toString(36)].join("-");
+    // Dashes, not colons: component ids are colon-delimited. A UUID is long
+    // enough to stay unique but keeps the custom_id inside Discord's 100 chars.
+    const id = [ownerId, this.now().toString(36), randomUUID()].join("-");
     const session: SettingsSession = {
       id,
       ownerId,

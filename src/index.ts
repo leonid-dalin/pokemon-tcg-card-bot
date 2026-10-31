@@ -1,4 +1,4 @@
-import { Client, Events, MessageFlags } from "discord.js";
+import { Client, EmbedBuilder, Events, MessageFlags } from "discord.js";
 import { TcgdexClient } from "./api/tcgdex.js";
 import { loadConfig } from "./config.js";
 import { loadDotEnv } from "./env.js";
@@ -29,7 +29,6 @@ import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
 import { createShardReadiness } from "./discord/shard-readiness.js";
-import { EmbedBuilder } from "discord.js";
 import { settingsAnnouncementChunks } from "./discord/announcement.js";
 import { SettingsPanelController } from "./discord/settings-controller.js";
 import { handleVersionAction } from "./discord/commands.js";
@@ -138,7 +137,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         : interaction.isChatInputCommand()
           ? "command"
           : "other";
-  const label = "customId" in interaction ? interaction.customId : interaction.commandName;
+  // Log the prefix only: a full custom_id can carry a session id.
+  const label = "customId" in interaction ? interaction.customId.split(":")[0] : interaction.commandName;
   console.log(`interaction ${kind} ${label} received (${interaction.id})`);
   let handled = false;
   try {
