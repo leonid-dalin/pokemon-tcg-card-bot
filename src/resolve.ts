@@ -50,6 +50,34 @@ export function scoreCandidate(query: string, candidate: string): number {
   return 0;
 }
 
+
+/** Words that may sit before a card name without making it a different card. */
+const NAME_QUALIFIERS = new Set(["mega", "ethan's", "blaine's", "brock's", "misty's", "erika's", "sabrina's", "giovanni's", "surge's", "rocket's", "team"]);
+
+/** Suffixes that mark a card as the stronger print of the same Pokémon. */
+const NAME_SUFFIXES = new Set(["ex", "x", "y", "v", "vmax", "vstar"]);
+
+function nameCore(name: string): string[] {
+  const words = normaliseName(name).split(" ").filter(Boolean);
+  let start = 0;
+  while (start < words.length - 1 && NAME_QUALIFIERS.has(words[start]!)) start += 1;
+  let end = words.length;
+  while (end > start + 1 && NAME_SUFFIXES.has(words[end - 1]!)) end -= 1;
+  return words.slice(start, end);
+}
+
+/**
+ * True when both names address the same Pokémon, differing only by qualifiers
+ * around it, so "Mega Charizard X ex" and "Ethan's Ho-Oh ex" are other printings
+ * of "Charizard" and "ho-oh ex" rather than different cards.
+ */
+export function sameCardName(a: string, b: string): boolean {
+  const x = nameCore(a);
+  const y = nameCore(b);
+  if (x.length === 0 || x.length !== y.length) return false;
+  return x.every((word, index) => word === y[index]);
+}
+
 /**
  * Filters by the optional partial set hint and ranks positive name matches.
  * Equal scores retain input order; this function does not sort by release date.

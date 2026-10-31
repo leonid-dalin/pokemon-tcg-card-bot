@@ -2,7 +2,7 @@ import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
 import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
-import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
+import { normaliseName, rankPrintings, sameCardName, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { findExactCardName } from "./text-search.js";
@@ -34,8 +34,15 @@ export interface LookupOptions {
 // Display order: name score, image availability, set recency, then input order.
 function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
   return [...ranked].sort((a, b) => {
-    const score = scoreCandidate(query, b.name) - scoreCandidate(query, a.name);
-    if (score !== 0) return score;
+    const scoreA = scoreCandidate(query, a.name);
+    const scoreB = scoreCandidate(query, b.name);
+    const sameA = sameCardName(query, a.name);
+    const sameB = sameCardName(query, b.name);
+    // A different card still ranks behind one that shares the name, but between
+    // printings of the same Pokémon the newest wins: a Mega Charizard ex is a
+    // newer Charizard, so it takes the reply over an older plain printing.
+    if (sameA !== sameB) return sameA ? -1 : 1;
+    if (!sameA && !sameB && scoreA !== scoreB) return scoreB - scoreA;
     const art = (b.image ? 1 : 0) - (a.image ? 1 : 0);
     if (art !== 0) return art;
     return setRecency(b.id) - setRecency(a.id);

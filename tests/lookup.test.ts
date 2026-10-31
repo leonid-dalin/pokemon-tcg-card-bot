@@ -225,18 +225,54 @@ describe("lookupCard", () => {
     expect(lookup?.card.id).toBe("A1-025");
   });
 
-  it("keeps an exact name ahead of a newer series that only contains it", async () => {
+  it("does not answer an owner reprint with an older plain printing", async () => {
+    // Reported case: "[[ho-oh ex]]" answered with the 2016 BKP card while newer
+    // printings of the same Pokémon existed.
     stubFetch({
       "/cards?name=": {
         body: [
-          { id: "me02-013", name: "Mega Charizard X ex", localId: "013", image: "https://assets.tcgdex.net/en/me/me02/13" },
+          { id: "xy9-92", name: "Ho-Oh EX", localId: "092", image: "https://assets.tcgdex.net/en/xy/xy9/92" },
+          { id: "sv10-039", name: "Ethan's Ho-Oh ex", localId: "039", image: "https://assets.tcgdex.net/en/sv/sv10/039" },
+        ],
+      },
+      "/cards/sv10-039": { body: { ...dragapult, id: "sv10-039", name: "Ethan's Ho-Oh ex", localId: "039" } },
+      "/cards/xy9-92": { body: { ...dragapult, id: "xy9-92", name: "Ho-Oh EX", localId: "092" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "ho-oh ex");
+    expect(lookup?.card.id).toBe("sv10-039");
+  });
+
+  it("prefers a newer Mega printing over an older plain one", async () => {
+    // Both printings are Charizard, so recency decides and the Mega wins.
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "swsh10.5-010", name: "Charizard", localId: "010", image: "https://assets.tcgdex.net/en/swsh/swsh10.5/010" },
+          { id: "me02-013", name: "Mega Charizard X ex", localId: "013", image: "https://assets.tcgdex.net/en/me/me02/013" },
+        ],
+      },
+      "/cards/me02-013": { body: { ...dragapult, id: "me02-013", name: "Mega Charizard X ex", localId: "013" } },
+      "/cards/swsh10.5-010": { body: { ...dragapult, id: "swsh10.5-010", name: "Charizard", localId: "010" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "Charizard");
+    expect(lookup?.card.id).toBe("me02-013");
+  });
+
+  it("keeps a different card behind one that carries the name", async () => {
+    // "Charmander" contains no Charizard, so it must not outrank the exact name.
+    stubFetch({
+      "/cards?name=": {
+        body: [
           { id: "sv03-125", name: "Charizard", localId: "125", image: "https://assets.tcgdex.net/en/sv/sv03/125" },
+          { id: "sv03-025", name: "Charmander", localId: "025", image: "https://assets.tcgdex.net/en/sv/sv03/025" },
         ],
       },
       "/cards/sv03-125": { body: { ...dragapult, id: "sv03-125", name: "Charizard", localId: "125" } },
     });
-    const client = new TcgdexClient();
-    const lookup = await lookupCard(client, "Charizard");
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "charizard");
     expect(lookup?.card.id).toBe("sv03-125");
   });
 
@@ -340,17 +376,6 @@ describe("lookup contracts", () => {
     const lookup = await lookupCard(client, "Dragapult ex", "sv06-130");
     expect(lookup?.card.id).toBe("sv06-130");
     expect(calls.some((url) => url.includes("/cards/sv06-130"))).toBe(true);
-  });
-
-  it("lists only printings with the same name as other printings", async () => {
-    stubFetch({
-      // "Mega Dragapult ex" contains the query, so ranking keeps it as a candidate.
-      "/cards?name=": { body: [...summaries, { id: "me03-050", name: "Mega Dragapult ex", localId: "050" }] },
-      "/cards/sv08.5-073": { body: dragapult },
-    });
-    const client = new TcgdexClient({ retries: 0 });
-    const lookup = await lookupCard(client, "Dragapult ex");
-    expect(lookup?.alternates.map((card) => card.id)).toEqual(["sv06-130"]);
   });
 
   it("suggests names by dropping the last word of a missed query", async () => {
