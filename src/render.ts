@@ -221,8 +221,13 @@ function cardProfile(card: Card): string | undefined {
     .join(" · ");
 }
 
+/** Pocket pads an energy symbol as "[ F ]"; the compact "[F]" matches the attack line. */
+function compactEnergyTokens(text: string | undefined): string | undefined {
+  return text?.replace(/\[\s*([A-Z])\s*\]/g, "[$1]");
+}
+
 function cardDescription(card: Card): string | undefined {
-  if (card.category === "Trainer" || card.category === "Energy") return card.effect;
+  if (card.category === "Trainer" || card.category === "Energy") return compactEnergyTokens(card.effect);
   return cardProfile(card);
 }
 

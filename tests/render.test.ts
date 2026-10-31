@@ -311,4 +311,9 @@ describe("combat fields", () => {
     const fields = combat({ ...dragapult, weaknesses: [{ type: "  ", value: "×2" }], resistances: undefined });
     expect(fields.find((field) => field.name === "Weakness")?.value).toBe("none");
   });
+
+  it("compacts a padded energy token in trainer text", () => {
+    const rika = { ...dragapult, category: "Trainer", effect: "Produce 2 [ F ] Energy from your Energy Zone." };
+    expect(renderCard(rika).description).toBe("Produce 2 [F] Energy from your Energy Zone.");
+  });
 });
