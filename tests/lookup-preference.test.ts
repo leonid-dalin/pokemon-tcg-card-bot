@@ -215,6 +215,8 @@ vi.restoreAllMocks();
   });
 
   it("prefers a package card over a set-id guess for an ambiguous printed form", () => {
+    // B2 prints identically for the Pocket set b2 and physical Base Set 2; the
+    // package wins so Pocket footers round-trip.
     expect(isCardId("B2 5")).toBe(true);
   });
 

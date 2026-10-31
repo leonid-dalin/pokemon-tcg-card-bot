@@ -119,8 +119,10 @@ const printedAsId = (value: string): string => {
     return getPocketCard(padded) !== undefined && getPocketCard(id) === undefined ? [padded, id] : [id];
   });
   const flattened = paddedCandidates.flat();
-  // A printed form can be ambiguous, such as B2 for the Pocket set b2 and Base
-  // Set 2: a card the package actually contains wins over a set-id guess.
+  // B2 is genuinely ambiguous: the physical code B2 (Base Set 2) and the Pocket
+  // set b2 (Fantastical Parade) print identically, so either choice breaks one
+  // footer round-trip. The package wins to keep the whole Pocket catalogue
+  // addressable from its own printed codes.
   const inPackage = flattened.find((id) => getPocketCard(id) !== undefined);
   if (inPackage) return inPackage;
   const indexed = flattened.find((id) => {

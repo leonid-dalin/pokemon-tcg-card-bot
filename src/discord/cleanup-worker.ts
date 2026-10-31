@@ -60,7 +60,9 @@ export class CleanupWorker {
       this.timer = undefined;
       this.armedAt = undefined;
       void this.drain()
-        .catch(() => undefined)
+        .catch((error: unknown) => {
+          console.error(`cleanup drain failed (${errorCategory(error)})`);
+        })
         .finally(() => {
           if (this.stopped) return;
           try {
