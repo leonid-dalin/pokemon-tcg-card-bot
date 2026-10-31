@@ -1,9 +1,8 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 
-// Anchored to the installation, not the CWD: two launches from different
-// directories must contend for the same lock.
-const LOCK_PATH = fileURLToPath(new URL("../../.bot.pid", import.meta.url));
+// Relative to the process CWD by default; the entry point passes the data
+// directory when configured so the lock does not depend on the CWD.
+const LOCK_PATH = ".bot.pid";
 
 function isRunning(pid: number): boolean {
   try {

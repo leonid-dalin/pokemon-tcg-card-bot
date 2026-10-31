@@ -38,9 +38,15 @@ import { startRuntimeStatus } from "./runtime-status.js";
 
 loadDotEnv();
 
-if (!acquireSingleInstanceLock()) process.exit(1);
-
 const config = loadConfig(process.env);
+
+// The lock lives in the data directory when configured: both deploy targets
+// set DATA_DIR to a writable volume, and a CWD-relative lock would let two
+// launches from different directories run concurrently.
+if (!acquireSingleInstanceLock(config.dataDir ? join(config.dataDir, ".bot.pid") : undefined)) {
+  process.exit(1);
+}
+
 const invocations = new InvocationLog(config.invocationLogDir, config.invocationLogRetentionDays);
 const settings = new SettingsStore(
   config.dataDir ? join(config.dataDir, "settings.db") : undefined,
