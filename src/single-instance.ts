@@ -1,4 +1,4 @@
-import { linkSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { linkSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 
 // Relative to the process CWD by default; the entry point passes the data
 // directory when configured so the lock does not depend on the CWD.
@@ -10,6 +10,7 @@ function isRunning(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch {
+    // A dead pid, or one this process may not signal, cannot be running.
     return false;
   }
 }
@@ -19,6 +20,7 @@ function holder(path: string): number | undefined {
     const pid = Number.parseInt(readFileSync(path, "utf8").trim(), 10);
     return Number.isFinite(pid) ? pid : undefined;
   } catch {
+    // A missing or unreadable file has no holder to report.
     return undefined;
   }
 }
@@ -40,6 +42,7 @@ function claim(path: string): boolean {
     try {
       if (holder(path) === process.pid) unlinkSync(path);
     } catch {
+      // The lock file is already gone.
     }
   };
   process.on("exit", release);
@@ -73,11 +76,11 @@ function createLock(candidate: string, path: string): boolean {
 }
 
 /**
- * Claims the lock so two starting processes cannot both hold it. A candidate is
- * written to a unique file and hard-linked into place, so the claimed file is
- * never briefly empty. Clearing a stale holder copies it aside first and removes
- * the original only while it still holds the pid that was read; if it has been
- * replaced by a live claim, that claim is left untouched.
+ * Claims the lock. A candidate is written to a unique file and hard-linked into
+ * place, so the claimed file is never briefly empty. A stale holder is renamed
+ * aside, which only one process can do, and the cleared slot is then claimed. A
+ * narrow window remains between the rename and the new claim, during which a fast
+ * starter can take the slot.
  */
 export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
   const candidate = `${path}.${process.pid}`;
@@ -91,44 +94,78 @@ export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
       return false;
     }
 
+    // Only one process may clear the stale file, so the takeover itself is the
+    // exclusive resource rather than the lock file it is about to remove.
+    const takeover = `${path}.takeover`;
+    try {
+      writeFileSync(takeover, String(process.pid), { flag: "wx", mode: 0o600 });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      // A marker left by a process that died mid-takeover would block startup for
+      // ever, so a marker naming a dead pid is removed and the check retried once.
+      if (!isStale(holder(takeover))) return false;
+      try {
+        unlinkSync(takeover);
+        writeFileSync(takeover, String(process.pid), { flag: "wx", mode: 0o600 });
+      } catch {
+        // Another process recovered the marker first and now owns the takeover.
+        return false;
+      }
+    }
+    try {
+      return clearStale(candidate, path, pid, claim);
+    } finally {
+      try {
+        unlinkSync(takeover);
+      } catch {
+        // The marker is already gone.
+      }
+    }
+  } finally {
+    try {
+      unlinkSync(candidate);
+    } catch {
+      // The candidate is already gone.
+    }
+  }
+}
+
+/** Moves a stale lock aside and claims the freed path, under the takeover marker. */
+function clearStale(candidate: string, path: string, pid: number | undefined, claim: (path: string) => boolean): boolean {
     const aside = `${candidate}.stale`;
     try {
-      linkSync(path, aside);
+      renameSync(path, aside);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") return false;
-      if (LINK_UNSUPPORTED.has(code ?? "")) {
-        try {
-          unlinkSync(path);
-        } catch {
-          return false;
-        }
-        if (!createLock(candidate, path)) return false;
-        return claim(path);
+      // Only one process can move the stale file, so a failure means another
+      // process owns the takeover. EPERM on Windows means it was deleted.
+      if (code !== "ENOENT" && code !== "EPERM") {
+        console.error(`could not move the stale lock at ${path} (${code ?? "unknown"})`);
       }
-      throw error;
+      return false;
     }
 
     if (holder(aside) !== pid) {
+      // The file changed since it was read, so a live claim now owns the path.
+      // Give it back rather than leave a running instance without a lock file.
+      try {
+        linkSync(aside, path);
+      } catch {
+        // A newer claim already took the path, which is the better outcome.
+      }
       try {
         unlinkSync(aside);
       } catch {
+        // The moved copy is gone already.
       }
       return false;
     }
     try {
       unlinkSync(aside);
-      unlinkSync(path);
     } catch (error) {
-      console.error(`could not clear the stale lock at ${path} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+      console.error(`could not remove the stale copy at ${aside} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
       return false;
     }
     if (!createLock(candidate, path)) return false;
     return claim(path);
-  } finally {
-    try {
-      unlinkSync(candidate);
-    } catch {
-    }
-  }
 }

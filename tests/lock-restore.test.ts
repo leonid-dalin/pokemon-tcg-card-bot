@@ -28,14 +28,12 @@ async function moduleWithLiveReplacement(livePid: number) {
     let replaced = false;
     return {
       ...actual,
-      // The first read sees the stale pid; the copy made for clearing holds the
-      // live pid that arrived in between.
-      linkSync: (from: string, to: string) => {
-        if (!replaced && from === process.env.LOCK_PATH && to.endsWith(".stale")) {
+      renameSync: (from: string, to: string) => {
+        actual.renameSync(from, to);
+        if (!replaced && from === process.env.LOCK_PATH) {
           replaced = true;
-          actual.writeFileSync(from, String(livePid));
+          actual.writeFileSync(to, String(livePid));
         }
-        return actual.linkSync(from, to);
       },
     };
   });
@@ -43,7 +41,7 @@ async function moduleWithLiveReplacement(livePid: number) {
 }
 
 describe("a live lock replaced while a stale one is cleared", () => {
-  it("does not take the lock from the live holder", async () => {
+  it("does not report a win when the moved file names a live holder", async () => {
     const livePid = process.ppid;
     process.env.LOCK_PATH = lock;
     writeFileSync(lock, "2147483646");
@@ -64,7 +62,7 @@ describe("a live lock replaced while a stale one is cleared", () => {
 
     acquireSingleInstanceLock(lock);
 
-    expect(readdirSync(dir).filter((name) => name.endsWith(".stale"))).toEqual([]);
+    expect(readdirSync(dir).filter((name) => name !== ".bot.pid")).toEqual([]);
     delete process.env.LOCK_PATH;
   });
 });
