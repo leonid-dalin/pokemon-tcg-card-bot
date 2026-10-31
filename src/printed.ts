@@ -11,6 +11,21 @@ const codeBySet = new Map(
   SET_INDEX.filter((entry) => entry.code).map((entry) => [normaliseName(entry.id), entry.code as string]),
 );
 
+// Codes may be shared with a subset set, such as SHF for swsh4.5 and swsh4.5sv;
+// the base set id prefixes the variant, so it wins the mapping.
+const setIdByCode = new Map<string, string>();
+for (const entry of SET_INDEX.filter((e) => e.code)) {
+  const code = (entry.code as string).split(":")[0]!.toLowerCase();
+  const current = setIdByCode.get(code);
+  if (!current || (current.length > entry.id.length && current.startsWith(entry.id))) {
+    setIdByCode.set(code, entry.id);
+  }
+}
+
+export function setIdForCode(code: string): string | undefined {
+  return setIdByCode.get(code.toLowerCase());
+}
+
 /**
  * Formats a printing with its indexed set code and card number.
  * Pocket sets use their own codes; unknown physical sets retain the raw ID.

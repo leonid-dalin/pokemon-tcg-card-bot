@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { printedNumber } from "../src/printed.js";
+import { printedNumber, setIdForCode } from "../src/printed.js";
 
 describe("printedNumber", () => {
   it("uses the set code and drops leading zeros", () => {
@@ -34,5 +34,22 @@ describe("printedNumber", () => {
 
   it("shows a Promo-C card as P-C", () => {
     expect(printedNumber("pc-001")).toBe("P-C 1");
+  });
+});
+
+describe("setIdForCode", () => {
+  it("maps a physical set code back to its set id", () => {
+    expect(setIdForCode("NVI")).toBe("bw3");
+    expect(setIdForCode("nvi")).toBe("bw3");
+  });
+
+  it("prefers the base set when a code is shared with a subset set", () => {
+    expect(setIdForCode("SHF")).toBe("swsh4.5");
+    expect(setIdForCode("CEL")).toBe("cel25");
+    expect(setIdForCode("BRS")).toBe("swsh9");
+  });
+
+  it("returns undefined for an unknown code", () => {
+    expect(setIdForCode("ZZZ")).toBeUndefined();
   });
 });

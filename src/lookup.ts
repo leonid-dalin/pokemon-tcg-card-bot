@@ -1,7 +1,7 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
-import { printedNumber } from "./printed.js";
+import { printedNumber, setIdForCode } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
@@ -89,11 +89,14 @@ export function printingsForButtons(card: Card, candidates: CardSummary[]): Card
 const SET_IDS = new Set(SET_INDEX.map((entry) => normaliseName(entry.id)));
 const LOCAL_ID = /^[a-z0-9.!%]{1,8}$/i;
 export const CARD_ID = /^[a-z0-9.]+(?:-[a-z0-9.]+)*-[a-z0-9.!%]{1,8}$/i;
-/** Recognises IDs from indexed sets or exact records in the Pocket package. */
 /** The printed code, such as "C1 168", addresses the same card as "c1-168". */
 const printedAsId = (value: string): string => {
   const printed = /^([a-z]{1,3}[0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(value.trim());
-  return printed ? `${printed[1]}-${printed[2]}` : value;
+  if (printed) return `${printed[1]}-${printed[2]}`;
+  // A physical set code, such as "NVI 101", addresses the same card as "bw3-101".
+  const coded = /^([a-z0-9:.]{2,6})\s+([0-9]{1,3}[a-z]?)$/i.exec(value.trim());
+  const setId = coded ? setIdForCode(coded[1]!) : undefined;
+  return setId && coded ? `${setId}-${coded[2]}` : value;
 };
 
 export const isCardId = (value: string): boolean => {

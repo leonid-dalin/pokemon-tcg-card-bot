@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { TcgdexClient } from "../src/api/tcgdex.js";
 import type { Card, CardSummary } from "../src/api/types.js";
-import { lookupCard, POCKET_ATTRIBUTION } from "../src/lookup.js";
+import { lookupCard, isCardId, POCKET_ATTRIBUTION } from "../src/lookup.js";
 
 const dragapult = JSON.parse(
   readFileSync(new URL("./fixtures/dragapult-ex-sv08.5-073.json", import.meta.url), "utf8"),
@@ -169,4 +169,16 @@ vi.restoreAllMocks();
   it("still rejects a printed form that names no card", async () => {
     const client = clientReturning([]);
     expect(await lookupCard(client, "Rika", "C1 999", {})).toBeUndefined();
+  });
+
+  it("accepts a physical set code as a card id", async () => {
+    const client = clientReturning([{ id: "bw3-101a", name: "N", localId: "101a" }]);
+    expect(isCardId("NVI 101")).toBe(true);
+    expect(isCardId("NVI 101a")).toBe(true);
+    const byCode = await lookupCard(client, "N", "NVI 101a", {});
+    expect(byCode?.card.id.toLowerCase()).toBe("bw3-101a");
+  });
+
+  it("still rejects an unknown set code", () => {
+    expect(isCardId("ZZZ 1")).toBe(false);
   });
