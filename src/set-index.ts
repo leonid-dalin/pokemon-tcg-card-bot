@@ -58,7 +58,6 @@ export function resolveSetHint(hint: string): string | undefined {
   );
   if (partial[0]) return partial[0].id;
 
-  // The static index predates sets the package already ships, so it answers last.
   return getPocketExpansion(trimmed)?.id;
 }
 

@@ -44,7 +44,6 @@ interface GameplayRecord {
   type?: string;
   /** Pokémon type or Trainer subtype. */
   subtype?: string;
-  /** Knockout points the card awards. */
   points?: number;
   /** Rules text for a Trainer card. */
   card_text?: string;
@@ -254,12 +253,15 @@ export function searchPocketByName(name: string): CardSummary[] {
   return partial;
 }
 
-/** Returns a package record by case-insensitive ID, or undefined if absent. */
-/** Expansion metadata from the installed package, for sets newer than the static index. */
 export function getPocketExpansion(idOrName: string): { id: string; name: string } | undefined {
   const wanted = idOrName.trim().toLowerCase();
+  // A printed promo code reads P-C while the package stores pc and Promo-C.
+  const hyphenless = wanted.replace(/-/g, "");
   const match = loadExpansions().find(
-    (entry) => entry.id.toLowerCase() === wanted || entry.name.toLowerCase() === wanted,
+    (entry) =>
+      entry.id.toLowerCase() === wanted ||
+      entry.name.toLowerCase() === wanted ||
+      (hyphenless.length > 0 && entry.id.toLowerCase() === hyphenless),
   );
   return match ? { id: match.id, name: match.name } : undefined;
 }
