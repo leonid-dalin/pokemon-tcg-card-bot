@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import { isCardId, lookupById, lookupCard, POCKET_ATTRIBUTION } from "../lookup.js";
+import { isPocketCardId } from "../prizes.js";
 import { renderCardDetails, renderSet } from "../render.js";
 import { printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
@@ -385,13 +386,10 @@ export async function handleVersionCommand(
   await interaction.reply({ embeds: [versionEmbed(startedAt, now)], components: versionActions(), flags: MessageFlags.Ephemeral });
 }
 
-/** Pocket set prefixes, including promo ids, distinguish Pocket cards from physical-card ids. */
-const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
-
 /** Include Pocket attribution when any listed printing uses a Pocket id. */
 export function footerFor(printings: { id: string }[], attribution: string): string {
-  const pocket = printings.some((printing) => POCKET_ID.test(printing.id));
-  const physical = printings.some((printing) => !POCKET_ID.test(printing.id));
+  const pocket = printings.some((printing) => isPocketCardId(printing.id));
+  const physical = printings.some((printing) => !isPocketCardId(printing.id));
   if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards · github.com/PocketDecks/pokemon-tcg-pocket-cards`;
   return pocket ? POCKET_ATTRIBUTION : attribution;
 }
