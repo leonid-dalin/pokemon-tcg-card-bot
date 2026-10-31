@@ -175,7 +175,6 @@ export async function handleAutocomplete(
   }
 
   const summaries = await context.client.searchByName(query);
-  // Offer only the games this server allows, matching the card command.
   const scope = gamePreference(context, interaction.guildId)?.allowed ?? "both";
   const allowed = scope === "both" ? summaries : summaries.filter((card) => isPocketCardId(card.id) === (scope === "pocket"));
   const ranked = rankPrintings(allowed, query).slice(0, 25);
@@ -197,7 +196,6 @@ export async function handleCardCommand(
     await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
     return;
   }
-  // Look up autocomplete values by card id.
   const preference = gamePreference(context, interaction.guildId);
   const lookup = isCardId(query)
     ? await lookupById(context.client, query, { attribution: context.attribution, energyEmoji: context.energyEmoji })
@@ -209,7 +207,6 @@ export async function handleCardCommand(
   await interaction.editReply(cardReply(lookup, interaction.user.id));
 }
 
-/** Replaces the card reply after checking the printing button's optional owner ID. */
 export async function handlePrintingButton(
   context: CommandContext,
   interaction: ButtonInteraction,
@@ -234,7 +231,6 @@ export async function handlePrintingButton(
     await interaction.followUp({ content: `No card matched \`${parsed.cardId}\`.`, flags: MessageFlags.Ephemeral });
     return;
   }
-  // Clear the original miss prompt when replacing the reply.
   await interaction.editReply({ ...cardReply(lookup, parsed.ownerId), content: null });
 }
 
@@ -255,7 +251,6 @@ export async function handleDetailsButton(
     await interaction.editReply({ content: `No card matched \`${id}\`.` });
     return;
   }
-  // Use the lookup's source attribution for Pocket cards.
   await interaction.editReply({
     embeds: [
       toEmbed(
@@ -343,7 +338,6 @@ export async function handleSearchCommand(
 ): Promise<void> {
   const query = interaction.options.getString("text", true).trim();
   await interaction.deferReply();
-  // Search honours the server's Card games setting, as card lookups already do.
   const scope = gamePreference(context, interaction.guildId)?.allowed ?? "both";
   await interaction.editReply(searchReply(query, searchCardGroups(query, scope), context.attribution, interaction.user.id, context.pages));
 }

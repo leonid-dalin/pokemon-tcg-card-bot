@@ -13,7 +13,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import { renderPanel, SCOPE_PERSONAL, SCOPE_SERVER } from "./settings-panel.js";
+import { renderPanel } from "./settings-panel.js";
 import { SettingsSessions, type SettingsSession } from "./settings-session.js";
 
 export interface SettingsPanelContext {
@@ -232,7 +232,6 @@ export class SettingsPanelController {
     await interaction.editReply({ flags: MessageFlags.IsComponentsV2, components } as never);
   }
 
-  /** Acknowledges a component interaction with fresh components. */
   private async present(interaction: PanelInteraction, ...components: unknown[]): Promise<void> {
     const payload = { flags: MessageFlags.IsComponentsV2, components } as never;
     if (typeof interaction.update === "function") {

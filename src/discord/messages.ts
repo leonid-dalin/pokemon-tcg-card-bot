@@ -15,7 +15,7 @@ import { normaliseName } from "../resolve.js";
 import { findExactCardName, searchCardGroups } from "../text-search.js";
 import { footerFor } from "./commands.js";
 import { toEmbed, toEmbeds } from "./embeds.js";
-import { versionActions, versionEmbed, versionLines } from "./version-view.js";
+import { versionActions, versionEmbed } from "./version-view.js";
 import { busyMessage, overloadHint } from "./interaction-failure.js";
 import { helpView } from "../help.js";
 import { MAX_EMBEDS_PER_MESSAGE, mentionReply, searchReply, type MentionMiss } from "./replies.js";
@@ -89,7 +89,6 @@ function replyText(payload: ReplyPayload): string {
   return parts.filter(Boolean).join("\n\n");
 }
 
-/** Routes eligible messages to help, decklist, search or card replies. */
 export function createMessageHandler(context: MessageContext): (message: IncomingMessage) => Promise<void> {
   const { api, config, budget, requests } = context;
   let warnedAboutContent = false;
@@ -191,7 +190,6 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       }
     }
 
-    // Apply the same per-member, per-channel budget to every message reply.
     if (activeBudget) {
       const verdict = activeBudget.take(`${message.channelId}:${message.author.id}`);
       if (!verdict.allowed) {

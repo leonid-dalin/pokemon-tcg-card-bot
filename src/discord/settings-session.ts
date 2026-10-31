@@ -30,7 +30,6 @@ export class SettingsSessions {
     return this.sessions.size;
   }
 
-  /** Creates a panel session owned by the clicking member. */
   open(ownerId: string, guildId: string | null, scope: "personal" | "server", screen: SettingsSession["screen"], baseline: string): SettingsSession {
     this.prune();
     if (this.sessions.size >= MAX_SESSIONS) {
