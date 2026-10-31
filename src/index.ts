@@ -44,7 +44,14 @@ const config = loadConfig(process.env);
 // The lock lives in the data directory when configured: both deploy targets
 // set DATA_DIR to a writable volume, and a CWD-relative lock would let two
 // launches from different directories run concurrently.
-if (config.dataDir) mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
+if (config.dataDir) {
+  try {
+    mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
+  } catch (error) {
+    console.error(`could not create the data directory (${errorCategory(error)}); check DATA_DIR`);
+    process.exit(1);
+  }
+}
 if (!acquireSingleInstanceLock(config.dataDir ? join(config.dataDir, ".bot.pid") : undefined)) {
   process.exit(1);
 }
