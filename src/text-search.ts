@@ -195,15 +195,18 @@ export function searchCardText(query: string, limit = Number.POSITIVE_INFINITY):
  * "N" cannot be searched upstream: the service treats it as a substring filter
  * and returns unrelated cards first, so the id comes from the local index.
  */
+let byFoldedName: Map<string, TextHit> | undefined;
+
 export function findExactCardName(query: string): TextHit | undefined {
-  const wanted = query.trim().toLowerCase();
-  if (!wanted) return undefined;
-  let best: TextHit | undefined;
-  for (const entry of load()) {
-    if (entry.name.trim().toLowerCase() !== wanted) continue;
-    if (!best || entry.id > best.id) best = entry;
+  if (!byFoldedName) {
+    byFoldedName = new Map();
+    for (const entry of load()) {
+      const key = entry.name.trim().toLowerCase();
+      const known = byFoldedName.get(key);
+      if (!known || entry.id > known.id) byFoldedName.set(key, entry);
+    }
   }
-  return best;
+  return byFoldedName.get(query.trim().toLowerCase());
 }
 
 /** Every card carrying exactly this name, newest id first. */
