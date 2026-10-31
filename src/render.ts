@@ -275,7 +275,9 @@ function isPokemon(card: Card): boolean {
 const ABSENT = new Set(["none", "n/a", "null", "undefined", "-"]);
 
 function isAbsent(value: string | undefined): boolean {
-  return value === undefined || ABSENT.has(value.trim().toLowerCase());
+  if (value === undefined) return true;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length === 0 || ABSENT.has(trimmed);
 }
 
 export function combatEntry(entries: { type: string; value?: string }[] | undefined): string {

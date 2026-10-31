@@ -268,7 +268,8 @@ describe("combat fields", () => {
     (renderCard(card).fields ?? []).filter((field) => ["Weakness", "Resistance", "Retreat"].includes(field.name));
 
   it("keeps no combat fields on a trainer", () => {
-    const trainer = { ...dragapult, category: "Trainer", weaknesses: undefined, resistances: undefined, retreat: undefined };
+    // Real combat data on a Trainer, so the assertion proves the guard filters it.
+    const trainer = { ...dragapult, category: "Trainer", weaknesses: [{ type: "Fire", value: "×2" }], resistances: [{ type: "Water", value: "-30" }], retreat: 2 };
     const fields = combat(trainer);
     expect(fields).toEqual([]);
   });
@@ -304,5 +305,10 @@ describe("combat fields", () => {
   it("shows a retreat cost when the card has one", () => {
     const fields = combat({ ...dragapult, retreat: 2 });
     expect(fields.find((field) => field.name === "Retreat")?.value).toBe("2");
+  });
+
+  it("treats a blank stat string as absent", () => {
+    const fields = combat({ ...dragapult, weaknesses: [{ type: "  ", value: "×2" }], resistances: undefined });
+    expect(fields.find((field) => field.name === "Weakness")?.value).toBe("none");
   });
 });

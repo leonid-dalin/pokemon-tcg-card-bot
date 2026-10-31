@@ -37,6 +37,9 @@ interface GameplayAttack {
   effect?: string | null;
 }
 
+/** A printed promo code such as P-A or P-C, which the package stores as pa or pc. */
+const PRINTED_PROMO = /^p-([abc])$/i;
+
 interface GameplayRecord {
   id: string;
   name: string;
@@ -255,13 +258,12 @@ export function searchPocketByName(name: string): CardSummary[] {
 
 export function getPocketExpansion(idOrName: string): { id: string; name: string } | undefined {
   const wanted = idOrName.trim().toLowerCase();
-  // A printed promo code reads P-C while the package stores pc and Promo-C.
-  const hyphenless = wanted.replace(/-/g, "");
+  const promo = PRINTED_PROMO.exec(wanted)?.[1]?.toLowerCase();
   const match = loadExpansions().find(
     (entry) =>
       entry.id.toLowerCase() === wanted ||
       entry.name.toLowerCase() === wanted ||
-      (hyphenless.length > 0 && entry.id.toLowerCase() === hyphenless),
+      (promo !== undefined && entry.id.toLowerCase() === `p${promo}`),
   );
   return match ? { id: match.id, name: match.name } : undefined;
 }

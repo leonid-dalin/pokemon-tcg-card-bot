@@ -97,4 +97,9 @@ describe("printed promo codes as hints", () => {
     // P-A is carried by the static index, so it resolves there before the package.
     expect(resolveSetHint("P-A")).toBe("P-A");
   });
+
+  it("rejects a hyphenated form that is not a printed promo code", () => {
+    expect(resolveSetHint("A-1")).toBeUndefined();
+    expect(resolveSetHint("A-B")).toBeUndefined();
+  });
 });
