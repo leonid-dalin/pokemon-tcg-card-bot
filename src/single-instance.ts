@@ -23,17 +23,20 @@ function holder(path: string): number | undefined {
   }
 }
 
+/** Filesystems that cannot hard link report one of these instead of creating it. */
+const LINK_UNSUPPORTED = new Set(["EPERM", "ENOTSUP", "EOPNOTSUPP", "EXDEV", "EMLINK", "EACCES"]);
+
 /** A holder that is gone, unreadable or this same pid cannot be running. */
 function isStale(pid: number | undefined): boolean {
   return pid === undefined || pid === process.pid || !isRunning(pid);
 }
 
-/** Registers cleanup once, so repeated acquires do not accumulate listeners. */
-let registered = false;
+/** Registers cleanup once per lock path, so repeated acquires do not accumulate listeners. */
+const registered = new Set<string>();
 
 function claim(path: string): boolean {
-  if (registered) return true;
-  registered = true;
+  if (registered.has(path)) return true;
+  registered.add(path);
   const release = () => {
     try {
       if (holder(path) === process.pid) unlinkSync(path);
@@ -61,7 +64,19 @@ export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
       linkSync(candidate, path);
       return claim(path);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const code = (error as NodeJS.ErrnoException).code;
+      // Bind mounts and network shares may refuse hard links; the exclusive
+      // create still keeps two starters apart there, at the cost of the
+      // never-empty guarantee.
+      if (code !== "EEXIST" && !LINK_UNSUPPORTED.has(code ?? "")) throw error;
+      if (code !== "EEXIST") {
+        try {
+          writeFileSync(path, String(process.pid), { flag: "wx", mode: 0o600 });
+          return claim(path);
+        } catch (fallback) {
+          if ((fallback as NodeJS.ErrnoException).code !== "EEXIST") throw fallback;
+        }
+      }
     }
 
     const pid = holder(path);
@@ -81,12 +96,23 @@ export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
       }
       return false;
     }
-    // Clear only the file this process moved, and only if it is still the stale one.
+    // The path may have been claimed again since it was read. Put the live lock
+    // back rather than leave a running instance's file moved aside.
     if (holder(aside) !== pid) {
-      console.error(`the lock at ${path} changed while it was being cleared; not removing it`);
+      try {
+        linkSync(aside, path);
+      } catch {
+        // A newer claim already holds the path, which is the outcome we want.
+      }
+      console.error(`the lock at ${path} changed while it was being cleared; it was restored`);
       return false;
     }
-    unlinkSync(aside);
+    try {
+      unlinkSync(aside);
+    } catch (error) {
+      console.error(`could not remove the stale copy at ${aside} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+      return false;
+    }
 
     try {
       linkSync(candidate, path);
