@@ -174,7 +174,15 @@ export async function handleAutocomplete(
     return;
   }
 
-  const summaries = await context.client.searchByName(query);
+  // The name path reaches upstream too, so it needs the same deadline as the set list.
+  const summaries = await Promise.race([
+    context.client.searchByName(query),
+    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), AUTOCOMPLETE_DEADLINE_MS)),
+  ]);
+  if (!summaries) {
+    await interaction.respond([]);
+    return;
+  }
   const scope = gamePreference(context, interaction.guildId)?.allowed ?? "both";
   const allowed = scope === "both" ? summaries : summaries.filter((card) => isPocketCardId(card.id) === (scope === "pocket"));
   const ranked = rankPrintings(allowed, query).slice(0, 25);
@@ -465,6 +473,10 @@ export async function handleVersionAction(
   if (previous !== undefined && now - previous < PUBLIC_REFRESH_INTERVAL_MS) {
     await interaction.reply({ content: "This card was refreshed a moment ago. Try again in a little while.", flags: MessageFlags.Ephemeral });
     return;
+  }
+  // Channels are unbounded, so drop entries that can no longer block a refresh.
+  for (const [seen, at] of lastPublicRefresh) {
+    if (now - at >= PUBLIC_REFRESH_INTERVAL_MS) lastPublicRefresh.delete(seen);
   }
   lastPublicRefresh.set(key, now);
   await interaction.update({ embeds: [versionEmbed(startedAt, now)] });
