@@ -192,7 +192,14 @@ export class SettingsPanelController {
       await interaction.editReply(payload as never);
     } catch (error) {
       console.error(`settings panel reply failed (${errorCategory(error)})`);
-      await interaction.followUp({ content: "The settings panel could not be opened. Try /settings again.", flags: MessageFlags.Ephemeral }).catch(() => {});
+      const notice = { content: "The settings panel could not be opened. Try /settings again.", flags: MessageFlags.Ephemeral };
+      // Before deferral the interaction still needs its first response; a follow-up
+      // would be rejected. Only swallow once the notice has actually been sent.
+      const sent =
+        interaction.deferred || interaction.replied
+          ? await interaction.followUp(notice as never).then(() => true, () => false)
+          : await interaction.reply(notice as never).then(() => true, () => false);
+      if (!sent) throw error;
       return;
     }
   }
