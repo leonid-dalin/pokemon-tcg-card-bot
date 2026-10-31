@@ -220,7 +220,12 @@ export function findExactCardName(query: string): TextHit | undefined {
     for (const entry of load()) {
       const key = entry.name.trim().toLowerCase();
       const known = byFoldedName.get(key);
-      if (!known || entry.id > known.id) byFoldedName.set(key, entry);
+      if (!known) {
+        byFoldedName.set(key, entry);
+        continue;
+      }
+      const recency = setRecency(entry.id) - setRecency(known.id);
+      if (recency > 0 || (recency === 0 && entry.id > known.id)) byFoldedName.set(key, entry);
     }
   }
   return byFoldedName.get(query.trim().toLowerCase());

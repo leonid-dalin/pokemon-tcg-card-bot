@@ -4,6 +4,7 @@ import type { DeckLine, ParsedDeck } from "./decklist.js";
 import { SET_INDEX } from "./data/set-index.js";
 import { normaliseName, rankPrintings, scoreCandidate } from "./resolve.js";
 import { errorCategory } from "./diagnostics.js";
+import { isMissing } from "./lookup.js";
 import { setRecency } from "./set-index.js";
 import { setUsesPaddedNumbers } from "./text-search.js";
 
@@ -29,14 +30,18 @@ const entryByCode = new Map(
 /** A deck message may spend at most this many upstream calls, whatever it contains. */
 export const MAX_DECK_CALLS = 48;
 
-/** Counts calls down; a caller that runs out stops asking upstream. */
+/** Counts calls down; refused records that a call was actually turned away. */
 interface Budget {
   left: number;
+  refused: boolean;
 }
 
 async function spend<T>(budget: Budget | undefined, call: () => Promise<T>, fallback: T): Promise<T> {
   if (!budget) return call();
-  if (budget.left <= 0) return fallback;
+  if (budget.left <= 0) {
+    budget.refused = true;
+    return fallback;
+  }
   budget.left -= 1;
   return call();
 }
@@ -46,7 +51,7 @@ export async function resolveDeckCards(client: TcgdexClient, deck: ParsedDeck): 
   const resolved: ResolvedLine[] = [];
   // Lines naming the same card, such as nine copies of one Trainer, resolve once.
   const byPrinting = new Map<string, Promise<Card | undefined>>();
-  const budget: Budget = { left: MAX_DECK_CALLS };
+  const budget: Budget = { left: MAX_DECK_CALLS, refused: false };
   const resolveOnce = (line: DeckLine): Promise<Card | undefined> => {
     const key = `${line.setCode ?? ""}|${line.number ?? ""}|${normaliseName(line.name)}`;
     const known = byPrinting.get(key);
@@ -63,7 +68,7 @@ export async function resolveDeckCards(client: TcgdexClient, deck: ParsedDeck): 
     }));
     resolved.push(...results);
   }
-  return { lines: resolved, exhausted: budget.left <= 0 };
+  return { lines: resolved, exhausted: budget.refused };
 }
 
 // Decklists and set records use different names for basic Energy.
@@ -87,7 +92,7 @@ function sameName(cardName: string, lineName: string): boolean {
 
 /** A missing card is an ordinary miss; anything else is an outage worth reporting. */
 function outage(error: unknown): void {
-  if (errorCategory(error) === "missing") return;
+  if (isMissing(error)) return;
   console.error(`deck lookup failed (${errorCategory(error)})`);
 }
 

@@ -138,6 +138,21 @@ export const versionCommand = new SlashCommandBuilder()
 
 export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand, versionCommand, settingsCommand];
 
+/** Runs an upstream call with the autocomplete deadline, clearing the timer after. */
+async function withDeadline<T>(call: Promise<T>): Promise<T | undefined> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      call,
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), AUTOCOMPLETE_DEADLINE_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function handleAutocomplete(
   context: CommandContext,
   interaction: AutocompleteInteraction,
@@ -158,10 +173,7 @@ export async function handleAutocomplete(
 
   if (focused.name === "id") {
     // Discord wants an autocomplete answer within three seconds, so do not wait the full queue deadline.
-    const sets = await Promise.race([
-      context.client.listSets(),
-      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), AUTOCOMPLETE_DEADLINE_MS)),
-    ]);
+    const sets = await withDeadline(context.client.listSets());
     if (!sets) {
       await interaction.respond([]);
       return;
@@ -175,10 +187,7 @@ export async function handleAutocomplete(
   }
 
   // The name path reaches upstream too, so it needs the same deadline as the set list.
-  const summaries = await Promise.race([
-    context.client.searchByName(query),
-    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), AUTOCOMPLETE_DEADLINE_MS)),
-  ]);
+  const summaries = await withDeadline(context.client.searchByName(query));
   if (!summaries) {
     await interaction.respond([]);
     return;

@@ -261,19 +261,38 @@ describe("lookupCard", () => {
   });
 
   it("keeps a different card behind one that carries the name", async () => {
-    // "Charmander" contains no Charizard, so it must not outrank the exact name.
+    // "Charizard Spirit Link" contains the query and sits in a newer set, so only
+    // the same-card check keeps the plain Charizard ahead of it.
     stubFetch({
       "/cards?name=": {
         body: [
           { id: "sv03-125", name: "Charizard", localId: "125", image: "https://assets.tcgdex.net/en/sv/sv03/125" },
-          { id: "sv03-025", name: "Charmander", localId: "025", image: "https://assets.tcgdex.net/en/sv/sv03/025" },
+          { id: "sv10-160", name: "Charizard Spirit Link", localId: "160", image: "https://assets.tcgdex.net/en/sv/sv10/160" },
         ],
       },
+      "/cards/sv10-160": { body: { ...dragapult, id: "sv10-160", name: "Charizard Spirit Link", localId: "160" } },
       "/cards/sv03-125": { body: { ...dragapult, id: "sv03-125", name: "Charizard", localId: "125" } },
     });
     const client = new TcgdexClient({ retries: 0 });
-    const lookup = await lookupCard(client, "charizard");
+    const lookup = await lookupCard(client, "Charizard");
     expect(lookup?.card.id).toBe("sv03-125");
+  });
+
+  it("prefers a newer Mega printing over an older plain one", async () => {
+    // Both printings are Charizard, so recency decides and the Mega wins.
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "swsh10.5-010", name: "Charizard", localId: "010", image: "https://assets.tcgdex.net/en/swsh/swsh10.5/010" },
+          { id: "me02-013", name: "Mega Charizard X ex", localId: "013", image: "https://assets.tcgdex.net/en/me/me02/013" },
+        ],
+      },
+      "/cards/me02-013": { body: { ...dragapult, id: "me02-013", name: "Mega Charizard X ex", localId: "013" } },
+      "/cards/swsh10.5-010": { body: { ...dragapult, id: "swsh10.5-010", name: "Charizard", localId: "010" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "Charizard");
+    expect(lookup?.card.id).toBe("me02-013");
   });
 
   it("prefers the newest series among art-bearing printings", async () => {

@@ -44,4 +44,9 @@ describe("finding a card by exact name", () => {
   it("ignores surrounding whitespace and case", () => {
     expect(findExactCardName("  PIKACHU ")).toEqual(findExactCardName("Pikachu"));
   });
+
+  it("picks the newest printing of an exact name", () => {
+    const hit = findExactCardName("abomasnow");
+    expect(hit?.id).toBe("sv10-060");
+  });
 });

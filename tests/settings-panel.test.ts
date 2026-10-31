@@ -620,7 +620,7 @@ describe("settings panel reset announcements", () => {
 describe("empty channel selection always asks first", () => {
   // The confirmation is an update, so check everything the view rendered.
   const confirmText = (view: { sent: unknown[]; updates: unknown[] }): boolean =>
-    JSON.stringify([view.sent, view.updates]).includes("Save an empty selection");
+    JSON.stringify([view.sent, view.updates]).includes("Stop replies everywhere");
 
   it("saves the picked channels when switching to Selected, rather than emptying the list", async () => {
     const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: [] });

@@ -289,6 +289,8 @@ describe("decklist replies take the same admission", () => {
   });
 
   it("takes one admission for a deck when deck replies are on", async () => {
+    // No upstream requests: the admission is what this test is about.
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, json: async () => [] }) as unknown as Response);
     const taken: string[] = [];
     const requests = { take: (key: string) => { taken.push(key); return { allowed: true as const }; } };
     const { message } = deckMessage(DECK);
