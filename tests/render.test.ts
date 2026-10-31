@@ -28,8 +28,8 @@ describe("renderCard", () => {
   it("puts game information on the Mega Gallade ex front", () => {
     const view = renderCard(megaGallade);
     expect(view.description).toMatch(/^350 HP · Fighting · Stage 2 · from Kirlia/);
-    expect(view.fields.map((field) => field.name)).toEqual(["[F]  Gale Slash  50+", "[FFC]  Marvelous Edge  240", "Weakness", "Retreat"]);
-    expect(view.fields.find((field) => field.name === "Weakness")?.value).toBe("Psychic ×2");
+    expect(view.fields.map((field) => field.name)).toEqual(["[F]  Gale Slash  50+", "[FFC]  Marvelous Edge  240", "Weakness", "Resistance", "Retreat"]);
+    expect(view.fields.find((field) => field.name === "Weakness")?.value).toBe("Psychic (×2)");
     expect(view.fields.some((field) => ["Rarity", "Legal", "Illustrator"].includes(field.name))).toBe(false);
     expect(view.fields.map((field) => field.name)).not.toContain("Prices (Cardmarket)");
     expect(view.footer).toMatch(/^CRI 48 · Reg J/);
@@ -174,7 +174,7 @@ describe("renderCard", () => {
 
   it("summarises weakness and retreat as separate fields", () => {
     const fields = renderCard(charizard).fields;
-    expect(fields.find((field) => field.name === "Weakness")?.value).toBe("Grass ×2");
+    expect(fields.find((field) => field.name === "Weakness")?.value).toBe("Grass (×2)");
     expect(fields.find((field) => field.name === "Retreat")?.value).toBe("2");
   });
 
@@ -259,5 +259,56 @@ describe("footer credit", () => {
   it("falls back to the TCGdex credit", () => {
     expect(renderSet(set).footer).toBe(DEFAULT_ATTRIBUTION);
     expect(renderSearchResults("iono", hits).footer).toBe(DEFAULT_ATTRIBUTION);
+  });
+});
+
+describe("combat fields", () => {
+  const dragapult = fixture("dragapult-ex-sv08.5-073.json");
+  const combat = (card: Card) =>
+    (renderCard(card).fields ?? []).filter((field) => ["Weakness", "Resistance", "Retreat"].includes(field.name));
+
+  it("keeps no combat fields on a trainer", () => {
+    // Real combat data on a Trainer, so the assertion proves the guard filters it.
+    const trainer = { ...dragapult, category: "Trainer", weaknesses: [{ type: "Fire", value: "×2" }], resistances: [{ type: "Water", value: "-30" }], retreat: 2 };
+    const fields = combat(trainer);
+    expect(fields).toEqual([]);
+  });
+
+  it("keeps all three fields on a Pokemon with neither stat", () => {
+    const fields = combat({ ...dragapult, weaknesses: undefined, resistances: undefined });
+    expect(fields.map((field) => field.name)).toEqual(["Weakness", "Resistance", "Retreat"]);
+    expect(fields.find((field) => field.name === "Weakness")?.value).toBe("none");
+    expect(fields.find((field) => field.name === "Resistance")?.value).toBe("none");
+  });
+
+  it("puts the multiplier in parentheses after the type", () => {
+    const fields = combat({ ...dragapult, weaknesses: [{ type: "Fire", value: "×2" }] });
+    expect(fields.find((field) => field.name === "Weakness")?.value).toBe("Fire (×2)");
+  });
+
+  it("wraps a resistance modifier the same way", () => {
+    const fields = combat({ ...dragapult, resistances: [{ type: "Water", value: "-30" }] });
+    expect(fields.find((field) => field.name === "Resistance")?.value).toBe("Water (-30)");
+  });
+
+  it("treats the literal none string as an absent stat", () => {
+    const fields = combat({ ...dragapult, weaknesses: [{ type: "none", value: "+20" }], resistances: [] });
+    expect(fields.find((field) => field.name === "Weakness")?.value).toBe("none");
+    expect(fields.find((field) => field.name === "Resistance")?.value).toBe("none");
+  });
+
+  it("reports none for a retreat that is not recorded", () => {
+    const fields = combat({ ...dragapult, retreat: undefined });
+    expect(fields.find((field) => field.name === "Retreat")?.value).toBe("none");
+  });
+
+  it("shows a retreat cost when the card has one", () => {
+    const fields = combat({ ...dragapult, retreat: 2 });
+    expect(fields.find((field) => field.name === "Retreat")?.value).toBe("2");
+  });
+
+  it("treats a blank stat string as absent", () => {
+    const fields = combat({ ...dragapult, weaknesses: [{ type: "  ", value: "×2" }], resistances: undefined });
+    expect(fields.find((field) => field.name === "Weakness")?.value).toBe("none");
   });
 });

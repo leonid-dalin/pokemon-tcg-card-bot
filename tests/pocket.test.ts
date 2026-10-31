@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getPocketCard, searchPocketByName } from "../src/api/pocket.js";
+import { isPocketSet } from "../src/prizes.js";
 
 describe("searchPocketByName", () => {
   it.each(["Mewtwo", "Pikachu", "Professor's Research"])("lists each %s printing once", (name) => {
@@ -32,5 +33,15 @@ describe("getPocketCard", () => {
   // The adapter renders a supplied weakness type with a +20 modifier.
   it("gives a Pokémon its weakness type with the fixed +20", () => {
     expect(getPocketCard("b4-070")?.weaknesses).toEqual([{ type: "Darkness", value: "+20" }]);
+  });
+
+  it("keeps the package point value so prizes need no name guess", () => {
+    expect(getPocketCard("c1-005")?.points).toBe(2);
+  });
+
+  it("classifies the C-series and Promo-C sets as pocket", () => {
+    expect(isPocketSet("c1")).toBe(true);
+    expect(isPocketSet("pc")).toBe(true);
+    expect(isPocketSet("swsh")).toBe(false);
   });
 });

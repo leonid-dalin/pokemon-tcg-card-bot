@@ -2,10 +2,10 @@ import { SET_INDEX } from "./data/set-index.js";
 import { normaliseName, setIdOf } from "./resolve.js";
 
 // Recognise regular Pocket sets and both package and hyphenated promo prefixes.
-const POCKET_SET = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])$/i;
+const POCKET_SET = /^(?:[abc]\d+[a-z]?|p[abc]?-[abc]?|p[abc])$/i;
 
 // Display package promo prefixes pa/pb as P-A/P-B.
-const PROMO_CODE = /^p([ab])$/i;
+const PROMO_CODE = /^p([abc])$/i;
 
 const codeBySet = new Map(
   SET_INDEX.filter((entry) => entry.code).map((entry) => [normaliseName(entry.id), entry.code as string]),

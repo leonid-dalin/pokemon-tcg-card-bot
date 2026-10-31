@@ -37,6 +37,9 @@ interface GameplayAttack {
   effect?: string | null;
 }
 
+/** A printed promo code such as P-A or P-C, which the package stores as pa or pc. */
+const PRINTED_PROMO = /^p-([abc])$/i;
+
 interface GameplayRecord {
   id: string;
   name: string;
@@ -44,6 +47,7 @@ interface GameplayRecord {
   type?: string;
   /** Pokémon type or Trainer subtype. */
   subtype?: string;
+  points?: number;
   /** Rules text for a Trainer card. */
   card_text?: string;
   stage?: string;
@@ -90,6 +94,21 @@ interface PocketIndex {
 }
 
 let cached: PocketIndex | undefined;
+
+interface PocketExpansion {
+  id: string;
+  name: string;
+}
+
+let cachedExpansions: PocketExpansion[] | undefined;
+
+function loadExpansions(): PocketExpansion[] {
+  cachedExpansions ??= readJson<PocketExpansion[]>(join(PACKAGE_ROOT, "expansions.json")).map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+  }));
+  return cachedExpansions;
+}
 
 function loadIndex(): PocketIndex {
   if (cached) return cached;
@@ -151,8 +170,11 @@ function loadIndex(): PocketIndex {
         ...(parent?.subtype ? (trainer ? { trainerType: parent.subtype } : { types: [parent.subtype] }) : {}),
         ...(parent?.card_text ? { effect: parent.card_text } : {}),
         ...(parent?.health ? { hp: parent.health } : {}),
+        ...(parent?.points !== undefined ? { points: parent.points } : {}),
         ...(parent?.retreat !== undefined ? { retreat: parent.retreat } : {}),
-        ...(parent?.weakness ? { weaknesses: [{ type: parent.weakness, value: "+20" }] } : {}),
+        ...(parent?.weakness && parent.weakness.trim().toLowerCase() !== "none"
+          ? { weaknesses: [{ type: parent.weakness, value: "+20" }] }
+          : {}),
         ...(parent?.ability?.exists && parent.ability.name
           ? {
               abilities: [
@@ -234,7 +256,18 @@ export function searchPocketByName(name: string): CardSummary[] {
   return partial;
 }
 
-/** Returns a package record by case-insensitive ID, or undefined if absent. */
+export function getPocketExpansion(idOrName: string): { id: string; name: string } | undefined {
+  const wanted = idOrName.trim().toLowerCase();
+  const promo = PRINTED_PROMO.exec(wanted)?.[1]?.toLowerCase();
+  const match = loadExpansions().find(
+    (entry) =>
+      entry.id.toLowerCase() === wanted ||
+      entry.name.toLowerCase() === wanted ||
+      (promo !== undefined && entry.id.toLowerCase() === `p${promo}`),
+  );
+  return match ? { id: match.id, name: match.name } : undefined;
+}
+
 export function getPocketCard(id: string): Card | undefined {
   // Accept differently cased input without changing package keys.
   return loadIndex().cards.get(id) ?? loadIndex().cards.get(id.toLowerCase());
