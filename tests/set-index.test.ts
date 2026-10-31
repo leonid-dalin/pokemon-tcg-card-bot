@@ -66,3 +66,19 @@ describe("pocket group hint", () => {
     expect(isPocketHint("sv07")).toBe(false);
   });
 });
+
+describe("package-backed set hints", () => {
+  it("resolves a set the static index does not carry", () => {
+    expect(resolveSetHint("C1")).toBe("c1");
+    expect(resolveSetHint("Dual Fusion")).toBe("c1");
+  });
+
+  it("still resolves indexed sets", () => {
+    expect(resolveSetHint("A1")).toBe("A1");
+    expect(resolveSetHint("Genetic Apex")).toBe("A1");
+  });
+
+  it("rejects an unknown hint", () => {
+    expect(resolveSetHint("nonsense")).toBeUndefined();
+  });
+});

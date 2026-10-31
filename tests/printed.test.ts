@@ -26,4 +26,13 @@ describe("printedNumber", () => {
   it("handles a number that is not numeric", () => {
     expect(printedNumber("sv06-130a")).toBe("TWM 130a");
   });
+
+  it("recognises a C-series pocket set", () => {
+    expect(printedNumber("c1-005")).toBe("C1 5");
+    expect(printedNumber("c1-168")).toBe("C1 168");
+  });
+
+  it("shows a Promo-C card as P-C", () => {
+    expect(printedNumber("pc-001")).toBe("P-C 1");
+  });
 });

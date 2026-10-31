@@ -44,6 +44,8 @@ interface GameplayRecord {
   type?: string;
   /** Pokémon type or Trainer subtype. */
   subtype?: string;
+  /** Knockout points the card awards. */
+  points?: number;
   /** Rules text for a Trainer card. */
   card_text?: string;
   stage?: string;
@@ -90,6 +92,21 @@ interface PocketIndex {
 }
 
 let cached: PocketIndex | undefined;
+
+interface PocketExpansion {
+  id: string;
+  name: string;
+}
+
+let cachedExpansions: PocketExpansion[] | undefined;
+
+function loadExpansions(): PocketExpansion[] {
+  cachedExpansions ??= readJson<PocketExpansion[]>(join(PACKAGE_ROOT, "expansions.json")).map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+  }));
+  return cachedExpansions;
+}
 
 function loadIndex(): PocketIndex {
   if (cached) return cached;
@@ -151,6 +168,7 @@ function loadIndex(): PocketIndex {
         ...(parent?.subtype ? (trainer ? { trainerType: parent.subtype } : { types: [parent.subtype] }) : {}),
         ...(parent?.card_text ? { effect: parent.card_text } : {}),
         ...(parent?.health ? { hp: parent.health } : {}),
+        ...(parent?.points !== undefined ? { points: parent.points } : {}),
         ...(parent?.retreat !== undefined ? { retreat: parent.retreat } : {}),
         ...(parent?.weakness && parent.weakness.trim().toLowerCase() !== "none"
           ? { weaknesses: [{ type: parent.weakness, value: "+20" }] }
@@ -237,6 +255,15 @@ export function searchPocketByName(name: string): CardSummary[] {
 }
 
 /** Returns a package record by case-insensitive ID, or undefined if absent. */
+/** Expansion metadata from the installed package, for sets newer than the static index. */
+export function getPocketExpansion(idOrName: string): { id: string; name: string } | undefined {
+  const wanted = idOrName.trim().toLowerCase();
+  const match = loadExpansions().find(
+    (entry) => entry.id.toLowerCase() === wanted || entry.name.toLowerCase() === wanted,
+  );
+  return match ? { id: match.id, name: match.name } : undefined;
+}
+
 export function getPocketCard(id: string): Card | undefined {
   // Accept differently cased input without changing package keys.
   return loadIndex().cards.get(id) ?? loadIndex().cards.get(id.toLowerCase());

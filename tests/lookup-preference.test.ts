@@ -124,3 +124,22 @@ describe("per-server card game preference in lookupCard", () => {
 });
 
 vi.restoreAllMocks();
+
+  it("resolves Rika through the C1 hint on a physical-only server", async () => {
+    const client = clientReturning([]);
+    const lookup = await lookupCard(client, "Rika", "C1", { gamePreference: PTCG_PREF });
+    expect(lookup?.card.name).toBe("Rika");
+    expect(lookup?.card.id.toLowerCase()).toMatch(/^c1-/);
+  });
+
+  it("resolves Rika through the Dual Fusion name on a physical-only server", async () => {
+    const client = clientReturning([]);
+    const lookup = await lookupCard(client, "Rika", "Dual Fusion", { gamePreference: PTCG_PREF });
+    expect(lookup?.card.name).toBe("Rika");
+  });
+
+  it("still resolves an older Pocket set by name", async () => {
+    const client = clientReturning([]);
+    const lookup = await lookupCard(client, "Rika", "Genetic Apex", { gamePreference: PTCG_PREF });
+    expect(lookup).toBeUndefined();
+  });

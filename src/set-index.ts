@@ -1,5 +1,6 @@
 import { SET_INDEX, type SetIndexEntry } from "./data/set-index.js";
 import { normaliseName, seriesRank, setIdOf } from "./resolve.js";
+import { getPocketExpansion } from "./api/pocket.js";
 
 const byId = new Map<string, SetIndexEntry>();
 const byCode = new Map<string, string>();
@@ -55,7 +56,10 @@ export function resolveSetHint(hint: string): string | undefined {
   const partial = SET_INDEX.filter((entry) => normaliseName(entry.name).includes(normalised)).sort(
     (a, b) => (a.name.length ?? 0) - (b.name.length ?? 0),
   );
-  return partial[0]?.id;
+  if (partial[0]) return partial[0].id;
+
+  // The static index predates sets the package already ships, so it answers last.
+  return getPocketExpansion(trimmed)?.id;
 }
 
 const POCKET_HINT = /^(ptcgp|tcgp|pocket|pocket tcg)$/i;
