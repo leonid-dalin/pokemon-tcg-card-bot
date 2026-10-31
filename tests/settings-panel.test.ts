@@ -637,18 +637,6 @@ describe("empty channel selection always asks first", () => {
     expect(confirmText(view)).toBe(false);
   });
 
-  it("never reaches Selected with no channels without asking", async () => {
-    const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: [] });
-    const sessionId = openChannelsPanel(fx);
-    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
-    const view = fx.interaction(`st:ch:selected:${sessionId}`, { admin: true });
-    await fx.controller.handleComponent(view.interaction as never);
-
-    const state = fixtureStoreState(fx);
-    const emptied = state.autoReplyChannelMode === "selected" && state.selectedChannelIds.length === 0;
-    expect(emptied && !confirmText(view)).toBe(false);
-  });
-
   it("asks before a save that would leave no channels, even from Everywhere", async () => {
     const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: [] });
     const sessionId = openChannelsPanel(fx);

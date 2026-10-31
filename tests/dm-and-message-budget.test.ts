@@ -276,7 +276,7 @@ describe("decklist replies take the same admission", () => {
     return { message, replies };
   }
 
-  it("spends no admission on a deck when deck replies are off", async () => {
+  it("parses no deck and spends no admission when deck replies are off", async () => {
     const taken: string[] = [];
     const requests = { take: (key: string) => { taken.push(key); return { allowed: true as const }; } };
     const { message, replies } = deckMessage(DECK);

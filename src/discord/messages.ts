@@ -244,15 +244,12 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     if (deck) {
-      // Nothing is looked up when deck replies are off, so no admission is spent.
-      if (decklistOn) {
-        const admission = requests?.take(message.guildId ? `${message.guildId}:${message.author.id}` : `dm:${message.author.id}`);
-        if (admission && !admission.allowed) {
-          await logReply({ content: busyMessage(admission.retryAfterSeconds) });
-          return;
-        }
+      const admission = requests?.take(message.guildId ? `${message.guildId}:${message.author.id}` : `dm:${message.author.id}`);
+      if (admission && !admission.allowed) {
+        await logReply({ content: busyMessage(admission.retryAfterSeconds) });
+        return;
       }
-      const resolution = decklistOn ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
+      const resolution = await resolveDeckCards(api, deck).catch(() => undefined);
       const view = renderDecklist(deck, resolution?.lines);
       const notes = [
         ...(deck.truncated ? [`only the first ${MAX_DECK_LINES} lines were read`] : []),
