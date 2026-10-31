@@ -1,4 +1,4 @@
-import { linkSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { linkSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 
 // Relative to the process CWD by default; the entry point passes the data
 // directory when configured so the lock does not depend on the CWD.
@@ -31,7 +31,6 @@ function isStale(pid: number | undefined): boolean {
   return pid === undefined || pid === process.pid || !isRunning(pid);
 }
 
-/** Registers cleanup once per lock path, so repeated acquires do not accumulate listeners. */
 const registered = new Set<string>();
 
 function claim(path: string): boolean {
@@ -41,7 +40,6 @@ function claim(path: string): boolean {
     try {
       if (holder(path) === process.pid) unlinkSync(path);
     } catch {
-      // Lock cleanup is best-effort.
     }
   };
   process.on("exit", release);
@@ -51,33 +49,41 @@ function claim(path: string): boolean {
 }
 
 /**
- * Claims the lock atomically. A candidate is written to a unique temporary file
- * and hard-linked into place, so only one process can create the link and the
- * claimed file is never briefly empty. To clear a stale holder, a process must
- * first rename it aside, and only the process that renamed it clears it.
+ * Creates the lock from an already-written candidate. Returns false when another
+ * process holds the path. A filesystem that cannot hard link falls back to an
+ * exclusive create, which still keeps two starters apart but cannot guarantee the
+ * file is never briefly empty.
+ */
+function createLock(candidate: string, path: string): boolean {
+  try {
+    linkSync(candidate, path);
+    return true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EEXIST") return false;
+    if (!LINK_UNSUPPORTED.has(code ?? "")) throw error;
+  }
+  try {
+    writeFileSync(path, String(process.pid), { flag: "wx", mode: 0o600 });
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+    throw error;
+  }
+}
+
+/**
+ * Claims the lock so two starting processes cannot both hold it. A candidate is
+ * written to a unique file and hard-linked into place, so the claimed file is
+ * never briefly empty. Clearing a stale holder copies it aside first and removes
+ * the original only while it still holds the pid that was read; if it has been
+ * replaced by a live claim, that claim is left untouched.
  */
 export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
   const candidate = `${path}.${process.pid}`;
   try {
     writeFileSync(candidate, String(process.pid), { mode: 0o600 });
-    try {
-      linkSync(candidate, path);
-      return claim(path);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      // Bind mounts and network shares may refuse hard links; the exclusive
-      // create still keeps two starters apart there, at the cost of the
-      // never-empty guarantee.
-      if (code !== "EEXIST" && !LINK_UNSUPPORTED.has(code ?? "")) throw error;
-      if (code !== "EEXIST") {
-        try {
-          writeFileSync(path, String(process.pid), { flag: "wx", mode: 0o600 });
-          return claim(path);
-        } catch (fallback) {
-          if ((fallback as NodeJS.ErrnoException).code !== "EEXIST") throw fallback;
-        }
-      }
-    }
+    if (createLock(candidate, path)) return claim(path);
 
     const pid = holder(path);
     if (!isStale(pid)) {
@@ -87,45 +93,42 @@ export function acquireSingleInstanceLock(path = LOCK_PATH): boolean {
 
     const aside = `${candidate}.stale`;
     try {
-      renameSync(path, aside);
+      linkSync(path, aside);
     } catch (error) {
-      // Another process moved it first, so that process owns the claim. Anything
-      // else means the stale file could not be cleared at all.
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        console.error(`could not clear the stale lock at ${path} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") return false;
+      if (LINK_UNSUPPORTED.has(code ?? "")) {
+        try {
+          unlinkSync(path);
+        } catch {
+          return false;
+        }
+        if (!createLock(candidate, path)) return false;
+        return claim(path);
       }
-      return false;
+      throw error;
     }
-    // The path may have been claimed again since it was read. Put the live lock
-    // back rather than leave a running instance's file moved aside.
+
     if (holder(aside) !== pid) {
       try {
-        linkSync(aside, path);
+        unlinkSync(aside);
       } catch {
-        // A newer claim already holds the path, which is the outcome we want.
       }
-      console.error(`the lock at ${path} changed while it was being cleared; it was restored`);
       return false;
     }
     try {
       unlinkSync(aside);
+      unlinkSync(path);
     } catch (error) {
-      console.error(`could not remove the stale copy at ${aside} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+      console.error(`could not clear the stale lock at ${path} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
       return false;
     }
-
-    try {
-      linkSync(candidate, path);
-      return claim(path);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
-      throw error;
-    }
+    if (!createLock(candidate, path)) return false;
+    return claim(path);
   } finally {
     try {
       unlinkSync(candidate);
     } catch {
-      // The temporary file is already gone.
     }
   }
 }

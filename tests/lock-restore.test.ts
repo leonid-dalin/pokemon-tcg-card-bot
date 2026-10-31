@@ -1,37 +1,70 @@
-import { existsSync, linkSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+let dir: string;
+let lock: string;
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "lock-interleave-"));
+  lock = join(dir, ".bot.pid");
+  vi.resetModules();
+});
+
+afterEach(() => {
+  vi.doUnmock("node:fs");
+  vi.resetModules();
+  rmSync(dir, { recursive: true, force: true });
+});
 
 /**
- * The acquire path restores a lock it moved aside when the pid turns out not to
- * be the stale one it read. A process race cannot be timed reliably in a unit
- * test, so the interleaving is driven directly and the invariant asserted.
+ * Drives the real acquire function through the interleaving where the stale file
+ * is replaced by a live claim between being read and being cleared.
  */
-describe("a live lock survives being moved aside", () => {
-  it("leaves the path holding the live holder's pid", () => {
-    const dir = mkdtempSync(join(tmpdir(), "lock-interleave-"));
-    const lock = join(dir, ".bot.pid");
-    const stalePid = 999999;
+async function moduleWithLiveReplacement(livePid: number) {
+  vi.doMock("node:fs", async () => {
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    let replaced = false;
+    return {
+      ...actual,
+      // The first read sees the stale pid; the copy made for clearing holds the
+      // live pid that arrived in between.
+      linkSync: (from: string, to: string) => {
+        if (!replaced && from === process.env.LOCK_PATH && to.endsWith(".stale")) {
+          replaced = true;
+          actual.writeFileSync(from, String(livePid));
+        }
+        return actual.linkSync(from, to);
+      },
+    };
+  });
+  return import("../src/single-instance.js");
+}
+
+describe("a live lock replaced while a stale one is cleared", () => {
+  it("does not take the lock from the live holder", async () => {
     const livePid = process.ppid;
+    process.env.LOCK_PATH = lock;
+    writeFileSync(lock, "2147483646");
+    const { acquireSingleInstanceLock } = await moduleWithLiveReplacement(livePid);
 
-    // A slow process read the stale file; a faster one has since claimed the lock.
-    writeFileSync(lock, String(stalePid));
-    writeFileSync(lock, String(livePid));
-    const aside = `${lock}.slow.stale`;
-    renameSync(lock, aside);
+    const won = acquireSingleInstanceLock(lock);
 
-    // The pid does not match the one that was read, so the file is put back.
-    if (Number.parseInt(readFileSync(aside, "utf8"), 10) !== stalePid) {
-      try {
-        linkSync(aside, lock);
-      } catch {
-        // A newer claim already holds the path.
-      }
-    }
-
-    expect(existsSync(lock)).toBe(true);
+    expect(won).toBe(false);
     expect(readFileSync(lock, "utf8")).toBe(String(livePid));
-    rmSync(dir, { recursive: true, force: true });
+    delete process.env.LOCK_PATH;
+  });
+
+  it("leaves no stale copy behind", async () => {
+    const livePid = process.ppid;
+    process.env.LOCK_PATH = lock;
+    writeFileSync(lock, "2147483646");
+    const { acquireSingleInstanceLock } = await moduleWithLiveReplacement(livePid);
+
+    acquireSingleInstanceLock(lock);
+
+    expect(readdirSync(dir).filter((name) => name.endsWith(".stale"))).toEqual([]);
+    delete process.env.LOCK_PATH;
   });
 });

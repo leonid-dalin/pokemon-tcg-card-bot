@@ -49,4 +49,12 @@ describe("lock acquisition without hard links", () => {
     expect(acquireSingleInstanceLock(lock)).toBe(false);
     expect(readFileSync(lock, "utf8")).toBe(String(process.ppid));
   });
+
+  it("claims a stale lock without crashing, as a restart after a crash must", async () => {
+    const { acquireSingleInstanceLock } = await moduleWithoutLinks();
+    writeFileSync(lock, "2147483646");
+
+    expect(acquireSingleInstanceLock(lock)).toBe(true);
+    expect(readFileSync(lock, "utf8")).toBe(String(process.pid));
+  });
 });
