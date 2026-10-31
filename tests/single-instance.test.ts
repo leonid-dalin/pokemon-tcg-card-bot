@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { acquireSingleInstanceLock } from "../src/single-instance.js";
 
@@ -53,6 +53,39 @@ describe("acquireSingleInstanceLock", () => {
     writeFileSync(path, "not-a-pid");
     expect(acquireSingleInstanceLock(path)).toBe(true);
     expect(readFileSync(path, "utf8")).toBe(String(process.pid));
+    rmSync(path, { force: true });
+  });
+});
+
+describe("stale lock clearing", () => {
+  it("leaves no temporary files behind after claiming", () => {
+    const path = lockIn();
+    writeFileSync(path, "999999");
+
+    expect(acquireSingleInstanceLock(path)).toBe(true);
+    const leftovers = readdirSync(dirname(path)).filter((name) => name !== basename(path));
+    expect(leftovers).toEqual([]);
+    rmSync(path, { force: true });
+  });
+
+  it("does not clear a lock that a live process claimed in the meantime", () => {
+    const path = lockIn();
+    writeFileSync(path, "999999");
+
+    // Claim it as if another process won the race, then try to take it.
+    writeFileSync(path, String(process.ppid));
+    expect(acquireSingleInstanceLock(path)).toBe(false);
+    expect(readFileSync(path, "utf8")).toBe(String(process.ppid));
+    rmSync(path, { force: true });
+  });
+
+  it("registers exit cleanup once across repeated acquires", () => {
+    const path = lockIn();
+    const before = process.listenerCount("exit");
+    acquireSingleInstanceLock(path);
+    acquireSingleInstanceLock(path);
+    acquireSingleInstanceLock(path);
+    expect(process.listenerCount("exit") - before).toBeLessThanOrEqual(1);
     rmSync(path, { force: true });
   });
 });
