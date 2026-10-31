@@ -1,6 +1,6 @@
 # Using the bot
 
-Use these commands in a Discord server where the bot is installed. Ordinary-message replies depend on the host and [server settings](server-settings.md)
+Use these commands in a Discord server where the bot is installed. The bot also answers in a direct message with it. Ordinary-message replies depend on the host and [server settings](server-settings.md)
 
 ## Commands
 
@@ -12,6 +12,7 @@ Use these commands in a Discord server where the bot is installed. Ordinary-mess
 | `/search text:<words>` | Search indexed card names and rules text; quote a phrase to match adjacent words |
 | `/help` | Command and message examples |
 | `/settings` | Opens a private panel for server preferences and your own choices |
+| `/version` | The running revision, uptime and version |
 
 ## Card mentions
 
@@ -35,7 +36,7 @@ Paged lists expire after fifteen minutes and are cleared on restart. Run the com
 
 ## Data and limits
 
-Physical card records, legality and prices come from [TCGdex](https://tcgdex.dev). Pocket records come from the installed [pokemon-tcg-pocket-cards](https://github.com/chase-mew/pokemon-tcg-pocket-cards) package. Wording search uses a checked-in index, which can lag new releases; [data maintenance](data-maintenance.md) explains how to refresh it
+Physical card records, legality and prices come from [TCGdex](https://tcgdex.dev). Pocket records come from the installed [pokemon-tcg-pocket-cards](https://github.com/PocketDecks/pokemon-tcg-pocket-cards) package. Wording search uses a checked-in index, which can lag new releases; [data maintenance](data-maintenance.md) explains how to refresh it
 
 Prices appear only when the source provides them. Default reply settings allow both card games and prefer the physical game for an ambiguous card name
 
