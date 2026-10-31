@@ -190,6 +190,9 @@ export async function lookupById(
   id: string,
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
+  // Callers pass autocomplete values and typed queries alike; printed forms such
+  // as "P-C 1" address the same card as "pc-001".
+  id = printedAsId(id);
   // Preserve upstream failures while checking whether the package has the card.
   let tcgdexCard: Card | undefined;
   let outage: unknown;
@@ -197,6 +200,19 @@ export async function lookupById(
     tcgdexCard = await client.getCard(id);
   } catch (error) {
     if (!isMissing(error)) outage = error;
+  }
+  // Physical printed numbers drop leading zeros ("PRE 73"), but modern sets store
+  // them padded ("sv08.5-073") while older sets do not ("bw3-101").
+  const at = id.lastIndexOf("-");
+  const number = id.slice(at + 1);
+  if (!tcgdexCard && outage === undefined && /^\d{1,2}$/.test(number)) {
+    const padded = `${id.slice(0, at)}-${number.padStart(3, "0")}`;
+    try {
+      tcgdexCard = await client.getCard(padded);
+      if (tcgdexCard) id = padded;
+    } catch (error) {
+      if (!isMissing(error)) outage = error;
+    }
   }
   const pocketCard = tcgdexCard ? undefined : getPocketCard(id);
   const pinned = tcgdexCard ?? pocketCard;
