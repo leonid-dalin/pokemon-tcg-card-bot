@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Card } from "../src/api/types.js";
 import { TcgdexClient } from "../src/api/tcgdex.js";
-import { parseDecklist } from "../src/decklist.js";
+import { MAX_DECK_LINES, parseDecklist } from "../src/decklist.js";
 import { resolveDeckCards, type ResolvedLine } from "../src/deck-check.js";
 import { cardmarketAverage, renderDecklist } from "../src/render.js";
 
@@ -169,5 +169,25 @@ describe("cardmarketAverage", () => {
   it("reads the first variant that carries a Cardmarket price", () => {
     expect(cardmarketAverage(card("sv02-185", "Iono", pricedValue(1.49)))).toBe(1.49);
     expect(cardmarketAverage(card("sv02-185", "Iono"))).toBeUndefined();
+  });
+});
+
+describe("parseDecklist line cap", () => {
+  it("stops at the cap and records that the list was cut", () => {
+    const lines = Array.from({ length: 120 }, (_, i) => `1 Card number ${i}`);
+    const deck = parseDecklist(lines.join("\n"));
+
+    expect(deck?.lines).toHaveLength(MAX_DECK_LINES);
+    expect(deck?.truncated).toBe(true);
+    // The total reflects the lines actually read, not the whole paste.
+    expect(deck?.total).toBe(MAX_DECK_LINES);
+  });
+
+  it("leaves a list inside the cap unwritten as truncated", () => {
+    const lines = Array.from({ length: 20 }, (_, i) => `3 Card number ${i}`);
+    const deck = parseDecklist(lines.join("\n"));
+
+    expect(deck?.lines).toHaveLength(20);
+    expect(deck?.truncated).toBeUndefined();
   });
 });

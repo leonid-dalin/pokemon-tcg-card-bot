@@ -9,7 +9,11 @@ export interface ParsedDeck {
   lines: DeckLine[];
   total: number;
   sections: { label: string; count: number }[];
+  truncated?: boolean;
 }
+
+/** A legal deck fits well inside this; the cap bounds upstream work per message. */
+export const MAX_DECK_LINES = 80;
 
 const HEADER = /^(pok[eé]mon|trainer|energy|total cards)\s*:?\s*(\d+)?\s*$/i;
 const CARD_LINE = /^(\d{1,2})\s+(.+?)(?:\s+([A-Z][A-Z0-9]{1,4})\s+(\d{1,3}))?$/;
@@ -23,6 +27,7 @@ export function parseDecklist(text: string): ParsedDeck | undefined {
   const lines: DeckLine[] = [];
   const sections: { label: string; count: number }[] = [];
   let declaredTotal: number | undefined;
+  let truncated = false;
 
   for (const line of rawLines) {
     const total = line.match(TOTAL_LINE);
@@ -39,6 +44,11 @@ export function parseDecklist(text: string): ParsedDeck | undefined {
 
     const card = line.match(CARD_LINE);
     if (!card) continue;
+    // Stop at the cap so a pasted document cannot drive unbounded upstream work.
+    if (lines.length >= MAX_DECK_LINES) {
+      truncated = true;
+      break;
+    }
     const count = Number.parseInt(card[1] ?? "", 10);
     const name = (card[2] ?? "").trim();
     // Allow large Energy counts while filtering likely totals and malformed rows.
@@ -60,5 +70,6 @@ export function parseDecklist(text: string): ParsedDeck | undefined {
     lines,
     total: declaredTotal ?? total,
     sections,
+    ...(truncated ? { truncated: true } : {}),
   };
 }

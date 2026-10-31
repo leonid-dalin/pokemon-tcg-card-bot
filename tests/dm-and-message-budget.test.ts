@@ -220,3 +220,106 @@ describe("a stored off preference mutes a direct message too", () => {
     expect(none.replies.length).toBe(1);
   });
 });
+
+/** Reads the footer text out of the serialised decklist embed. */
+function deckFooter(reply: { embeds?: unknown[] } | undefined): string {
+  const first = (reply?.embeds as { toJSON?: () => { footer?: { text?: string } } }[] | undefined)?.[0];
+  return first?.toJSON?.().footer?.text ?? "";
+}
+
+describe("decklist replies take the same admission", () => {
+  const DECK = [
+    "4 Charizard ex",
+    "4 Charmander",
+    "3 Charmeleon",
+    "4 Rare Candy",
+    "4 Ultra Ball",
+    "4 Buddy-Buddy Poffin",
+    "3 Boss's Orders",
+    "4 Arven",
+    "2 Super Rod",
+    "4 Basic Fire Energy",
+    "4 Fire Energy",
+    "2 Professor's Research",
+    "3 Nest Ball",
+    "4 Iono",
+    "4 Switch",
+    "3 Mist Energy",
+    "2 Artazon",
+    "2 Defiance Band",
+    "4 Earthen Vessel",
+    "2 Pokégear 3.0",
+  ].join("\n");
+
+  function handler(requests: MentionBudget | undefined, decklistEnabled = true) {
+    return createMessageHandler({
+      api: new TcgdexClient({ retries: 0 }),
+      config: { mentionEnabled: true, decklistEnabled, mentionCooldownSeconds: 0, attribution: "x", energyEmoji: {} },
+      pages: { create: () => "p", get: () => undefined, set: () => undefined, delete: () => undefined } as never,
+      requests,
+      selfId: () => "bot",
+    });
+  }
+
+  function deckMessage(content: string, guildId: string | null = "guild-a") {
+    const replies: { content?: string; embeds?: unknown[] }[] = [];
+    const message = {
+      guildId,
+      author: { id: "member-1", bot: false },
+      webhookId: null,
+      system: false,
+      content,
+      mentions: { has: () => true, users: { has: () => false } },
+      reference: null,
+      reply: async (payload: { content?: string; embeds?: unknown[] }) => void replies.push(payload),
+    };
+    return { message, replies };
+  }
+
+  it("refuses a deck without any upstream call when the allowance is spent", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+    });
+    const requests = new MentionBudget({ capacity: 1, refillSeconds: 45 });
+    requests.take("guild-a:member-1");
+    const { message, replies } = deckMessage(DECK);
+
+    await handler(requests)(message as never);
+
+    expect(calls).toEqual([]);
+    expect(replies[0]?.content).toBe(busyMessage(45));
+  });
+
+  it("meters a deck in a DM under the dm key", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, json: async () => [] }) as unknown as Response);
+    const requests = new MentionBudget({ capacity: 1, refillSeconds: 40 });
+    requests.take("dm:member-1");
+    const { message, replies } = deckMessage(DECK, null);
+
+    await handler(requests)(message as never);
+
+    expect(replies[0]?.content).toBe(busyMessage(40));
+  });
+
+  it("reads a normal 60-card deck without a truncation note", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, json: async () => [] }) as unknown as Response);
+    const { message, replies } = deckMessage(DECK);
+
+    await handler(new MentionBudget({ capacity: 5, refillSeconds: 60 }))(message as never);
+
+    expect(replies[0]?.content).toBeUndefined();
+    expect(deckFooter(replies[0])).not.toContain("only the first");
+  });
+
+  it("says the list was cut when it exceeds the line cap", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, json: async () => [] }) as unknown as Response);
+    const long = Array.from({ length: 120 }, (_, i) => `1 Card number ${i}`).join("\n");
+    const { message, replies } = deckMessage(long);
+
+    await handler(new MentionBudget({ capacity: 5, refillSeconds: 60 }))(message as never);
+
+    expect(deckFooter(replies[0])).toContain("only the first 80 lines were read");
+  });
+});

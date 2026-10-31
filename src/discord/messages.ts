@@ -2,7 +2,7 @@ import { EmbedBuilder, type Message } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import type { Config } from "../config.js";
 import { MentionBudget } from "../cooldown.js";
-import { parseDecklist } from "../decklist.js";
+import { MAX_DECK_LINES, parseDecklist } from "../decklist.js";
 import { resolveDeckCards } from "../deck-check.js";
 import { errorCategory } from "../diagnostics.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
@@ -246,8 +246,18 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     if (deck) {
+      // A deck costs several upstream calls per line, so it takes the same
+      // admission as the card path before any request is made.
+      const admission = requests?.take(message.guildId ? `${message.guildId}:${message.author.id}` : `dm:${message.author.id}`);
+      if (admission && !admission.allowed) {
+        await logReply({ content: busyMessage(admission.retryAfterSeconds) });
+        return;
+      }
       const resolved = decklistOn ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
-      await logReply({ embeds: toEmbeds([renderDecklist(deck, resolved)]) as never });
+      const view = renderDecklist(deck, resolved);
+      // Say when the list was cut, rather than let the reply imply every line was read.
+      const footer = deck.truncated ? `${view.footer} · only the first ${MAX_DECK_LINES} lines were read` : view.footer;
+      await logReply({ embeds: toEmbeds([{ ...view, footer }]) as never });
       return;
     }
 
