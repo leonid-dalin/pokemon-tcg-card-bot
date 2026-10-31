@@ -143,3 +143,17 @@ vi.restoreAllMocks();
     const lookup = await lookupCard(client, "Rika", "Genetic Apex", { gamePreference: PTCG_PREF });
     expect(lookup).toBeUndefined();
   });
+
+  it("resolves Pikachu through the printed P-C hint", async () => {
+    const client = clientReturning([]);
+    const lookup = await lookupCard(client, "Pikachu", "P-C", { gamePreference: PTCG_PREF });
+    expect(lookup?.card.id.toLowerCase()).toBe("pc-001");
+  });
+
+  it("resolves the same card through pc and Promo-C", async () => {
+    const client = clientReturning([]);
+    const byId = await lookupCard(client, "Pikachu", "pc", { gamePreference: PTCG_PREF });
+    const byName = await lookupCard(client, "Pikachu", "Promo-C", { gamePreference: PTCG_PREF });
+    expect(byId?.card.id.toLowerCase()).toBe("pc-001");
+    expect(byName?.card.id.toLowerCase()).toBe("pc-001");
+  });

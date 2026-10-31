@@ -82,3 +82,19 @@ describe("package-backed set hints", () => {
     expect(resolveSetHint("nonsense")).toBeUndefined();
   });
 });
+
+describe("printed promo codes as hints", () => {
+  it("accepts the hyphenated printed form", () => {
+    expect(resolveSetHint("P-C")).toBe("pc");
+  });
+
+  it("keeps the package id and name working", () => {
+    expect(resolveSetHint("pc")).toBe("pc");
+    expect(resolveSetHint("Promo-C")).toBe("pc");
+  });
+
+  it("keeps static index precedence for the older P-A form", () => {
+    // P-A is carried by the static index, so it resolves there before the package.
+    expect(resolveSetHint("P-A")).toBe("P-A");
+  });
+});
