@@ -64,6 +64,23 @@ function load(): TextHit[] {
 }
 
 /** Returns the number of records in the loaded index. */
+/** Sets whose card ids zero-pad the number, so the padded form is the real one. */
+let paddedPrefixes: Set<string> | undefined;
+
+export function setUsesPaddedNumbers(prefix: string): boolean {
+  if (!paddedPrefixes) {
+    paddedPrefixes = new Set();
+    for (const entry of load()) {
+      const match = /^(.*)-(\d+)$/.exec(entry.id);
+      if (!match) continue;
+      const setPrefix = match[1] ?? "";
+      const number = match[2] ?? "";
+      if (number.length === 3 && number.startsWith("0")) paddedPrefixes.add(setPrefix);
+    }
+  }
+  return paddedPrefixes.has(prefix);
+}
+
 export function textIndexSize(): number {
   return load().length;
 }

@@ -276,6 +276,28 @@ describe("decklist replies take the same admission", () => {
     return { message, replies };
   }
 
+  it("spends no admission on a deck when deck replies are off", async () => {
+    const taken: string[] = [];
+    const requests = { take: (key: string) => { taken.push(key); return { allowed: true as const }; } };
+    const { message, replies } = deckMessage(DECK);
+
+    await handler(requests as never, false)(message as never);
+
+    // Deck replies are off, so the list is not parsed and nothing is looked up.
+    expect(taken).toEqual([]);
+    expect(replies).toEqual([]);
+  });
+
+  it("takes one admission for a deck when deck replies are on", async () => {
+    const taken: string[] = [];
+    const requests = { take: (key: string) => { taken.push(key); return { allowed: true as const }; } };
+    const { message } = deckMessage(DECK);
+
+    await handler(requests as never, true)(message as never);
+
+    expect(taken).toEqual(["guild-a:member-1"]);
+  });
+
   it("refuses a deck without any upstream call when the allowance is spent", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {

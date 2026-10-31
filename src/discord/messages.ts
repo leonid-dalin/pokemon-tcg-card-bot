@@ -244,17 +244,23 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     if (deck) {
-      // A deck costs several upstream calls per line, so it takes the same
-      // admission as the card path before any request is made.
-      const admission = requests?.take(message.guildId ? `${message.guildId}:${message.author.id}` : `dm:${message.author.id}`);
-      if (admission && !admission.allowed) {
-        await logReply({ content: busyMessage(admission.retryAfterSeconds) });
-        return;
+      // Nothing is looked up when deck replies are off, so no admission is spent.
+      if (decklistOn) {
+        const admission = requests?.take(message.guildId ? `${message.guildId}:${message.author.id}` : `dm:${message.author.id}`);
+        if (admission && !admission.allowed) {
+          await logReply({ content: busyMessage(admission.retryAfterSeconds) });
+          return;
+        }
       }
-      const resolved = decklistOn ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
-      const view = renderDecklist(deck, resolved);
-      // Say when the list was cut, rather than let the reply imply every line was read.
-      const footer = deck.truncated ? `${view.footer} · only the first ${MAX_DECK_LINES} lines were read` : view.footer;
+      const resolution = decklistOn ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
+      const view = renderDecklist(deck, resolution?.lines);
+      const notes = [
+        ...(deck.truncated ? [`only the first ${MAX_DECK_LINES} lines were read`] : []),
+        ...(resolution?.exhausted ? ["some lines were not checked"] : []),
+      ];
+      // Say when the list was cut or only partly checked, rather than let the reply
+      // imply every line was read.
+      const footer = notes.length > 0 ? `${view.footer} · ${notes.join(" · ")}` : view.footer;
       await logReply({ embeds: toEmbeds([{ ...view, footer }]) as never });
       return;
     }

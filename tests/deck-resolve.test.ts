@@ -39,7 +39,7 @@ describe("printed code resolves only a card with the line's name", () => {
       ],
       "/v2/en/cards/sv08.5-073": card("sv08.5-073", "Dragapult ex"),
     });
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["3 Dragapult ex TWM 130", ...FILLER]));
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["3 Dragapult ex TWM 130", ...FILLER]));
     const line = resolved.find((entry) => entry.line.name === "Dragapult ex");
     expect(line?.card?.name).toBe("Dragapult ex");
     expect(line?.card?.id).not.toBe("sv06-130");
@@ -55,7 +55,7 @@ describe("name fallback ties", () => {
       ],
       "/v2/en/cards/swsh6-146": card("swsh6-146", "Melony"),
     });
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["2 Melony ZZZ 1", ...FILLER]));
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["2 Melony ZZZ 1", ...FILLER]));
     expect(resolved.find((entry) => entry.line.name === "Melony")?.card?.id).toBe("swsh6-146");
   });
 
@@ -67,7 +67,7 @@ describe("name fallback ties", () => {
       ],
       "/v2/en/cards/sv06-170": card("sv06-170", "Melony"),
     });
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["2 Melony ZZZ 1", ...FILLER]));
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["2 Melony ZZZ 1", ...FILLER]));
     // sv06 is a newer set than swsh6, so it wins once artwork ties.
     expect(resolved.find((entry) => entry.line.name === "Melony")?.card?.id).toBe("sv06-170");
   });

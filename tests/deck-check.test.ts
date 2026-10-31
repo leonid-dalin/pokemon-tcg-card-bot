@@ -50,7 +50,7 @@ describe("resolveDeckCards", () => {
   it("resolves a line through its unpadded id", async () => {
     const { calls } = stubFetch({ "/cards/sv06-128": { body: card("sv06-128", "Dreepy") } });
     const deck = deckOf(["4 Dreepy TWM 128", ...FILLER]);
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
     expect(resolved.find((entry) => entry.line.name === "Dreepy")?.card?.id).toBe("sv06-128");
     expect(calls.some((url) => url.endsWith("/cards/sv06-128"))).toBe(true);
   });
@@ -58,7 +58,7 @@ describe("resolveDeckCards", () => {
   it("resolves a line through the padded id", async () => {
     stubFetch({ "/cards/sve-005": { body: card("sve-005", "Basic {P} Energy") } });
     const deck = deckOf(["8 Basic {P} Energy SVE 5", ...FILLER]);
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
     expect(resolved.find((entry) => entry.line.name === "Basic {P} Energy")?.card?.id).toBe("sve-005");
   });
 
@@ -68,7 +68,7 @@ describe("resolveDeckCards", () => {
       "/cards/swsh6-146": { body: card("swsh6-146", "Melony") },
     });
     const deck = deckOf(["2 Melony ZZZ 1", ...FILLER]);
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
     expect(resolved.find((entry) => entry.line.name === "Melony")?.card?.id).toBe("swsh6-146");
     expect(calls.some((url) => url.includes("name=Melony"))).toBe(true);
   });
@@ -76,7 +76,7 @@ describe("resolveDeckCards", () => {
   it("resolves a printed code whose set id is not its card id prefix", async () => {
     const { calls } = stubFetch({ "/cards/sv01-196": { body: card("sv01-196", "Ultra Ball") } });
     const deck = deckOf(["4 Ultra Ball SVI 196", "4 Arven SVI 166", "4 Iono PAL 185", "4 Nest Ball SVI 181", "4 Switch SVI 194"]);
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
     expect(resolved.find((entry) => entry.line.name === "Ultra Ball")?.card?.id).toBe("sv01-196");
     expect(calls.some((url) => url.endsWith("/cards/svi-196"))).toBe(false);
   });

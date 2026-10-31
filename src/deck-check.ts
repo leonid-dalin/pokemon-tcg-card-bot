@@ -5,11 +5,18 @@ import { SET_INDEX } from "./data/set-index.js";
 import { normaliseName, rankPrintings, scoreCandidate } from "./resolve.js";
 import { errorCategory } from "./diagnostics.js";
 import { setRecency } from "./set-index.js";
+import { setUsesPaddedNumbers } from "./text-search.js";
 
 export interface ResolvedLine {
   line: DeckLine;
   /** Omitted when the line does not resolve to a card. */
   card?: Card;
+}
+
+export interface DeckResolution {
+  lines: ResolvedLine[];
+  /** True when the call budget ran out before every line was looked up. */
+  exhausted: boolean;
 }
 
 // Limit upstream lookups while resolving each deck.
@@ -35,7 +42,7 @@ async function spend<T>(budget: Budget | undefined, call: () => Promise<T>, fall
 }
 
 /** Resolves decklist lines with at most four concurrent line lookups. */
-export async function resolveDeckCards(client: TcgdexClient, deck: ParsedDeck): Promise<ResolvedLine[]> {
+export async function resolveDeckCards(client: TcgdexClient, deck: ParsedDeck): Promise<DeckResolution> {
   const resolved: ResolvedLine[] = [];
   // Lines naming the same card, such as nine copies of one Trainer, resolve once.
   const byPrinting = new Map<string, Promise<Card | undefined>>();
@@ -56,7 +63,7 @@ export async function resolveDeckCards(client: TcgdexClient, deck: ParsedDeck): 
     }));
     resolved.push(...results);
   }
-  return resolved;
+  return { lines: resolved, exhausted: budget.left <= 0 };
 }
 
 // Decklists and set records use different names for basic Energy.
@@ -89,7 +96,11 @@ async function resolveLine(client: TcgdexClient, line: DeckLine, budget?: Budget
     // Printed set codes can map to a different TCGdex card-id prefix.
     const prefix = entryByCode.get(normaliseName(line.setCode))?.id ?? line.setCode;
     const bare = line.number.replace(/^0+(?=\d)/, "");
-    for (const candidate of [`${prefix}-${bare}`, `${prefix}-${bare.padStart(3, "0")}`]) {
+    const padded = `${prefix}-${bare.padStart(3, "0")}`;
+    const unpadded = `${prefix}-${bare}`;
+    // Try the form the set actually uses first, so most lines cost one call.
+    const forms = padded === unpadded ? [unpadded] : setUsesPaddedNumbers(prefix) ? [padded, unpadded] : [unpadded, padded];
+    for (const candidate of forms) {
       const card = await spend(budget, () => client.getCard(candidate).catch((error: unknown): undefined => { outage(error); return undefined; }), undefined);
       // Confirm that the supplied set and number resolve to the requested name.
       if (card && sameName(card.name, line.name)) return card;

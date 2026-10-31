@@ -35,7 +35,7 @@ describe("deck resolution cost", () => {
   it("asks upstream once for repeated lines naming the same card", async () => {
     const { calls, client } = countingClient();
 
-    await resolveDeckCards(client, deckOf(9, true));
+    const result = await resolveDeckCards(client, deckOf(9, true));
 
     // One card costs its two printed-id attempts plus a name fallback, once.
     expect(calls.get + calls.search).toBeLessThanOrEqual(3);
@@ -44,19 +44,41 @@ describe("deck resolution cost", () => {
   it("stops at the call budget however many distinct lines a deck has", async () => {
     const { calls, client } = countingClient();
 
-    await resolveDeckCards(client, deckOf(80));
+    const result = await resolveDeckCards(client, deckOf(80));
 
-    expect(calls.get + calls.search).toBeLessThanOrEqual(MAX_DECK_CALLS * 2);
+    expect(calls.get + calls.search).toBeLessThanOrEqual(MAX_DECK_CALLS);
+    expect(result.exhausted).toBe(true);
   });
 
-  it("does not spend more calls than lines", async () => {
+  it("resolves a realistic 31-line list with padded ids inside the budget", async () => {
+    const ids = Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(3, "0"));
+    const deck: ParsedDeck = {
+      lines: ids.map((number, index) => ({ count: 1, name: `Card ${index}`, setCode: "SVI", number })),
+      truncated: false,
+    };
+    const seen: string[] = [];
+    const client = {
+      getCard: async (id: string) => {
+        seen.push(id);
+        return { id, name: `Card ${ids.indexOf(id.split("-")[1] ?? "")}` };
+      },
+      searchByName: async () => [],
+    } as never;
+
+    const result = await resolveDeckCards(client, deck);
+
+    expect(result.exhausted).toBe(false);
+    expect(result.lines.filter((line) => line.card)).toHaveLength(31);
+    expect(seen.length).toBeLessThanOrEqual(MAX_DECK_CALLS);
+  });
+
+  it("keeps a small deck well inside the budget", async () => {
     const small = countingClient();
-    await resolveDeckCards(small.client, deckOf(3));
-    const large = countingClient();
-    await resolveDeckCards(large.client, deckOf(30));
+
+    const result = await resolveDeckCards(small.client, deckOf(3));
 
     expect(small.calls.get + small.calls.search).toBeLessThanOrEqual(9);
-    expect(large.calls.get + large.calls.search).toBeLessThanOrEqual(MAX_DECK_CALLS * 2);
+    expect(result.exhausted).toBe(false);
   });
 });
 
