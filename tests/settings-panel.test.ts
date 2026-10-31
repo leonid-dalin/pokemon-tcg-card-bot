@@ -155,7 +155,9 @@ describe("settings panel server changes", () => {
     const fx = fixture({ selectedChannelIds: ["ch-1"] });
     const sessionId = openServerPanel(fx);
     await fx.controller.handleComponent(fx.interaction(`st:ch:selected:${sessionId}`, { admin: true }).interaction as never);
-    expect(fx.recorded).toEqual([["guild-a", "channel-1", "Automatic-reply channels: Everywhere -> Selected channels"]]);
+    expect(fxStore(fx).autoReplyChannelMode).toBe("selected");
+    expect(fx.recorded).toHaveLength(1);
+    expect(fx.recorded[0]?.slice(2).join("\n")).toContain("-> 1 selected");
   });
 
   it("resets the server after confirmation and keeps personal rows", async () => {
@@ -563,9 +565,12 @@ describe("settings panel remaining sibling paths", () => {
     const fx = fixture({ selectedChannelIds: ["ch-1"] });
     const session = fx.sessions.open("member-1", "guild-a", "server", "channels", baselineOf(fxStoreState(fx)));
     const click = fx.interaction(`st:ch:selected:${session.id}`, { admin: true });
-    (click.interaction as { editReply: unknown }).editReply = async () => {
+    // A failed panel refresh still counts as a committed change.
+    (click.interaction as { update: unknown }).update = async () => {
       throw new Error("update failed");
     };
+    (click.interaction as { deferred?: boolean }).deferred = true;
+    (click.interaction as { followUp: unknown }).followUp = async () => undefined;
     await expect(controller_safe(fx, click.interaction)).resolves.toBeUndefined();
     expect(fxStore(fx).autoReplyChannelMode).toBe("selected");
     expect(fx.recorded).toHaveLength(1);
@@ -616,6 +621,33 @@ describe("empty channel selection always asks first", () => {
   // The confirmation is an update, so check everything the view rendered.
   const confirmText = (view: { sent: unknown[]; updates: unknown[] }): boolean =>
     JSON.stringify([view.sent, view.updates]).includes("Save an empty selection");
+
+  it("saves the picked channels when switching to Selected, rather than emptying the list", async () => {
+    const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: [] });
+    const sessionId = openChannelsPanel(fx);
+    // The admin picks a channel, then switches mode instead of pressing Save.
+    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
+    const view = fx.interaction(`st:ch:selected:${sessionId}`, { admin: true });
+    await fx.controller.handleComponent(view.interaction as never);
+
+    const state = fixtureStoreState(fx);
+    expect(state.autoReplyChannelMode).toBe("selected");
+    expect(state.selectedChannelIds).toEqual(["ch-1"]);
+    expect(fx.recorded).toHaveLength(1);
+    expect(confirmText(view)).toBe(false);
+  });
+
+  it("never reaches Selected with no channels without asking", async () => {
+    const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: [] });
+    const sessionId = openChannelsPanel(fx);
+    await fx.controller.handleComponent(fx.interaction(`st:ch:add:${sessionId}`, { values: ["ch-1"], admin: true }).interaction as never);
+    const view = fx.interaction(`st:ch:selected:${sessionId}`, { admin: true });
+    await fx.controller.handleComponent(view.interaction as never);
+
+    const state = fixtureStoreState(fx);
+    const emptied = state.autoReplyChannelMode === "selected" && state.selectedChannelIds.length === 0;
+    expect(emptied && !confirmText(view)).toBe(false);
+  });
 
   it("asks before a save that would leave no channels, even from Everywhere", async () => {
     const fx = fixture({ autoReplyChannelMode: "all", selectedChannelIds: [] });

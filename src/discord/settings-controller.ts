@@ -481,10 +481,17 @@ export class SettingsPanelController {
         await this.render(session, interaction, isAdmin, "These settings changed while you were here. Choose again.");
         return;
       }
-      // Selecting the mode with nothing saved would stop replies everywhere, so it
-      // takes the same confirmation as saving an empty list.
-      if (sub === "selected" && (session.draftChannelIds ?? []).length === 0 && before.selectedChannelIds.length === 0) {
-        await this.confirmEmptySelection(interaction, session);
+      if (sub === "selected") {
+        // The picker is reachable without visiting the Channels screen, so an
+        // unset draft means the saved list rather than an empty one.
+        const draft = session.draftChannelIds ?? [...before.selectedChannelIds];
+        // Switching is the same commit as Save, so a picked list is kept rather
+        // than thrown away, and only an empty result needs a confirmation.
+        if (draft.length === 0) {
+          await this.confirmEmptySelection(interaction, session);
+          return;
+        }
+        await this.saveChannels(interaction, session, draft);
         return;
       }
       this.store.update(session.guildId, { autoReplyChannelMode: sub });
