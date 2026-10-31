@@ -89,29 +89,45 @@ export function printingsForButtons(card: Card, candidates: CardSummary[]): Card
 const SET_IDS = new Set(SET_INDEX.map((entry) => normaliseName(entry.id)));
 const LOCAL_ID = /^[a-z0-9.!%]{1,8}$/i;
 export const CARD_ID = /^[a-z0-9.]+(?:-[a-z0-9.]+)*-[a-z0-9.!%]{1,8}$/i;
-/** The printed code, such as "C1 168", addresses the same card as "c1-168". */
-const printedAsId = (value: string): string => {
+/** Candidate ids a printed form may address, in data-backed precedence. */
+const printedCandidates = (value: string): string[] => {
   const trimmed = value.trim();
-  const printed = /^([a-z]{1,3}[0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
-  // A physical set code, such as "NVI 101", addresses the same card as "bw3-101".
-  const coded = /^([a-z0-9:.]{2,6})\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
   // A printed promo form, such as "P-C 1", addresses the same card as "pc-001".
   const promo = /^p[-\s]?([a-c])\s+([0-9]{1,3})$/i.exec(trimmed);
-  const derived = printed
-    ? `${printed[1]}-${printed[2]}`
-    : promo
-      ? `p${promo[1]}-${promo[2]}`
-      : coded && setIdForCode(coded[1]!)
-        ? `${setIdForCode(coded[1]!)}-${coded[2]}`
-        : trimmed;
-  const at = derived.lastIndexOf("-");
-  const number = derived.slice(at + 1);
-  // Package records zero-pad three-digit numbers, so "A1 36" addresses "a1-036".
-  if (/^\d{1,2}$/.test(number)) {
-    const padded = `${derived.slice(0, at)}-${number.padStart(3, "0")}`;
-    if (getPocketCard(derived) === undefined && getPocketCard(padded) !== undefined) return padded;
+  // Pocket series ids, such as "A1 36" or "B4B 133".
+  const pocket = /^([abc][0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
+  // A physical set code, such as "NVI 101" or "G1 5", addresses its set's id.
+  const coded = /^([a-z0-9:.]{2,7})\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
+  const candidates = [promo ? `p${promo[1]}-${promo[2]}` : "", pocket ? `${pocket[1]}-${pocket[2]}` : ""];
+  if (coded) {
+    const setId = setIdForCode(coded[1]!) ?? (SET_IDS.has(normaliseName(coded[1]!)) ? coded[1]! : undefined);
+    if (setId) candidates.push(`${setId}-${coded[2]}`);
   }
-  return derived;
+  return candidates.filter(Boolean);
+};
+
+/** The printed code, such as "C1 168", addresses the same card as "c1-168". */
+const printedAsId = (value: string): string => {
+  const candidates = printedCandidates(value);
+  if (candidates.length === 0) return value.trim();
+  // Package records zero-pad three-digit numbers, so "A1 36" addresses "a1-036".
+  const paddedCandidates = candidates.map((id) => {
+    const at = id.lastIndexOf("-");
+    const number = id.slice(at + 1);
+    if (!/^\d{1,2}$/.test(number)) return [id];
+    const padded = `${id.slice(0, at)}-${number.padStart(3, "0")}`;
+    return getPocketCard(padded) !== undefined && getPocketCard(id) === undefined ? [padded, id] : [id];
+  });
+  const flattened = paddedCandidates.flat();
+  // A printed form can be ambiguous, such as B2 for the Pocket set b2 and Base
+  // Set 2: a card the package actually contains wins over a set-id guess.
+  const inPackage = flattened.find((id) => getPocketCard(id) !== undefined);
+  if (inPackage) return inPackage;
+  const indexed = flattened.find((id) => {
+    const at = id.lastIndexOf("-");
+    return SET_IDS.has(normaliseName(id.slice(0, at)));
+  });
+  return indexed ?? flattened[0]!;
 };
 
 export const isCardId = (value: string): boolean => {

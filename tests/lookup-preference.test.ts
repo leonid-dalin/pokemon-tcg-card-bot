@@ -196,3 +196,28 @@ vi.restoreAllMocks();
     expect(byPrinted?.card.id.toLowerCase()).toBe("pc-001");
     expect(isCardId("P-C 1")).toBe(true);
   });
+
+  it("resolves a physical code whose shape looks like a Pocket set", async () => {
+    // G1 is Gym Heroes' printed code; the Pocket-shaped guess g1 is Generations.
+    const seen: string[] = [];
+    const client = {
+      searchByName: async () => [],
+      getCard: async (id: string) => {
+        seen.push(id);
+        return null;
+      },
+    } as unknown as TcgdexClient;
+    expect(await lookupCard(client, "N", "G1 5", {})).toBeUndefined();
+    expect(seen[0]).toBe("gym1-5");
+    expect(isCardId("N1 5")).toBe(true);
+    expect(isCardId("P1 5")).toBe(true);
+    expect(isCardId("G2 5")).toBe(true);
+  });
+
+  it("prefers a package card over a set-id guess for an ambiguous printed form", () => {
+    expect(isCardId("B2 5")).toBe(true);
+  });
+
+  it("accepts a dotted set id in the space form", () => {
+    expect(isCardId("swsh4.5 5")).toBe(true);
+  });
