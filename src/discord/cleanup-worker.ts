@@ -59,9 +59,19 @@ export class CleanupWorker {
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.armedAt = undefined;
-      void this.drain().finally(() => {
-        if (!this.stopped) this.wakeAtNext();
-      });
+      void this.drain()
+        .catch((error: unknown) => {
+          console.error(`cleanup drain failed (${errorCategory(error)})`);
+        })
+        .finally(() => {
+          if (this.stopped) return;
+          try {
+            this.wakeAtNext();
+          } catch (error) {
+            console.error(`cleanup reschedule failed (${errorCategory(error)})`);
+            this.armRecovery();
+          }
+        });
     }, wait);
     this.timer.unref?.();
   }
@@ -74,11 +84,27 @@ export class CleanupWorker {
     this.arm(next);
   }
 
+  /** Arms a retry wake-up without cancelling an earlier timer that will fire first. */
+  private armRecovery(): void {
+    this.wakeAt(Date.now() + DRAIN_INTERVAL_MS);
+  }
+
   start(): void {
     this.stopped = false;
-    void this.drain().finally(() => {
-      if (!this.stopped) this.wakeAtNext();
-    });
+    void this.drain()
+      .catch((error: unknown) => {
+        console.error(`cleanup drain failed (${errorCategory(error)})`);
+      })
+      .finally(() => {
+        if (this.stopped) return;
+        try {
+          this.wakeAtNext();
+        } catch (error) {
+          // A store failure here must not stop the clock: retry on the next interval.
+          console.error(`cleanup reschedule failed (${errorCategory(error)})`);
+          this.armRecovery();
+        }
+      });
   }
 
   stop(): void {

@@ -1,3 +1,5 @@
+export const DEFAULT_BURST = 3;
+
 export interface BucketOptions {
   /** Token capacity of a full bucket. Defaults to 3. */
   capacity?: number;
@@ -20,7 +22,7 @@ export class MentionBudget {
   private readonly buckets = new Map<string, Bucket>();
 
   constructor(options: BucketOptions = {}) {
-    this.capacity = Math.max(1, options.capacity ?? 3);
+    this.capacity = Math.max(1, options.capacity ?? DEFAULT_BURST);
     this.refillMs = Math.max(1, options.refillSeconds ?? 5) * 1000;
     this.maxKeys = Math.max(1, options.maxKeys ?? 10_000);
   }

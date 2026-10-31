@@ -1,5 +1,7 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 
+// Relative to the process CWD by default; the entry point passes the data
+// directory when configured so the lock does not depend on the CWD.
 const LOCK_PATH = ".bot.pid";
 
 function isRunning(pid: number): boolean {

@@ -55,7 +55,7 @@ npm run build
 npm start
 ```
 
-Run from the repository root and keep the installed dependencies and `src/data/text-index.json` alongside `dist/`. The compiler does not copy that search index. Run one instance per bot token across all machines; the local `.bot.pid` check cannot detect a second host
+Run from the repository root and keep the installed dependencies and `src/data/text-index.json` alongside `dist/`. The compiler does not copy that search index. Run one instance per bot token across all machines; the lock is kept in `DATA_DIR`, or in the working directory when that is unset, and cannot detect a second host
 
 ## Troubleshooting
 

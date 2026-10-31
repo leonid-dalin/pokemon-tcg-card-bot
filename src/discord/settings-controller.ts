@@ -192,8 +192,15 @@ export class SettingsPanelController {
       await interaction.editReply(payload as never);
     } catch (error) {
       console.error(`settings panel reply failed (${errorCategory(error)})`);
-      await interaction.followUp({ content: "The settings panel could not be opened. Try /settings again.", flags: MessageFlags.Ephemeral }).catch(() => {});
-      throw error;
+      const notice = { content: "The settings panel could not be opened. Try /settings again.", flags: MessageFlags.Ephemeral };
+      // Before deferral the interaction still needs its first response; a follow-up
+      // would be rejected. Only swallow once the notice has actually been sent.
+      const sent =
+        interaction.deferred || interaction.replied
+          ? await interaction.followUp(notice as never).then(() => true, () => false)
+          : await interaction.reply(notice as never).then(() => true, () => false);
+      if (!sent) throw error;
+      return;
     }
   }
 
@@ -240,11 +247,6 @@ export class SettingsPanelController {
     const [namespace, action] = parts;
     if (namespace !== "st") return;
     const isAdmin = isAdminNow(interaction);
-
-    if (action === "launcher") {
-      await this.open(interaction, false);
-      return;
-    }
 
     if (action === "cooldown-modal") {
       await this.handleCooldownModal(interaction, isAdmin);
@@ -369,7 +371,10 @@ export class SettingsPanelController {
       return;
     }
     const patch = serverPatch(field, value);
-    if (!patch) return;
+    if (!patch) {
+      await this.render(session, interaction, isAdmin);
+      return;
+    }
     const previous = describeField(before, field);
     this.store.update(session.guildId, patch);
     const after = this.store.get(session.guildId);
@@ -492,7 +497,11 @@ export class SettingsPanelController {
       if (previous !== current) {
         await this.announceChange(interaction as PanelInteraction & { guildId: string }, [`Automatic-reply channels: ${previous} -> ${current}`]);
       }
+      return;
     }
+
+    // Unknown sub-actions must still acknowledge, or Discord shows a failure.
+    await this.render(session, interaction, isAdmin);
   }
 
   private async saveChannels(
@@ -526,10 +535,15 @@ export class SettingsPanelController {
     if (changed) {
       const added = after.selectedChannelIds.filter((id) => !before.selectedChannelIds.includes(id));
       const removed = before.selectedChannelIds.filter((id) => !after.selectedChannelIds.includes(id));
+      // The announcement is public, so it reports how many channels changed rather
+      // than naming them; channel identities are restricted information.
+      const deltas = [
+        ...(added.length > 0 ? [`Added ${added.length}`] : []),
+        ...(removed.length > 0 ? [`removed ${removed.length}`] : []),
+      ];
       await this.announceChange(interaction as PanelInteraction & { guildId: string }, [
         `Automatic-reply channels: ${previous} -> ${after.selectedChannelIds.length} selected`,
-        ...(added.length > 0 ? [`Added: ${added.map((id) => `<#${id}>`).join(", ")}`] : []),
-        ...(removed.length > 0 ? [`Removed: ${removed.map((id) => `<#${id}>`).join(", ")}`] : []),
+        ...(deltas.length > 0 ? [deltas.join(", ")] : []),
       ]);
     }
   }

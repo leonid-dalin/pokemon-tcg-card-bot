@@ -24,6 +24,7 @@ import { errorCategory } from "./diagnostics.js";
 import { InvocationLog } from "./invocation-log.js";
 import { SettingsStore } from "./settings-store.js";
 import { MentionBudget } from "./cooldown.js";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { acquireSingleInstanceLock } from "./single-instance.js";
 import { reportInteractionFailure } from "./discord/interaction-failure.js";
@@ -38,9 +39,23 @@ import { startRuntimeStatus } from "./runtime-status.js";
 
 loadDotEnv();
 
-if (!acquireSingleInstanceLock()) process.exit(1);
-
 const config = loadConfig(process.env);
+
+// The lock lives in the data directory when configured: both deploy targets
+// set DATA_DIR to a writable volume, and a CWD-relative lock would let two
+// launches from different directories run concurrently.
+if (config.dataDir) {
+  try {
+    mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
+  } catch (error) {
+    console.error(`could not create the data directory (${errorCategory(error)}); check DATA_DIR`);
+    process.exit(1);
+  }
+}
+if (!acquireSingleInstanceLock(config.dataDir ? join(config.dataDir, ".bot.pid") : undefined)) {
+  process.exit(1);
+}
+
 const invocations = new InvocationLog(config.invocationLogDir, config.invocationLogRetentionDays);
 const settings = new SettingsStore(
   config.dataDir ? join(config.dataDir, "settings.db") : undefined,

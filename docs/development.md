@@ -71,6 +71,6 @@ npm start
 
 `npm start` runs `dist/src/index.js`. Keep `src/data/text-index.json` in the deployment alongside `dist/`, the installed dependencies and runtime configuration. The compiler does not copy that JSON file; compiled search code falls back to the source path
 
-Use the repository root as the working directory so `.env` and `.bot.pid` resolve as expected. Stop the current instance before starting another with the same token. A restart also clears existing paged lists
+Use the repository root as the working directory so `.env` resolves as expected; the `.bot.pid` lock lives in `DATA_DIR` when that is set, and in the working directory otherwise. Stop the current instance before starting another with the same token. A restart also clears existing paged lists
 
 See [data maintenance](data-maintenance.md) when a change needs refreshed set metadata or card wording

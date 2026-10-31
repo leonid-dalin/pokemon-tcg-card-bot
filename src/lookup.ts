@@ -1,7 +1,7 @@
 import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
-import { printedNumber } from "./printed.js";
+import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
 import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
@@ -89,11 +89,49 @@ export function printingsForButtons(card: Card, candidates: CardSummary[]): Card
 const SET_IDS = new Set(SET_INDEX.map((entry) => normaliseName(entry.id)));
 const LOCAL_ID = /^[a-z0-9.!%]{1,8}$/i;
 export const CARD_ID = /^[a-z0-9.]+(?:-[a-z0-9.]+)*-[a-z0-9.!%]{1,8}$/i;
-/** Recognises IDs from indexed sets or exact records in the Pocket package. */
+/** Candidate ids a printed form may address, in data-backed precedence. */
+const printedCandidates = (value: string): string[] => {
+  const trimmed = value.trim();
+  const promo = /^p[-\s]?([a-c])\s+([0-9]{1,3})$/i.exec(trimmed);
+  const pocket = /^([abc][0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(trimmed);
+  const coded = /^([a-z0-9:.]{2,7})\s+([a-z]{0,3}[0-9]{1,3}[a-z]?)$/i.exec(trimmed);
+  const candidates = [promo ? `p${promo[1]}-${promo[2]}` : "", pocket ? `${pocket[1]}-${pocket[2]}` : ""];
+  if (coded) {
+    // Gallery footers drop the subset suffix ("BRS TG23" for swsh9tg), so the
+    // number's own prefix identifies the subset the card lives in.
+    const gallery = /^([a-z]+)([0-9]{1,3})$/i.exec(coded[2]!);
+    const subset = gallery ? setIdForSubsetCode(`${coded[1]}:${gallery[1]}`) : undefined;
+    if (subset) candidates.push(`${subset}-${coded[2]}`);
+    const setId = setIdForCode(coded[1]!) ?? (SET_IDS.has(normaliseName(coded[1]!)) ? coded[1]! : undefined);
+    if (setId) candidates.push(`${setId}-${coded[2]}`);
+  }
+  return candidates.filter(Boolean);
+};
+
 /** The printed code, such as "C1 168", addresses the same card as "c1-168". */
 const printedAsId = (value: string): string => {
-  const printed = /^([a-z]{1,3}[0-9]{1,2}[a-z]?)\s+([0-9]{1,3}[a-z]?)$/i.exec(value.trim());
-  return printed ? `${printed[1]}-${printed[2]}` : value;
+  const candidates = printedCandidates(value);
+  if (candidates.length === 0) return value.trim();
+  // Package records zero-pad three-digit numbers, so "A1 36" addresses "a1-036".
+  const paddedCandidates = candidates.map((id) => {
+    const at = id.lastIndexOf("-");
+    const number = id.slice(at + 1);
+    if (!/^\d{1,2}$/.test(number)) return [id];
+    const padded = `${id.slice(0, at)}-${number.padStart(3, "0")}`;
+    return getPocketCard(padded) !== undefined && getPocketCard(id) === undefined ? [padded, id] : [id];
+  });
+  const flattened = paddedCandidates.flat();
+  // B2 is genuinely ambiguous: the physical code B2 (Base Set 2) and the Pocket
+  // set b2 (Fantastical Parade) print identically, so either choice breaks one
+  // footer round-trip. The package wins to keep the whole Pocket catalogue
+  // addressable from its own printed codes.
+  const inPackage = flattened.find((id) => getPocketCard(id) !== undefined);
+  if (inPackage) return inPackage;
+  const indexed = flattened.find((id) => {
+    const at = id.lastIndexOf("-");
+    return SET_IDS.has(normaliseName(id.slice(0, at)));
+  });
+  return indexed ?? flattened[0]!;
 };
 
 export const isCardId = (value: string): boolean => {
@@ -154,6 +192,9 @@ export async function lookupById(
   id: string,
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
+  // Callers pass autocomplete values and typed queries alike; printed forms such
+  // as "P-C 1" address the same card as "pc-001".
+  id = printedAsId(id);
   // Preserve upstream failures while checking whether the package has the card.
   let tcgdexCard: Card | undefined;
   let outage: unknown;
@@ -161,6 +202,19 @@ export async function lookupById(
     tcgdexCard = await client.getCard(id);
   } catch (error) {
     if (!isMissing(error)) outage = error;
+  }
+  // Physical printed numbers drop leading zeros ("PRE 73"), but modern sets store
+  // them padded ("sv08.5-073") while older sets do not ("bw3-101").
+  const at = id.lastIndexOf("-");
+  const number = id.slice(at + 1);
+  if (!tcgdexCard && outage === undefined && /^\d{1,2}$/.test(number)) {
+    const padded = `${id.slice(0, at)}-${number.padStart(3, "0")}`;
+    try {
+      tcgdexCard = await client.getCard(padded);
+      if (tcgdexCard) id = padded;
+    } catch (error) {
+      if (!isMissing(error)) outage = error;
+    }
   }
   const pocketCard = tcgdexCard ? undefined : getPocketCard(id);
   const pinned = tcgdexCard ?? pocketCard;

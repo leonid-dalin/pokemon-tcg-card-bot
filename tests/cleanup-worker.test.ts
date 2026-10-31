@@ -198,9 +198,44 @@ describe("cleanup worker scheduling", () => {
     worker.stop();
     vi.useRealTimers();
   });
+  it("keeps a wake-up armed when the reschedule fails", async () => {
+    vi.useFakeTimers();
+    const deletions: string[] = [];
+    type Job = typeof JOB & { deleteAfter: number };
+    let due: Job[] = [];
+    let failNext = false;
+    const store = {
+      scheduleCleanup: (job: Job) => void (due = [...due, { ...job }]),
+      dueCleanup: (now: number) => due.filter((job) => job.deleteAfter <= now),
+      nextCleanupAt: () => {
+        if (failNext) throw new Error("store unavailable");
+        return due.length > 0 ? Math.min(...due.map((job) => job.deleteAfter)) : undefined;
+      },
+      completeCleanup: (id: string) => void (due = due.filter((job) => job.messageId !== id)),
+      deferCleanup: (id: string, at: number) => {
+        due = due.map((job) => (job.messageId === id ? { ...job, deleteAfter: at, attempts: job.attempts + 1 } : job));
+      },
+    };
+    const client = { user: { id: "bot" }, channels: { fetch: async () => channel(deletions) } };
+    const worker = new CleanupWorker(client as never, store as never);
+    const armedAt = () => (worker as unknown as { armedAt?: number }).armedAt;
+
+    worker.schedule({ botMessageId: "reply-1", channelId: "channel-1", invokeMessageId: "invoke-1" });
+    failNext = true;
+    await vi.advanceTimersByTimeAsync(90_000);
+    failNext = false;
+
+    expect(deletions).toContain("reply-1");
+    expect(armedAt()).toBeTypeOf("number");
+
+    worker.stop();
+    vi.useRealTimers();
+  });
+
 });
 
 describe("cleanup worker deadline arming", () => {
+
   it("keeps the earlier armed deadline when a later job arrives", async () => {
     vi.useFakeTimers();
     const deletions: string[] = [];

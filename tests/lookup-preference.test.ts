@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { TcgdexClient } from "../src/api/tcgdex.js";
 import type { Card, CardSummary } from "../src/api/types.js";
-import { lookupCard, POCKET_ATTRIBUTION } from "../src/lookup.js";
+import { lookupCard, isCardId, POCKET_ATTRIBUTION } from "../src/lookup.js";
 
 const dragapult = JSON.parse(
   readFileSync(new URL("./fixtures/dragapult-ex-sv08.5-073.json", import.meta.url), "utf8"),
@@ -169,4 +169,57 @@ vi.restoreAllMocks();
   it("still rejects a printed form that names no card", async () => {
     const client = clientReturning([]);
     expect(await lookupCard(client, "Rika", "C1 999", {})).toBeUndefined();
+  });
+
+  it("accepts a physical set code as a card id", async () => {
+    const client = clientReturning([{ id: "bw3-101a", name: "N", localId: "101a" }]);
+    expect(isCardId("NVI 101")).toBe(true);
+    expect(isCardId("NVI 101a")).toBe(true);
+    const byCode = await lookupCard(client, "N", "NVI 101a", {});
+    expect(byCode?.card.id.toLowerCase()).toBe("bw3-101a");
+  });
+
+  it("still rejects an unknown set code", () => {
+    expect(isCardId("ZZZ 1")).toBe(false);
+  });
+
+  it("addresses a padded package record through its printed number", async () => {
+    const client = clientReturning([{ id: "a1-036", name: "Charizard ex", localId: "036" }]);
+    const byPrinted = await lookupCard(client, "Charizard", "A1 36", {});
+    expect(byPrinted?.card.id.toLowerCase()).toBe("a1-036");
+    expect(await lookupCard(client, "Charizard", "A1 036", {})).toBeDefined();
+  });
+
+  it("addresses a printed promo code and number", async () => {
+    const client = clientReturning([]);
+    const byPrinted = await lookupCard(client, "Pikachu", "P-C 1", {});
+    expect(byPrinted?.card.id.toLowerCase()).toBe("pc-001");
+    expect(isCardId("P-C 1")).toBe(true);
+  });
+
+  it("resolves a physical code whose shape looks like a Pocket set", async () => {
+    // G1 is Gym Heroes' printed code; the Pocket-shaped guess g1 is Generations.
+    const seen: string[] = [];
+    const client = {
+      searchByName: async () => [],
+      getCard: async (id: string) => {
+        seen.push(id);
+        return null;
+      },
+    } as unknown as TcgdexClient;
+    expect(await lookupCard(client, "N", "G1 5", {})).toBeUndefined();
+    expect(seen[0]).toBe("gym1-5");
+    expect(isCardId("N1 5")).toBe(true);
+    expect(isCardId("P1 5")).toBe(true);
+    expect(isCardId("G2 5")).toBe(true);
+  });
+
+  it("prefers a package card over a set-id guess for an ambiguous printed form", () => {
+    // B2 prints identically for the Pocket set b2 and physical Base Set 2; the
+    // package wins so Pocket footers round-trip.
+    expect(isCardId("B2 5")).toBe(true);
+  });
+
+  it("accepts a dotted set id in the space form", () => {
+    expect(isCardId("swsh4.5 5")).toBe(true);
   });

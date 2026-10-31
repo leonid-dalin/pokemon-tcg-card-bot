@@ -20,7 +20,15 @@ const DEFAULTS = { messageReplies: true, decklistReplies: false, cooldownSeconds
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) {
+    // Windows keeps a deleted database handle open briefly; a failed cleanup
+    // must not mask the test result.
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    } catch {
+      // The temp directory is disposable.
+    }
+  }
 });
 
 describe("SettingsStore", () => {
@@ -197,6 +205,9 @@ describe("SettingsStore", () => {
       const { workerData, parentPort } = require("node:worker_threads");
       const { DatabaseSync } = require("node:sqlite");
       const db = new DatabaseSync(workerData.path);
+      // The main writer holds the lock while this worker commits; retry rather
+      // than failing the test with "database is locked".
+      db.exec("PRAGMA busy_timeout = 5000");
       db.exec("BEGIN IMMEDIATE");
       db.exec("UPDATE guild_settings SET cooldown_seconds = 5");
       parentPort.postMessage("locked");
