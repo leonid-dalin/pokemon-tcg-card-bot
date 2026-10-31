@@ -8,10 +8,12 @@ import { setIdOf } from "./resolve.js";
  */
 const POCKET_SET = /^(?:[abc]\d+[a-z]?|p[abc]?-[abc]?|p[abc])$/i;
 
+/** Classifies a card by its set-ID pattern. */
 export function isPocketCard(card: Card): boolean {
   return POCKET_SET.test(setIdOf(card.id));
 }
 
+/** Classifies a resolved set id as a Pocket set. */
 export function isPocketSet(setId: string): boolean {
   return POCKET_SET.test(setId);
 }

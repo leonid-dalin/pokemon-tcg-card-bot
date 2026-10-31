@@ -232,6 +232,7 @@ export class SettingsPanelController {
     await interaction.editReply({ flags: MessageFlags.IsComponentsV2, components } as never);
   }
 
+  /** Acknowledges a component interaction with fresh components. */
   private async present(interaction: PanelInteraction, ...components: unknown[]): Promise<void> {
     const payload = { flags: MessageFlags.IsComponentsV2, components } as never;
     if (typeof interaction.update === "function") {

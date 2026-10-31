@@ -63,10 +63,12 @@ function load(): TextHit[] {
   return cache;
 }
 
+/** Returns the number of records in the loaded index. */
 export function textIndexSize(): number {
   return load().length;
 }
 
+/** Returns normalised indexed wording, or undefined for an unknown ID. */
 export function indexedText(id: string): string | undefined {
   const hit = load().find((entry) => entry.id === id);
   return hit ? normaliseName(hit.text) : undefined;
@@ -225,6 +227,7 @@ export function searchCardGroups(query: string, scope: GameScope = "both"): Text
   return searchGroupsIn(withinScope(load(), scope), query);
 }
 
+/** Searches supplied entries and groups matches by name using their newest printing. */
 export function searchGroupsIn(entries: TextHit[], query: string): TextGroup[] {
   const groups = new Map<string, { card: TextHit; printings: number }>();
   for (const { card } of findHits(entries, query)) {

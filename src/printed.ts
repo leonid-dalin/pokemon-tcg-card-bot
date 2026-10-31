@@ -30,6 +30,7 @@ const setIdBySubset = new Map(
     .map((entry) => [(entry.code as string).toLowerCase(), entry.id]),
 );
 
+/** The subset set a gallery footer addresses, such as "BRS:TG" to swsh9tg. */
 export function setIdForSubsetCode(code: string): string | undefined {
   return setIdBySubset.get(code.toLowerCase());
 }

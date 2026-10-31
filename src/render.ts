@@ -94,7 +94,6 @@ function formatDate(iso?: string): string | undefined {
   return date.toISOString().slice(0, 10);
 }
 
-
 interface PriceSummary {
   cardmarket?: Pricing;
   tcgplayer?: Pricing;

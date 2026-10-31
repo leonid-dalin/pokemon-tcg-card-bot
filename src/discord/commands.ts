@@ -207,6 +207,7 @@ export async function handleCardCommand(
   await interaction.editReply(cardReply(lookup, interaction.user.id));
 }
 
+/** Replaces the card reply after checking the printing button's optional owner ID. */
 export async function handlePrintingButton(
   context: CommandContext,
   interaction: ButtonInteraction,

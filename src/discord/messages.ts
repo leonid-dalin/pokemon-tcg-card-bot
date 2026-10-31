@@ -89,6 +89,7 @@ function replyText(payload: ReplyPayload): string {
   return parts.filter(Boolean).join("\n\n");
 }
 
+/** Routes eligible messages to help, decklist, search or card replies. */
 export function createMessageHandler(context: MessageContext): (message: IncomingMessage) => Promise<void> {
   const { api, config, budget, requests } = context;
   let warnedAboutContent = false;
@@ -175,6 +176,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       return sent;
     };
 
+    // Apply the same per-member, per-channel budget to every message reply.
     let activeBudget = budget;
     if (message.guildId) {
       const cooldown = guild ? guild.cooldownSeconds : config.mentionCooldownSeconds;

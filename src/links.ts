@@ -24,6 +24,7 @@ export function limitlessUrl(cardId: string): string | undefined {
   const parts = split(cardId);
   if (!parts) return undefined;
   if (isPocketSet(parts.prefix)) {
+    // Limitless accepts either case; one card shape should still map to one URL.
     const promo = PROMO_URL.exec(parts.prefix);
     const set = promo ? `P-${promo[1]!.toUpperCase()}` : parts.prefix.toUpperCase();
     return `https://pocket.limitlesstcg.com/cards/${set}/${bareNumber(parts.number)}`;
