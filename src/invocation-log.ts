@@ -1,4 +1,4 @@
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface InvocationEntry {
@@ -56,13 +56,10 @@ export class InvocationLog {
         }
         kept.push(line);
       }
-      const size = statSync(this.file).size;
+      // Prune and record are synchronous and only the lock holder writes this file,
+      // so nothing can be appended between the read above and the rename.
       const tmp = `${this.file}.${process.pid}.${Date.now()}.tmp`;
       writeFileSync(tmp, `${kept.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
-      // The rewrite replaces the whole file, so entries appended while it was
-      // being read would be lost. Carry them over before the rename.
-      const appended = readFileSync(this.file, "utf8").slice(size);
-      if (appended.trim()) appendFileSync(tmp, appended, { encoding: "utf8" });
       renameSync(tmp, this.file);
     } catch {
       console.warn("could not prune the invocation log");
