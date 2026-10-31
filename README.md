@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-<a href="https://discord.com/oauth2/authorize?client_id=1564749707740192818&scope=bot+applications.commands&permissions=277025483776"><strong>Add to Discord</strong></a> · <a href="docs/usage.md">Use the bot</a> · <a href="docs/setup.md">Host your own</a> · <a href="docs/development.md">Develop</a>
+<a href="https://discord.com/oauth2/authorize?client_id=1564749707740192818&scope=bot+applications.commands&permissions=294205336576"><strong>Add to Discord</strong></a> · <a href="docs/usage.md">Use the bot</a> · <a href="docs/setup.md">Host your own</a> · <a href="docs/development.md">Develop</a>
 </p>
 
 ## Card lookup
@@ -29,7 +29,7 @@ Use `/card name:Dragapult ex` for the same lookup through a slash command. Add `
 | Compare versions of a card | `/printings name:Dragapult ex` |
 | Browse a set | `/set id:sv08.5 checklist:true` |
 | Find cards with a phrase in their wording | `/search text:"search your deck"` |
-| Choose reply channels or a preferred card game | `/settings` with Manage Server permission |
+| Choose reply channels or a preferred card game | `/settings` (administrators change server-wide values) |
 
 Pasted decklists can show card counts, Standard legality and available Cardmarket prices when a server administrator enables decklist replies. The [usage guide](docs/usage.md) explains the commands, printing hints and reply controls
 
