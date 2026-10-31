@@ -44,15 +44,15 @@ export function parseDecklist(text: string): ParsedDeck | undefined {
 
     const card = line.match(CARD_LINE);
     if (!card) continue;
-    // Stop at the cap so a pasted document cannot drive unbounded upstream work.
+    const count = Number.parseInt(card[1] ?? "", 10);
+    const name = (card[2] ?? "").trim();
+    // Reject malformed rows before the cap, so a stray row after a full deck does
+    // not make the list look truncated.
+    if (!Number.isFinite(count) || count < 1 || count > 20 || name.length < 2) continue;
     if (lines.length >= MAX_DECK_LINES) {
       truncated = true;
       break;
     }
-    const count = Number.parseInt(card[1] ?? "", 10);
-    const name = (card[2] ?? "").trim();
-    // Allow large Energy counts while filtering likely totals and malformed rows.
-    if (!Number.isFinite(count) || count < 1 || count > 20 || name.length < 2) continue;
     lines.push({
       count,
       name,

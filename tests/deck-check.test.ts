@@ -191,3 +191,22 @@ describe("parseDecklist line cap", () => {
     expect(deck?.truncated).toBeUndefined();
   });
 });
+
+describe("decklist truncation is honest", () => {
+  it("does not claim truncation when the 81st row is malformed", () => {
+    // 80 valid rows, then a row matching the shape but with a rejected count.
+    const valid = Array.from({ length: 80 }, (_, i) => `1 Card number ${i}`);
+    const deck = parseDecklist([...valid, "99 Rejected Row"].join("\n"));
+
+    expect(deck?.lines).toHaveLength(80);
+    expect(deck?.truncated).toBeUndefined();
+  });
+
+  it("still reports truncation when the 81st row is valid", () => {
+    const valid = Array.from({ length: 81 }, (_, i) => `1 Card number ${i}`);
+    const deck = parseDecklist(valid.join("\n"));
+
+    expect(deck?.lines).toHaveLength(80);
+    expect(deck?.truncated).toBe(true);
+  });
+});
