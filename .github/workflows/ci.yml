@@ -73,7 +73,7 @@ jobs:
           docker run --rm --memory=384m --cpus=1 --user 65534:65534 -v "$RUNNER_TEMP/unpacked:/app:ro" -w /tmp debian:bookworm-slim /app/bin/node --max-old-space-size=192 /app/deploy/smoke.mjs
       - name: Build and test optional Docker image
         run: |
-          docker build -t card-bot:test .
+          docker build --build-arg BUILD_SHA="$GITHUB_SHA" --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" -t card-bot:test .
           docker run --rm --memory=384m --user node --entrypoint node card-bot:test /app/deploy/smoke.mjs
           cp .env.example .env
           docker compose config --quiet

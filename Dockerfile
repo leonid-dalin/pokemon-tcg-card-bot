@@ -8,7 +8,12 @@ COPY scripts ./scripts
 RUN npm run build && npm prune --omit=dev --ignore-scripts
 
 FROM node:24.22.1-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c
-ENV NODE_ENV=production DATA_DIR=/data BOT_STATUS_FILE=/run/bot/status.json
+# The image carries no BUILD.json, so the commit and date arrive as environment
+# defaults; /version reads them before falling back to the package version.
+ARG BUILD_SHA=""
+ARG BUILD_DATE=""
+ENV NODE_ENV=production DATA_DIR=/data BOT_STATUS_FILE=/run/bot/status.json \
+    BUILD_SHA=${BUILD_SHA} BUILD_DATE=${BUILD_DATE}
 WORKDIR /app
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules

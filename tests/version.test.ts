@@ -48,3 +48,21 @@ describe("formatUptime", () => {
     expect(formatUptime(7 * day + 1 * hour)).toBe("7 days");
   });
 });
+
+describe("image build identity", () => {
+  it("reports the commit and date the image was built from", () => {
+    // The Dockerfile sets both as environment defaults from build args.
+    const identity = resolveIdentity({ BUILD_SHA: "c42292d", BUILD_DATE: "2026-10-31T13:34:00Z" });
+
+    expect(identity.source).toBe("env");
+    expect(identity.label).toBe("c42292d");
+    expect(identity.built).toBe("2026-10-31T13:34:00Z");
+  });
+
+  it("keeps the package version available alongside the image sha", () => {
+    const identity = resolveIdentity({ BUILD_SHA: "c42292d" });
+
+    expect(identity.source).toBe("env");
+    expect(identity.packageVersion).toBeDefined();
+  });
+});

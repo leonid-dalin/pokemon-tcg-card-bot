@@ -1,7 +1,11 @@
 services:
   bot:
     image: pokemon-card-bot:local
-    build: .
+    build:
+      context: .
+      args:
+        BUILD_SHA: ${BUILD_SHA:-}
+        BUILD_DATE: ${BUILD_DATE:-}
     restart: unless-stopped
     init: true
     env_file: .env
