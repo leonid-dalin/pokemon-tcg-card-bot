@@ -164,7 +164,9 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       let sent;
       try {
         sent = await message.reply(payload as never);
-      } catch {
+      } catch (error) {
+        // The invoker sees nothing if a reply fails here, so record why.
+        console.error(`reply failed (${errorCategory(error)})`);
         return undefined;
       }
       // Recording is best-effort and must not hide the reply from cleanup.
