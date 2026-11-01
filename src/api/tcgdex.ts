@@ -136,7 +136,13 @@ export class TcgdexClient {
             throw new TcgdexError(`request failed: ${response.status}`, response.status);
           }
           const body = (await response.json()) as T;
-          return shape ? shape(body) : body;
+          if (shape) {
+            // A malformed body must fail once, not retry: a TypeError here reads as
+            // retryable and costs every attempt.
+            if (!Array.isArray(body)) throw new TcgdexError(`malformed body from ${path}`, 422);
+            return shape(body);
+          }
+          return body;
         });
         this.remember(path, { expires: Date.now() + ttlMs, value });
         return value;

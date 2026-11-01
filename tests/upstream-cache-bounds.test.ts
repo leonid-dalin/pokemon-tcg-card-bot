@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TcgdexClient } from "../src/api/tcgdex.js";
+import { TcgdexClient, TcgdexError } from "../src/api/tcgdex.js";
 
 function summaries(prefix: string, count: number) {
   return Array.from({ length: count }, (_, index) => ({ id: `${prefix}-${index}`, name: `${prefix} ${index}` }));
@@ -88,5 +88,20 @@ describe("search cache bounds", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("a malformed 200 response", () => {
+  it("fails once without retrying or caching", async () => {
+    let fetches = 0;
+    vi.stubGlobal("fetch", async () => {
+      fetches += 1;
+      return { ok: true, status: 200, json: async () => ({ notAnArray: true }) } as unknown as Response;
+    });
+    const client = new TcgdexClient({ retries: 2 });
+    await expect(client.searchByName("bad")).rejects.toBeInstanceOf(TcgdexError);
+    expect(fetches).toBe(1);
+    await expect(client.searchByName("bad")).rejects.toBeInstanceOf(TcgdexError);
+    expect(fetches).toBe(2);
   });
 });
