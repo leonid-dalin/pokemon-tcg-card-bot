@@ -1,27 +1,23 @@
-import { EmbedBuilder, type Message } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, type Message } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import type { Config } from "../config.js";
 import { MentionBudget } from "../cooldown.js";
-import { parseDecklist } from "../decklist.js";
+import { MAX_DECK_LINES, parseDecklist } from "../decklist.js";
 import { resolveDeckCards } from "../deck-check.js";
 import { errorCategory } from "../diagnostics.js";
 import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
 import { extractMentions, parseHelpCommand, parseInlineCommand, parseSearchCommand } from "../mentions.js";
 import { listReply, type ListPage } from "./pages.js";
 import { printingsOf, printingItems } from "../printings.js";
-import { renderSet } from "../render.js";
+import { renderDecklist, renderSet } from "../render.js";
 import { resolveSetHint } from "../set-index.js";
 import { normaliseName } from "../resolve.js";
-import { findExactCardName } from "../text-search.js";
+import { findExactCardName, searchCardGroups } from "../text-search.js";
 import { footerFor } from "./commands.js";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
-import { toEmbed } from "./embeds.js";
-import { versionActions, versionEmbed, versionLines } from "./version-view.js";
+import { toEmbed, toEmbeds } from "./embeds.js";
+import { versionActions, versionEmbed } from "./version-view.js";
 import { busyMessage, overloadHint } from "./interaction-failure.js";
-import { renderDecklist } from "../render.js";
-import { searchCardGroups } from "../text-search.js";
 import { helpView } from "../help.js";
-import { toEmbeds } from "./embeds.js";
 import { MAX_EMBEDS_PER_MESSAGE, mentionReply, searchReply, type MentionMiss } from "./replies.js";
 
 export interface MessageContext {
@@ -168,7 +164,9 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       let sent;
       try {
         sent = await message.reply(payload as never);
-      } catch {
+      } catch (error) {
+        // The invoker sees nothing if a reply fails here, so record why.
+        console.error(`reply failed (${errorCategory(error)})`);
         return undefined;
       }
       // Recording is best-effort and must not hide the reply from cleanup.
@@ -180,6 +178,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       return sent;
     };
 
+    // Apply the same per-member, per-channel budget to every message reply.
     let activeBudget = budget;
     if (message.guildId) {
       const cooldown = guild ? guild.cooldownSeconds : config.mentionCooldownSeconds;
@@ -195,7 +194,6 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
       }
     }
 
-    // Apply the same per-member, per-channel budget to every message reply.
     if (activeBudget) {
       const verdict = activeBudget.take(`${message.channelId}:${message.author.id}`);
       if (!verdict.allowed) {
@@ -246,8 +244,21 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     }
 
     if (deck) {
-      const resolved = decklistOn ? await resolveDeckCards(api, deck).catch(() => undefined) : undefined;
-      await logReply({ embeds: toEmbeds([renderDecklist(deck, resolved)]) as never });
+      const admission = requests?.take(message.guildId ? `${message.guildId}:${message.author.id}` : `dm:${message.author.id}`);
+      if (admission && !admission.allowed) {
+        await logReply({ content: busyMessage(admission.retryAfterSeconds) });
+        return;
+      }
+      const resolution = await resolveDeckCards(api, deck).catch(() => undefined);
+      const view = renderDecklist(deck, resolution?.lines);
+      const notes = [
+        ...(deck.truncated ? [`only the first ${MAX_DECK_LINES} lines were read`] : []),
+        ...(resolution?.exhausted ? ["some lines were not checked"] : []),
+      ];
+      // Say when the list was cut or only partly checked, rather than let the reply
+      // imply every line was read.
+      const footer = notes.length > 0 ? `${view.footer} · ${notes.join(" · ")}` : view.footer;
+      await logReply({ embeds: toEmbeds([{ ...view, footer }]) as never });
       return;
     }
 
@@ -257,7 +268,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         return;
       }
       try {
-        const reply = searchReply(searchQuery, searchCardGroups(searchQuery), config.attribution, message.author.id, context.pages);
+        const reply = searchReply(searchQuery, searchCardGroups(searchQuery, guild ? guild.cardGames : "both"), config.attribution, message.author.id, context.pages);
         await logReply(reply as ReplyPayload);
       } catch (error) {
         console.error(`mention search failed (${errorCategory(error)})`);

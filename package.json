@@ -20,7 +20,8 @@
     "doctor": "tsx scripts/doctor.ts",
     "rename": "tsx scripts/rename.ts",
     "index:sets": "tsx scripts/build-set-index.ts",
-    "index:text": "tsx scripts/build-text-index.ts"
+    "index:text": "tsx scripts/build-text-index.ts",
+    "check:lock": "node scripts/lock-race-check.mjs 6 40 && node scripts/lock-race-check.mjs 14 30 && node scripts/lock-race-check.mjs 6 20 fallback"
   },
   "dependencies": {
     "@fawazahmed0/currency-api": "2026.10.28",

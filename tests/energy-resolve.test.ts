@@ -26,7 +26,7 @@ describe("basic Energy spellings", () => {
     stubExact({
       "/v2/en/cards/sve-005": energy("sve-005", "Psychic Energy"),
     });
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["8 Basic {P} Energy SVE 5", ...FILLER]));
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["8 Basic {P} Energy SVE 5", ...FILLER]));
     expect(resolved.find((entry) => entry.line.name === "Basic {P} Energy")?.card?.id).toBe("sve-005");
   });
 
@@ -34,7 +34,7 @@ describe("basic Energy spellings", () => {
     stubExact({
       "/v2/en/cards/sve-005": energy("sve-005", "Psychic Energy"),
     });
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["8 Basic Psychic Energy SVE 5", ...FILLER]));
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["8 Basic Psychic Energy SVE 5", ...FILLER]));
     expect(resolved.find((entry) => entry.line.name === "Basic Psychic Energy")?.card?.id).toBe("sve-005");
   });
 
@@ -46,7 +46,7 @@ describe("basic Energy spellings", () => {
       ] as never,
       "/v2/en/cards/sv08.5-073": { id: "sv08.5-073", name: "Dragapult ex" } as Card,
     });
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["3 Dragapult ex TWM 130", ...FILLER]));
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["3 Dragapult ex TWM 130", ...FILLER]));
     expect(resolved.find((entry) => entry.line.name === "Dragapult ex")?.card?.id).toBe("sv08.5-073");
   });
 
@@ -54,7 +54,7 @@ describe("basic Energy spellings", () => {
     stubExact({
       "/v2/en/cards/sve-001": energy("sve-001", "Grass Energy"),
     });
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["8 Basic {P} Energy SVE 1", ...FILLER]));
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deckOf(["8 Basic {P} Energy SVE 1", ...FILLER]));
     expect(resolved.find((entry) => entry.line.name === "Basic {P} Energy")?.card).toBeUndefined();
   });
 });

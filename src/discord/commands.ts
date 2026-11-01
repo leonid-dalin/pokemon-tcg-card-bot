@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import type { TcgdexClient } from "../api/tcgdex.js";
 import { isCardId, lookupById, lookupCard, POCKET_ATTRIBUTION } from "../lookup.js";
+import { isPocketCardId } from "../prizes.js";
 import { renderCardDetails, renderSet } from "../render.js";
 import { printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
@@ -137,6 +138,21 @@ export const versionCommand = new SlashCommandBuilder()
 
 export const commandDefinitions = [cardCommand, setCommand, searchCommand, printingsCommand, helpCommand, versionCommand, settingsCommand];
 
+/** Runs an upstream call with the autocomplete deadline, clearing the timer after. */
+async function withDeadline<T>(call: Promise<T>): Promise<T | undefined> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      call,
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), AUTOCOMPLETE_DEADLINE_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function handleAutocomplete(
   context: CommandContext,
   interaction: AutocompleteInteraction,
@@ -157,10 +173,7 @@ export async function handleAutocomplete(
 
   if (focused.name === "id") {
     // Discord wants an autocomplete answer within three seconds, so do not wait the full queue deadline.
-    const sets = await Promise.race([
-      context.client.listSets(),
-      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), AUTOCOMPLETE_DEADLINE_MS)),
-    ]);
+    const sets = await withDeadline(context.client.listSets());
     if (!sets) {
       await interaction.respond([]);
       return;
@@ -173,8 +186,15 @@ export async function handleAutocomplete(
     return;
   }
 
-  const summaries = await context.client.searchByName(query);
-  const ranked = rankPrintings(summaries, query).slice(0, 25);
+  // The name path reaches upstream too, so it needs the same deadline as the set list.
+  const summaries = await withDeadline(context.client.searchByName(query));
+  if (!summaries) {
+    await interaction.respond([]);
+    return;
+  }
+  const scope = gamePreference(context, interaction.guildId)?.allowed ?? "both";
+  const allowed = scope === "both" ? summaries : summaries.filter((card) => isPocketCardId(card.id) === (scope === "pocket"));
+  const ranked = rankPrintings(allowed, query).slice(0, 25);
   await interaction.respond(
     ranked.map((card) => ({ name: `${card.name} · ${printedNumber(card.id)}`.slice(0, 100), value: card.id })),
   );
@@ -193,7 +213,6 @@ export async function handleCardCommand(
     await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
     return;
   }
-  // Look up autocomplete values by card id.
   const preference = gamePreference(context, interaction.guildId);
   const lookup = isCardId(query)
     ? await lookupById(context.client, query, { attribution: context.attribution, energyEmoji: context.energyEmoji })
@@ -230,7 +249,6 @@ export async function handlePrintingButton(
     await interaction.followUp({ content: `No card matched \`${parsed.cardId}\`.`, flags: MessageFlags.Ephemeral });
     return;
   }
-  // Clear the original miss prompt when replacing the reply.
   await interaction.editReply({ ...cardReply(lookup, parsed.ownerId), content: null });
 }
 
@@ -251,7 +269,6 @@ export async function handleDetailsButton(
     await interaction.editReply({ content: `No card matched \`${id}\`.` });
     return;
   }
-  // Use the lookup's source attribution for Pocket cards.
   await interaction.editReply({
     embeds: [
       toEmbed(
@@ -339,7 +356,8 @@ export async function handleSearchCommand(
 ): Promise<void> {
   const query = interaction.options.getString("text", true).trim();
   await interaction.deferReply();
-  await interaction.editReply(searchReply(query, searchCardGroups(query), context.attribution, interaction.user.id, context.pages));
+  const scope = gamePreference(context, interaction.guildId)?.allowed ?? "both";
+  await interaction.editReply(searchReply(query, searchCardGroups(query, scope), context.attribution, interaction.user.id, context.pages));
 }
 
 export async function handleSetCommand(
@@ -385,13 +403,10 @@ export async function handleVersionCommand(
   await interaction.reply({ embeds: [versionEmbed(startedAt, now)], components: versionActions(), flags: MessageFlags.Ephemeral });
 }
 
-/** Pocket set prefixes, including promo ids, distinguish Pocket cards from physical-card ids. */
-const POCKET_ID = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])-/i;
-
 /** Include Pocket attribution when any listed printing uses a Pocket id. */
 export function footerFor(printings: { id: string }[], attribution: string): string {
-  const pocket = printings.some((printing) => POCKET_ID.test(printing.id));
-  const physical = printings.some((printing) => !POCKET_ID.test(printing.id));
+  const pocket = printings.some((printing) => isPocketCardId(printing.id));
+  const physical = printings.some((printing) => !isPocketCardId(printing.id));
   if (pocket && physical) return `${attribution} · Pocket cards from pokemon-tcg-pocket-cards · github.com/PocketDecks/pokemon-tcg-pocket-cards`;
   return pocket ? POCKET_ATTRIBUTION : attribution;
 }
@@ -467,6 +482,10 @@ export async function handleVersionAction(
   if (previous !== undefined && now - previous < PUBLIC_REFRESH_INTERVAL_MS) {
     await interaction.reply({ content: "This card was refreshed a moment ago. Try again in a little while.", flags: MessageFlags.Ephemeral });
     return;
+  }
+  // Channels are unbounded, so drop entries that can no longer block a refresh.
+  for (const [seen, at] of lastPublicRefresh) {
+    if (now - at >= PUBLIC_REFRESH_INTERVAL_MS) lastPublicRefresh.delete(seen);
   }
   lastPublicRefresh.set(key, now);
   await interaction.update({ embeds: [versionEmbed(startedAt, now)] });

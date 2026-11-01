@@ -225,19 +225,131 @@ describe("lookupCard", () => {
     expect(lookup?.card.id).toBe("A1-025");
   });
 
-  it("keeps an exact name ahead of a newer series that only contains it", async () => {
+  it("does not answer an owner reprint with an older plain printing", async () => {
+    // Reported case: "[[ho-oh ex]]" answered with the 2016 BKP card while newer
+    // printings of the same Pokémon existed.
     stubFetch({
       "/cards?name=": {
         body: [
-          { id: "me02-013", name: "Mega Charizard X ex", localId: "013", image: "https://assets.tcgdex.net/en/me/me02/13" },
-          { id: "sv03-125", name: "Charizard", localId: "125", image: "https://assets.tcgdex.net/en/sv/sv03/125" },
+          { id: "xy9-92", name: "Ho-Oh EX", localId: "092", image: "https://assets.tcgdex.net/en/xy/xy9/92" },
+          { id: "sv10-039", name: "Ethan's Ho-Oh ex", localId: "039", image: "https://assets.tcgdex.net/en/sv/sv10/039" },
         ],
       },
+      "/cards/sv10-039": { body: { ...dragapult, id: "sv10-039", name: "Ethan's Ho-Oh ex", localId: "039" } },
+      "/cards/xy9-92": { body: { ...dragapult, id: "xy9-92", name: "Ho-Oh EX", localId: "092" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "ho-oh ex");
+    expect(lookup?.card.id).toBe("sv10-039");
+  });
+
+  it("prefers a newer Mega printing over an older plain one", async () => {
+    // Both printings are Charizard, so recency decides and the Mega wins.
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "swsh10.5-010", name: "Charizard", localId: "010", image: "https://assets.tcgdex.net/en/swsh/swsh10.5/010" },
+          { id: "me02-013", name: "Mega Charizard X ex", localId: "013", image: "https://assets.tcgdex.net/en/me/me02/013" },
+        ],
+      },
+      "/cards/me02-013": { body: { ...dragapult, id: "me02-013", name: "Mega Charizard X ex", localId: "013" } },
+      "/cards/swsh10.5-010": { body: { ...dragapult, id: "swsh10.5-010", name: "Charizard", localId: "010" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "Charizard");
+    expect(lookup?.card.id).toBe("me02-013");
+  });
+
+  it("keeps a different card behind one that carries the name", async () => {
+    // "Charizard Spirit Link" contains the query and sits in a newer set, so only
+    // the same-card check keeps the plain Charizard ahead of it.
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "sv03-125", name: "Charizard", localId: "125", image: "https://assets.tcgdex.net/en/sv/sv03/125" },
+          { id: "sv10-160", name: "Charizard Spirit Link", localId: "160", image: "https://assets.tcgdex.net/en/sv/sv10/160" },
+        ],
+      },
+      "/cards/sv10-160": { body: { ...dragapult, id: "sv10-160", name: "Charizard Spirit Link", localId: "160" } },
       "/cards/sv03-125": { body: { ...dragapult, id: "sv03-125", name: "Charizard", localId: "125" } },
     });
-    const client = new TcgdexClient();
+    const client = new TcgdexClient({ retries: 0 });
     const lookup = await lookupCard(client, "Charizard");
     expect(lookup?.card.id).toBe("sv03-125");
+  });
+
+  it("answers ho-oh ex with the newest printing of the same card", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "xy9-92", name: "Ho-Oh EX", localId: "92", image: "https://assets.tcgdex.net/en/xy/xy9/92" },
+          { id: "sv10-039", name: "Ethan's Ho-Oh ex", localId: "039", image: "https://assets.tcgdex.net/en/sv/sv10/039" },
+        ],
+      },
+      "/cards/sv10-039": { body: { ...dragapult, id: "sv10-039", name: "Ethan's Ho-Oh ex", localId: "039" } },
+      "/cards/xy9-92": { body: { ...dragapult, id: "xy9-92", name: "Ho-Oh EX", localId: "92" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "ho-oh ex");
+    expect(lookup?.card.id).toBe("sv10-039");
+  });
+
+  it("answers moltres with the newest printing and keeps the regionals out", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "30th-011", name: "Moltres", localId: "011", image: "https://assets.tcgdex.net/en/30th/011" },
+          { id: "me02-014", name: "Moltres", localId: "014", image: "https://assets.tcgdex.net/en/me/me02/014" },
+          { id: "sv10-031", name: "Team Rocket's Moltres ex", localId: "031", image: "https://assets.tcgdex.net/en/sv/sv10/031" },
+          { id: "swsh6-97", name: "Galarian Moltres V", localId: "097", image: "https://assets.tcgdex.net/en/swsh/swsh6/097" },
+        ],
+      },
+      "/cards/30th-011": { body: { ...dragapult, id: "30th-011", name: "Moltres", localId: "011" } },
+      "/cards/me02-014": { body: { ...dragapult, id: "me02-014", name: "Moltres", localId: "014" } },
+      "/cards/sv10-031": { body: { ...dragapult, id: "sv10-031", name: "Team Rocket's Moltres ex", localId: "031" } },
+      "/cards/swsh6-97": { body: { ...dragapult, id: "swsh6-97", name: "Galarian Moltres V", localId: "097" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "moltres");
+    expect(lookup?.card.id.startsWith("30th-")).toBe(true);
+    const alternates = lookup?.alternates.map((card) => card.id) ?? [];
+    expect(alternates).toContain("me02-014");
+    expect(alternates).toContain("sv10-031");
+    expect(alternates).not.toContain("swsh6-97");
+  });
+
+  it("lets a set hint override the ranking", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "30th-011", name: "Moltres", localId: "011", image: "https://assets.tcgdex.net/en/30th/011" },
+          { id: "me02-014", name: "Moltres", localId: "014", image: "https://assets.tcgdex.net/en/me/me02/014" },
+        ],
+      },
+      "/cards/me02-014": { body: { ...dragapult, id: "me02-014", name: "Moltres", localId: "014" } },
+      "/cards/30th-011": { body: { ...dragapult, id: "30th-011", name: "Moltres", localId: "011" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "moltres", "PFL");
+    expect(lookup?.card.id).toBe("me02-014");
+  });
+
+  it("answers iono's bellibolt with the newest printing and lists the older one", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "sv08-043", name: "Iono's Bellibolt ex", localId: "043", image: "https://assets.tcgdex.net/en/sv/sv08/043" },
+          { id: "sv10-059", name: "Iono's Bellibolt ex", localId: "059", image: "https://assets.tcgdex.net/en/sv/sv10/059" },
+        ],
+      },
+      "/cards/sv10-059": { body: { ...dragapult, id: "sv10-059", name: "Iono's Bellibolt ex", localId: "059" } },
+      "/cards/sv08-043": { body: { ...dragapult, id: "sv08-043", name: "Iono's Bellibolt ex", localId: "043" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "iono's bellibolt");
+    expect(lookup?.card.id).toBe("sv10-059");
+    const alternates = lookup?.alternates.map((card) => card.id) ?? [];
+    expect(alternates).toContain("sv08-043");
   });
 
   it("prefers the newest series among art-bearing printings", async () => {
@@ -340,17 +452,6 @@ describe("lookup contracts", () => {
     const lookup = await lookupCard(client, "Dragapult ex", "sv06-130");
     expect(lookup?.card.id).toBe("sv06-130");
     expect(calls.some((url) => url.includes("/cards/sv06-130"))).toBe(true);
-  });
-
-  it("lists only printings with the same name as other printings", async () => {
-    stubFetch({
-      // "Mega Dragapult ex" contains the query, so ranking keeps it as a candidate.
-      "/cards?name=": { body: [...summaries, { id: "me03-050", name: "Mega Dragapult ex", localId: "050" }] },
-      "/cards/sv08.5-073": { body: dragapult },
-    });
-    const client = new TcgdexClient({ retries: 0 });
-    const lookup = await lookupCard(client, "Dragapult ex");
-    expect(lookup?.alternates.map((card) => card.id)).toEqual(["sv06-130"]);
   });
 
   it("suggests names by dropping the last word of a missed query", async () => {

@@ -1,7 +1,11 @@
 import type { Card } from "./api/types.js";
 import { setIdOf } from "./resolve.js";
 
-// Recognise regular Pocket sets and both package and hyphenated promo prefixes.
+/**
+ * The one Pocket set-id pattern: regular sets (a1, b2a, c1), hyphenated promo
+ * sets (p-a, pc) and bare package promos (pa, pb, pc). Every consumer imports
+ * this rather than keeping a copy that can drift.
+ */
 const POCKET_SET = /^(?:[abc]\d+[a-z]?|p[abc]?-[abc]?|p[abc])$/i;
 
 /** Classifies a card by its set-ID pattern. */
@@ -12,6 +16,10 @@ export function isPocketCard(card: Card): boolean {
 /** Classifies a resolved set id as a Pocket set. */
 export function isPocketSet(setId: string): boolean {
   return POCKET_SET.test(setId);
+}
+
+export function isPocketCardId(cardId: string): boolean {
+  return POCKET_SET.test(setIdOf(cardId));
 }
 
 /** Uses explicit Pocket points or infers the knockout reward from the card name. */

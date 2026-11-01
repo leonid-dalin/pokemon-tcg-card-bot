@@ -13,7 +13,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import { renderPanel, SCOPE_PERSONAL, SCOPE_SERVER } from "./settings-panel.js";
+import { renderPanel } from "./settings-panel.js";
 import { SettingsSessions, type SettingsSession } from "./settings-session.js";
 
 export interface SettingsPanelContext {
@@ -327,6 +327,7 @@ export class SettingsPanelController {
               new TextInputBuilder()
                 .setCustomId("seconds")
                 .setLabel("Seconds between replies (0 to 86400)")
+                .setMaxLength(5)
                 .setStyle(TextInputStyle.Short)
                 .setRequired(true),
             ),
@@ -457,16 +458,10 @@ export class SettingsPanelController {
 
     if (sub === "save") {
       const draft = session.draftChannelIds ?? [];
-      if (before.autoReplyChannelMode === "selected" && draft.length === 0) {
-        this.sessions.update(session);
-        await this.present(interaction,
-          new ContainerBuilder()
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent("**Save an empty selection?**\nWith Selected channels and no channels saved, automatic replies stop everywhere."))
-            .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-              new ButtonBuilder().setCustomId(`st:ch:save-confirm:${session.id}`).setLabel("Stop replies everywhere").setStyle(ButtonStyle.Danger),
-              new ButtonBuilder().setCustomId(`st:ch:cancel:${session.id}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
-            )),
-        );
+      // An empty selection switches replies off everywhere, so it is always confirmed,
+      // whatever the mode was before this save.
+      if (draft.length === 0) {
+        await this.confirmEmptySelection(interaction, session);
         return;
       }
       await this.saveChannels(interaction, session, draft);
@@ -486,6 +481,19 @@ export class SettingsPanelController {
         await this.render(session, interaction, isAdmin, "These settings changed while you were here. Choose again.");
         return;
       }
+      if (sub === "selected") {
+        // The picker is reachable without visiting the Channels screen, so an
+        // unset draft means the saved list rather than an empty one.
+        const draft = session.draftChannelIds ?? [...before.selectedChannelIds];
+        // Switching is the same commit as Save, so a picked list is kept rather
+        // than thrown away, and only an empty result needs a confirmation.
+        if (draft.length === 0) {
+          await this.confirmEmptySelection(interaction, session);
+          return;
+        }
+        await this.saveChannels(interaction, session, draft);
+        return;
+      }
       this.store.update(session.guildId, { autoReplyChannelMode: sub });
       const after = this.store.get(session.guildId);
       session.baseline = baselineOf(after);
@@ -502,6 +510,19 @@ export class SettingsPanelController {
 
     // Unknown sub-actions must still acknowledge, or Discord shows a failure.
     await this.render(session, interaction, isAdmin);
+  }
+
+  /** Asks before a change that leaves Selected channels mode with no channels saved. */
+  private async confirmEmptySelection(interaction: PanelInteraction, session: SettingsSession): Promise<void> {
+    this.sessions.update(session);
+    await this.present(interaction,
+      new ContainerBuilder()
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent("**Save an empty selection?**\nWith Selected channels and no channels saved, automatic replies stop everywhere."))
+        .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder().setCustomId(`st:ch:save-confirm:${session.id}`).setLabel("Stop replies everywhere").setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`st:ch:cancel:${session.id}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary),
+        )),
+    );
   }
 
   private async saveChannels(

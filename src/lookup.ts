@@ -2,7 +2,7 @@ import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
 import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
-import { normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
+import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { findExactCardName } from "./text-search.js";
@@ -31,15 +31,24 @@ export interface LookupOptions {
   gamePreference?: { allowed: import("./settings-store.js").CardGameScope; default: import("./settings-store.js").CardGameDefault };
 }
 
-// Display order: name score, image availability, set recency, then input order.
+/**
+ * Printings of what was asked for come first, newest first, because a newer
+ * printing is the card the reader means. Everything else follows by name score.
+ */
 function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
-  return [...ranked].sort((a, b) => {
-    const score = scoreCandidate(query, b.name) - scoreCandidate(query, a.name);
-    if (score !== 0) return score;
+  const byDisplay = (a: CardSummary, b: CardSummary): number => {
     const art = (b.image ? 1 : 0) - (a.image ? 1 : 0);
     if (art !== 0) return art;
     return setRecency(b.id) - setRecency(a.id);
-  });
+  };
+  const printings = ranked.filter((card) => isPrintingOf(query, card.name)).sort(byDisplay);
+  const others = ranked
+    .filter((card) => !isPrintingOf(query, card.name))
+    .sort((a, b) => {
+      const score = scoreCandidate(query, b.name) - scoreCandidate(query, a.name);
+      return score !== 0 ? score : byDisplay(a, b);
+    });
+  return [...printings, ...others];
 }
 
 // Locale fallback order for card responses without displayable prices.
@@ -59,17 +68,21 @@ async function withEnglishPricing(client: TcgdexClient, card: Card): Promise<Car
   return card;
 }
 
-// Keep same-name alternates in candidate order, excluding the selected ID.
+/**
+ * Other printings of the card asked for, in display order. Without a query the
+ * same-name filter applies, which the Pocket and by-id paths rely on.
+ */
 function toLookup(
   card: Card,
   candidates: CardSummary[],
   attribution: string | undefined,
   energyEmoji?: Record<string, string>,
   limit = 10,
+  query?: string,
 ): CardLookup {
   const name = normaliseName(card.name);
   const alternates = candidates
-    .filter((entry) => entry.id !== card.id && normaliseName(entry.name) === name)
+    .filter((entry) => entry.id !== card.id && (normaliseName(entry.name) === name || (query ? isPrintingOf(query, entry.name) : false)))
     .slice(0, limit);
   return { card, alternates, matchingPrintings: printingsForButtons(card, alternates), ...(attribution ? { attribution } : {}), ...(energyEmoji ? { energyEmoji } : {}) };
 }
@@ -342,7 +355,7 @@ export async function lookupCard(
   if (!primary) return undefined;
 
   const card = await withEnglishPricing(client, await client.getCard(primary.id));
-  return toLookup(card, ordered, options.attribution, options.energyEmoji, options.alternateLimit);
+  return toLookup(card, ordered, options.attribution, options.energyEmoji, options.alternateLimit, query);
 }
 
 /** Enables scan-only output only when the requested card has an image. */

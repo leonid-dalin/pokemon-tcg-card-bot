@@ -1,10 +1,10 @@
 import { SET_INDEX } from "./data/set-index.js";
+import { isPocketSet } from "./prizes.js";
 
 const byId = new Map(SET_INDEX.map((entry) => [entry.id, entry]));
 
-// Pocket cards use the separate Pocket Limitless database.
-const POCKET = /^(?:[ab]\d+[a-z]?|p[ab]?-[ab]?|p[ab])$/i;
-const PROMO_URL = /^p([ab])$/i;
+// Package promo sets print as P-A, P-B and P-C, which is how Limitless addresses them.
+const PROMO_URL = /^p([abc])$/i;
 
 function split(cardId: string): { prefix: string; number: string } | undefined {
   const at = cardId.lastIndexOf("-");
@@ -23,9 +23,10 @@ function bareNumber(number: string): string {
 export function limitlessUrl(cardId: string): string | undefined {
   const parts = split(cardId);
   if (!parts) return undefined;
-  if (POCKET.test(parts.prefix)) {
+  if (isPocketSet(parts.prefix)) {
+    // Limitless accepts either case; one card shape should still map to one URL.
     const promo = PROMO_URL.exec(parts.prefix);
-    const set = promo ? `P-${promo[1]!.toUpperCase()}` : parts.prefix;
+    const set = promo ? `P-${promo[1]!.toUpperCase()}` : parts.prefix.toUpperCase();
     return `https://pocket.limitlesstcg.com/cards/${set}/${bareNumber(parts.number)}`;
   }
   const entry = byId.get(parts.prefix);

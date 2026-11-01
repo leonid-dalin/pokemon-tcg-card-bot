@@ -8,7 +8,7 @@ The service starts at boot and retries after a crash or a failed login. The bot 
 
 The host needs root access, Python 3 and systemd. Confirm `uname -m` prints `aarch64` and there is enough free disk space. Install missing prerequisites with `sudo apt-get install python3 ca-certificates git`
 
-Wait for the deployment and application changes to merge into `master`, then check that the CI run for the current master commit has published its `ptcg-discord-bot-<version>.<date>.<time>-linux-arm64` prerelease. Pull requests build and test bundles but do not publish them
+Wait for the deployment and application changes to merge into `master`, then check that the CI run for the current master commit has published its `ptcg-discord-bot-<version>.<date>.<time>-<short sha>-linux-arm64` prerelease. Pull requests build and test bundles but do not publish them
 
 On the machine that currently runs the bot, locate the working `.env` and the directory named by `DATA_DIR`. If `DATA_DIR` is unset, existing server settings live in memory and cannot be copied. Stop the source bot before copying SQLite files or starting the new one. Copy `settings.db` and any `settings.db-wal` or `settings.db-shm` files together after the process exits
 
@@ -140,7 +140,7 @@ The native service suits a small single-board computer that also runs DNS or gat
 Place a private `.env` beside `compose.yaml`, set `INVOCATION_LOG_DIR=/data/invocations` if logging is wanted, then run:
 
 ```bash
-docker compose build
+BUILD_SHA=$(git rev-parse --short HEAD) BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) docker compose build
 docker compose up -d
 docker compose ps
 docker compose logs --tail=30

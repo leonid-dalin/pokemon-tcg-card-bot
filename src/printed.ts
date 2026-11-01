@@ -1,8 +1,6 @@
 import { SET_INDEX } from "./data/set-index.js";
 import { normaliseName, setIdOf } from "./resolve.js";
-
-// Recognise regular Pocket sets and both package and hyphenated promo prefixes.
-const POCKET_SET = /^(?:[abc]\d+[a-z]?|p[abc]?-[abc]?|p[abc])$/i;
+import { isPocketSet } from "./prizes.js";
 
 // Display package promo prefixes pa/pb as P-A/P-B.
 const PROMO_CODE = /^p([abc])$/i;
@@ -53,6 +51,6 @@ export function printedNumber(cardId: string): string {
   // Gallery numbers already contain the subset prefix, such as TG01.
   if (code) return `${code.split(":")[0]} ${bare}`;
   if (promo) return `P-${promo[1]!.toUpperCase()} ${bare}`;
-  if (POCKET_SET.test(setId)) return `${setId.toUpperCase()} ${bare}`;
+  if (isPocketSet(setId)) return `${setId.toUpperCase()} ${bare}`;
   return cardId;
 }

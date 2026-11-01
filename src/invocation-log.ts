@@ -56,7 +56,9 @@ export class InvocationLog {
         }
         kept.push(line);
       }
-      const tmp = `${this.file}.tmp`;
+      // Prune and record are synchronous and only the lock holder writes this file,
+      // so nothing can be appended between the read above and the rename.
+      const tmp = `${this.file}.${process.pid}.${Date.now()}.tmp`;
       writeFileSync(tmp, `${kept.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
       renameSync(tmp, this.file);
     } catch {

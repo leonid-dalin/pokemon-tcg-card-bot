@@ -61,7 +61,7 @@ describe("resolveByName rejects a wrong-named card", () => {
       return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
     });
     const deck = parseDecklist(["2 Nest Ball SVI 999", "4 Arven SVI 166", "4 Nest Ball SVI 181", "4 Ultra Ball SVI 196", "4 Switch SVI 194"].join("\n"))!;
-    const resolved = await resolveDeckCards(new TcgdexClient(), deck);
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient(), deck);
     const nest = resolved.find((r) => r.line.name === "Nest Ball");
     expect(nest?.card).toBeUndefined();
   });

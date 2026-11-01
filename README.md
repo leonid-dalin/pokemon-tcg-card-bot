@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-<a href="https://discord.com/oauth2/authorize?client_id=1564749707740192818&scope=bot+applications.commands&permissions=4503876652887104"><strong>Add to Discord</strong></a> · <a href="docs/usage.md">Use the bot</a> · <a href="docs/setup.md">Host your own</a> · <a href="docs/development.md">Develop</a>
+<a href="https://discord.com/oauth2/authorize?client_id=1564749707740192818&scope=bot+applications.commands&permissions=277025483776"><strong>Add to Discord</strong></a> · <a href="docs/usage.md">Use the bot</a> · <a href="docs/setup.md">Host your own</a> · <a href="docs/development.md">Develop</a>
 </p>
 
 ## Card lookup
@@ -29,9 +29,9 @@ Use `/card name:Dragapult ex` for the same lookup through a slash command. Add `
 | Compare versions of a card | `/printings name:Dragapult ex` |
 | Browse a set | `/set id:sv08.5 checklist:true` |
 | Find cards with a phrase in their wording | `/search text:"search your deck"` |
-| Choose reply channels or a preferred card game | `/settings` with Manage Server permission |
+| Choose reply channels or a preferred card game | `/settings` (members with Manage Server change server-wide values) |
 
-Pasted decklists can show card counts, Standard legality and available Cardmarket prices when a server administrator enables decklist replies. The [usage guide](docs/usage.md) explains the commands, printing hints and reply controls
+Pasted decklists can show card counts, Standard legality and available Cardmarket prices when a member with the Manage Server permission enables decklist replies. The [usage guide](docs/usage.md) explains the commands, printing hints and reply controls
 
 ## Host your own
 
@@ -49,7 +49,7 @@ Follow [setup](docs/setup.md) for the first login and command registration. For 
 | Configure persistence, logging or deployment defaults | [Configuration](docs/configuration.md) |
 | Develop, test or maintain card data | [Developer documentation](docs/README.md) |
 
-Physical card records come from [TCGdex](https://tcgdex.dev); Pocket records come from [pokemon-tcg-pocket-cards](https://github.com/chase-mew/pokemon-tcg-pocket-cards). Prices depend on the source, and the local wording index can lag new card releases
+Physical card records come from [TCGdex](https://tcgdex.dev); Pocket records come from [pokemon-tcg-pocket-cards](https://github.com/PocketDecks/pokemon-tcg-pocket-cards). Prices depend on the source, and the local wording index can lag new card releases
 
 Project code is [Apache-2.0](LICENSE). The Pocket dependency uses AGPL-3.0-or-later; card data and images have separate terms. Read the [third-party notices](docs/THIRD_PARTY_NOTICES.md) before redistributing a build
 

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { normaliseName } from "./resolve.js";
 import { setRecency } from "./set-index.js";
+import { isPocketCardId } from "./prizes.js";
 
 export interface TextPart {
   kind: "ability" | "attack" | "effect";
@@ -60,6 +61,23 @@ function load(): TextHit[] {
     parts: entry.parts?.map((part) => ({ ...part, name: part.name === undefined ? undefined : visible(part.name), text: visible(part.text ?? "") })),
   }));
   return cache;
+}
+
+/** Sets whose card ids zero-pad the number, so the padded form is the real one. */
+let paddedPrefixes: Set<string> | undefined;
+
+export function setUsesPaddedNumbers(prefix: string): boolean {
+  if (!paddedPrefixes) {
+    paddedPrefixes = new Set();
+    for (const entry of load()) {
+      const match = /^(.*)-(\d+)$/.exec(entry.id);
+      if (!match) continue;
+      const setPrefix = match[1] ?? "";
+      const number = match[2] ?? "";
+      if (number.length === 3 && number.startsWith("0")) paddedPrefixes.add(setPrefix);
+    }
+  }
+  return paddedPrefixes.has(prefix);
 }
 
 /** Returns the number of records in the loaded index. */
@@ -194,15 +212,23 @@ export function searchCardText(query: string, limit = Number.POSITIVE_INFINITY):
  * "N" cannot be searched upstream: the service treats it as a substring filter
  * and returns unrelated cards first, so the id comes from the local index.
  */
+let byFoldedName: Map<string, TextHit> | undefined;
+
 export function findExactCardName(query: string): TextHit | undefined {
-  const wanted = query.trim().toLowerCase();
-  if (!wanted) return undefined;
-  let best: TextHit | undefined;
-  for (const entry of load()) {
-    if (entry.name.trim().toLowerCase() !== wanted) continue;
-    if (!best || entry.id > best.id) best = entry;
+  if (!byFoldedName) {
+    byFoldedName = new Map();
+    for (const entry of load()) {
+      const key = entry.name.trim().toLowerCase();
+      const known = byFoldedName.get(key);
+      if (!known) {
+        byFoldedName.set(key, entry);
+        continue;
+      }
+      const recency = setRecency(entry.id) - setRecency(known.id);
+      if (recency > 0 || (recency === 0 && entry.id > known.id)) byFoldedName.set(key, entry);
+    }
   }
-  return best;
+  return byFoldedName.get(query.trim().toLowerCase());
 }
 
 /** Every card carrying exactly this name, newest id first. */
@@ -214,9 +240,16 @@ export function findExactNames(query: string): TextHit[] {
     .sort((a, b) => b.id.localeCompare(a.id));
 }
 
-/** Groups matching index records by normalised card name. */
-export function searchCardGroups(query: string): TextGroup[] {
-  return searchGroupsIn(load(), query);
+export type GameScope = "ptcg" | "pocket" | "both";
+
+function withinScope(entries: TextHit[], scope: GameScope): TextHit[] {
+  if (scope === "both") return entries;
+  const pocket = scope === "pocket";
+  return entries.filter((entry) => isPocketCardId(entry.id) === pocket);
+}
+
+export function searchCardGroups(query: string, scope: GameScope = "both"): TextGroup[] {
+  return searchGroupsIn(withinScope(load(), scope), query);
 }
 
 /** Searches supplied entries and groups matches by name using their newest printing. */

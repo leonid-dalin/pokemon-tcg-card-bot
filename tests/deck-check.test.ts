@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Card } from "../src/api/types.js";
 import { TcgdexClient } from "../src/api/tcgdex.js";
-import { parseDecklist } from "../src/decklist.js";
+import { MAX_DECK_LINES, parseDecklist } from "../src/decklist.js";
 import { resolveDeckCards, type ResolvedLine } from "../src/deck-check.js";
 import { cardmarketAverage, renderDecklist } from "../src/render.js";
 
@@ -50,7 +50,7 @@ describe("resolveDeckCards", () => {
   it("resolves a line through its unpadded id", async () => {
     const { calls } = stubFetch({ "/cards/sv06-128": { body: card("sv06-128", "Dreepy") } });
     const deck = deckOf(["4 Dreepy TWM 128", ...FILLER]);
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
     expect(resolved.find((entry) => entry.line.name === "Dreepy")?.card?.id).toBe("sv06-128");
     expect(calls.some((url) => url.endsWith("/cards/sv06-128"))).toBe(true);
   });
@@ -58,7 +58,7 @@ describe("resolveDeckCards", () => {
   it("resolves a line through the padded id", async () => {
     stubFetch({ "/cards/sve-005": { body: card("sve-005", "Basic {P} Energy") } });
     const deck = deckOf(["8 Basic {P} Energy SVE 5", ...FILLER]);
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
     expect(resolved.find((entry) => entry.line.name === "Basic {P} Energy")?.card?.id).toBe("sve-005");
   });
 
@@ -68,7 +68,7 @@ describe("resolveDeckCards", () => {
       "/cards/swsh6-146": { body: card("swsh6-146", "Melony") },
     });
     const deck = deckOf(["2 Melony ZZZ 1", ...FILLER]);
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
     expect(resolved.find((entry) => entry.line.name === "Melony")?.card?.id).toBe("swsh6-146");
     expect(calls.some((url) => url.includes("name=Melony"))).toBe(true);
   });
@@ -76,7 +76,7 @@ describe("resolveDeckCards", () => {
   it("resolves a printed code whose set id is not its card id prefix", async () => {
     const { calls } = stubFetch({ "/cards/sv01-196": { body: card("sv01-196", "Ultra Ball") } });
     const deck = deckOf(["4 Ultra Ball SVI 196", "4 Arven SVI 166", "4 Iono PAL 185", "4 Nest Ball SVI 181", "4 Switch SVI 194"]);
-    const resolved = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
+    const { lines: resolved } = await resolveDeckCards(new TcgdexClient({ retries: 0 }), deck);
     expect(resolved.find((entry) => entry.line.name === "Ultra Ball")?.card?.id).toBe("sv01-196");
     expect(calls.some((url) => url.endsWith("/cards/svi-196"))).toBe(false);
   });
@@ -169,5 +169,44 @@ describe("cardmarketAverage", () => {
   it("reads the first variant that carries a Cardmarket price", () => {
     expect(cardmarketAverage(card("sv02-185", "Iono", pricedValue(1.49)))).toBe(1.49);
     expect(cardmarketAverage(card("sv02-185", "Iono"))).toBeUndefined();
+  });
+});
+
+describe("parseDecklist line cap", () => {
+  it("stops at the cap and records that the list was cut", () => {
+    const lines = Array.from({ length: 120 }, (_, i) => `1 Card number ${i}`);
+    const deck = parseDecklist(lines.join("\n"));
+
+    expect(deck?.lines).toHaveLength(MAX_DECK_LINES);
+    expect(deck?.truncated).toBe(true);
+    // The total reflects the lines actually read, not the whole paste.
+    expect(deck?.total).toBe(MAX_DECK_LINES);
+  });
+
+  it("leaves a list inside the cap unwritten as truncated", () => {
+    const lines = Array.from({ length: 20 }, (_, i) => `3 Card number ${i}`);
+    const deck = parseDecklist(lines.join("\n"));
+
+    expect(deck?.lines).toHaveLength(20);
+    expect(deck?.truncated).toBeUndefined();
+  });
+});
+
+describe("decklist truncation is honest", () => {
+  it("does not claim truncation when the 81st row is malformed", () => {
+    // 80 valid rows, then a row matching the shape but with a rejected count.
+    const valid = Array.from({ length: 80 }, (_, i) => `1 Card number ${i}`);
+    const deck = parseDecklist([...valid, "99 Rejected Row"].join("\n"));
+
+    expect(deck?.lines).toHaveLength(80);
+    expect(deck?.truncated).toBeUndefined();
+  });
+
+  it("still reports truncation when the 81st row is valid", () => {
+    const valid = Array.from({ length: 81 }, (_, i) => `1 Card number ${i}`);
+    const deck = parseDecklist(valid.join("\n"));
+
+    expect(deck?.lines).toHaveLength(80);
+    expect(deck?.truncated).toBe(true);
   });
 });

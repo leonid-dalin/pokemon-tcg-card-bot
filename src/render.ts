@@ -94,11 +94,6 @@ function formatDate(iso?: string): string | undefined {
   return date.toISOString().slice(0, 10);
 }
 
-function money(amount: number | null | undefined, currency: string): string | undefined {
-  if (amount === null || amount === undefined || Number.isNaN(amount)) return undefined;
-  return `${amount.toFixed(2)} ${currency}`;
-}
-
 interface PriceSummary {
   cardmarket?: Pricing;
   tcgplayer?: Pricing;
