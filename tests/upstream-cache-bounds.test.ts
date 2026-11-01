@@ -101,7 +101,8 @@ describe("a malformed 200 response", () => {
     const client = new TcgdexClient({ retries: 2 });
     await expect(client.searchByName("bad")).rejects.toBeInstanceOf(TcgdexError);
     expect(fetches).toBe(1);
-    await expect(client.searchByName("bad")).rejects.toBeInstanceOf(TcgdexError);
+    const error = await client.searchByName("my private words").catch((caught: unknown) => caught as Error);
+    expect(error.message).not.toContain("private");
     expect(fetches).toBe(2);
   });
 });

@@ -139,7 +139,8 @@ export class TcgdexClient {
           if (shape) {
             // A malformed body must fail once, not retry: a TypeError here reads as
             // retryable and costs every attempt.
-            if (!Array.isArray(body)) throw new TcgdexError(`malformed body from ${path}`, 422);
+            // The path carries the query, and this message reaches the console.
+            if (!Array.isArray(body)) throw new TcgdexError("malformed body from the card search", 422);
             return shape(body);
           }
           return body;
