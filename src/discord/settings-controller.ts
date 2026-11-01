@@ -581,8 +581,9 @@ export class SettingsPanelController {
       return;
     }
     const raw = interaction.fields?.getTextInputValue("seconds").trim() ?? "";
-    const seconds = Number(raw);
-    if (!Number.isInteger(seconds) || seconds < 0 || seconds > 86400) {
+    // Digits only: Number() also reads "", "1e3", "0x1F" and "+5" as seconds.
+    const seconds = /^\d{1,5}$/.test(raw) ? Number(raw) : Number.NaN;
+    if (!Number.isInteger(seconds) || seconds > 86400) {
       await this.render(session, interaction, isAdmin, `"${raw}" is not a whole number of seconds between 0 and 86400.`);
       return;
     }

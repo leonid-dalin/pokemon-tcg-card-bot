@@ -695,3 +695,25 @@ describe("empty channel selection always asks first", () => {
     expect(fxStore(fx).selectedChannelIds).toEqual(["ch-1"]);
   });
 });
+
+describe("settings panel cooldown input", () => {
+  async function submit(fx: Fixture, sessionId: string, raw: string): Promise<void> {
+    const modal = fx.interaction(`st:cooldown-modal:${sessionId}`, { admin: true }) as unknown as { interaction: { fields: unknown } };
+    modal.interaction.fields = { getTextInputValue: () => raw };
+    await fx.controller.handleComponent(modal.interaction as never);
+  }
+
+  it.each(["", "   ", "1e3", "0x1F", "+5", "-1", "1.5", "123456", "86401"])("refuses %j and leaves the cooldown alone", async (raw) => {
+    const fx = fixture({ cooldownSeconds: 30 });
+    await submit(fx, openServerPanel(fx), raw);
+    expect(fxStore(fx).cooldownSeconds).toBe(30);
+    expect(fx.recorded).toEqual([]);
+  });
+
+  it.each([["0", 0], [" 45 ", 45], ["86400", 86400]])("accepts %j as %i seconds", async (raw, seconds) => {
+    const fx = fixture({ cooldownSeconds: 30 });
+    await submit(fx, openServerPanel(fx), raw);
+    expect(fxStore(fx).cooldownSeconds).toBe(seconds);
+    expect(fx.recorded).toHaveLength(1);
+  });
+});
