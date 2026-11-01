@@ -82,7 +82,7 @@ function toLookup(
 ): CardLookup {
   const name = normaliseName(card.name);
   const alternates = candidates
-    .filter((entry) => entry.id !== card.id && (query ? isPrintingOf(query, entry.name) : normaliseName(entry.name) === name))
+    .filter((entry) => entry.id !== card.id && (normaliseName(entry.name) === name || (query ? isPrintingOf(query, entry.name) : false)))
     .slice(0, limit);
   return { card, alternates, matchingPrintings: printingsForButtons(card, alternates), ...(attribution ? { attribution } : {}), ...(energyEmoji ? { energyEmoji } : {}) };
 }
