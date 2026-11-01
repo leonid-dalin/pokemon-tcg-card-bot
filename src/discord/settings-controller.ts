@@ -14,6 +14,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { renderPanel } from "./settings-panel.js";
+import { SETTINGS_FAILURE } from "./interaction-failure.js";
 import { SettingsSessions, type SettingsSession } from "./settings-session.js";
 
 export interface SettingsPanelContext {
@@ -332,7 +333,9 @@ export class SettingsPanelController {
                 .setRequired(true),
             ),
           );
-        interaction.showModal(modal);
+        await Promise.resolve(interaction.showModal(modal)).catch(async (error: unknown) => {
+          await this.reportOpenFailure(interaction, error);
+        });
         return;
       }
       case "reset":
@@ -581,8 +584,9 @@ export class SettingsPanelController {
       return;
     }
     const raw = interaction.fields?.getTextInputValue("seconds").trim() ?? "";
-    const seconds = Number(raw);
-    if (!Number.isInteger(seconds) || seconds < 0 || seconds > 86400) {
+    // Digits only: Number() also reads "", "1e3", "0x1F" and "+5" as seconds.
+    const seconds = /^\d{1,5}$/.test(raw) ? Number(raw) : Number.NaN;
+    if (!Number.isInteger(seconds) || seconds > 86400) {
       await this.render(session, interaction, isAdmin, `"${raw}" is not a whole number of seconds between 0 and 86400.`);
       return;
     }
@@ -642,6 +646,20 @@ export class SettingsPanelController {
 
   private async announceChange(interaction: PanelInteraction & { guildId: string }, lines: string[]): Promise<void> {
     await this.announce?.(interaction.guildId, interaction.channelId, lines);
+  }
+
+  /**
+   * Answers a panel failure with settings wording. The generic reporter's text
+   * names a card lookup, which reads as a bug on a settings control.
+   */
+  private async reportOpenFailure(interaction: PanelInteraction, error: unknown): Promise<void> {
+    console.error(`settings panel control failed (${errorCategory(error)})`);
+    const notice = { content: SETTINGS_FAILURE, flags: MessageFlags.Ephemeral };
+    const sent = await (interaction.deferred || interaction.replied
+      ? interaction.followUp(notice as never)
+      : interaction.reply(notice as never)
+    ).then(() => true, () => false);
+    if (!sent) throw error;
   }
 }
 

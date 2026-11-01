@@ -2,6 +2,8 @@ import type { Card, CardSetDetail, CardSummary, SetSummary } from "./types.js";
 import { OverloadedError, RequestLimiter, type LimiterOptions } from "./limiter.js";
 
 const BASE = "https://api.tcgdex.net/v2";
+/** Name searches keep this many summaries; short names match thousands of cards. */
+const SEARCH_RESULT_CAP = 500;
 
 export interface ClientOptions {
   baseUrl?: string;
@@ -11,6 +13,8 @@ export interface ClientOptions {
   setTtlMs?: number;
   /** Maximum cache entries, including remembered 404 responses. */
   maxEntries?: number;
+  /** Maximum summaries held across cached list responses. Defaults to 60000. */
+  maxCachedItems?: number;
   limiter?: LimiterOptions;
 }
 
@@ -19,6 +23,8 @@ interface CacheEntry {
   /** Absent for a remembered 404. */
   value?: unknown;
   missing?: true;
+  /** Cache cost: the list length for a list response, 1 otherwise. */
+  weight: number;
 }
 
 export class TcgdexError extends Error {
@@ -42,6 +48,8 @@ export class TcgdexClient {
   private readonly cardTtlMs: number;
   private readonly setTtlMs: number;
   private readonly maxEntries: number;
+  private readonly maxCachedItems: number;
+  private cachedItems = 0;
   private readonly cache = new Map<string, CacheEntry>();
   private readonly inFlight = new Map<string, Promise<unknown>>();
   private readonly limiter: RequestLimiter;
@@ -53,6 +61,7 @@ export class TcgdexClient {
     this.cardTtlMs = options.cardTtlMs ?? 10 * 60_000;
     this.setTtlMs = options.setTtlMs ?? 60 * 60_000;
     this.maxEntries = Math.max(1, options.maxEntries ?? 1000);
+    this.maxCachedItems = Math.max(1, options.maxCachedItems ?? 60_000);
     this.limiter = new RequestLimiter(options.limiter);
   }
 
@@ -60,22 +69,34 @@ export class TcgdexClient {
     return { running: this.limiter.running, queued: this.limiter.queued };
   }
 
-  private remember(path: string, entry: CacheEntry): void {
+  private forget(path: string): void {
+    const held = this.cache.get(path);
+    if (!held) return;
+    this.cachedItems -= held.weight;
     this.cache.delete(path);
-    if (this.cache.size >= this.maxEntries) {
-      const now = Date.now();
-      for (const [key, held] of this.cache) if (held.expires <= now) this.cache.delete(key);
-    }
-    // Map iteration follows insertion order, so the first key is the oldest.
-    while (this.cache.size >= this.maxEntries) {
-      const oldest = this.cache.keys().next().value;
-      if (oldest === undefined) break;
-      this.cache.delete(oldest);
-    }
-    this.cache.set(path, entry);
   }
 
-  private async getJson<T>(path: string, ttlMs: number): Promise<T> {
+  private remember(path: string, entry: Omit<CacheEntry, "weight">): void {
+    const weight = Array.isArray(entry.value) ? entry.value.length : 1;
+    this.forget(path);
+    // An entry that cannot fit the budget would evict everything else and then
+    // stay, so skip caching it rather than churn the cache around it.
+    if (weight > this.maxCachedItems) return;
+    if (this.cache.size >= this.maxEntries) {
+      const now = Date.now();
+      for (const [key, held] of this.cache) if (held.expires <= now) this.forget(key);
+    }
+    // Map iteration follows insertion order, so the first key is the oldest.
+    while (this.cache.size > 0 && (this.cache.size >= this.maxEntries || this.cachedItems + weight > this.maxCachedItems)) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest === undefined) break;
+      this.forget(oldest);
+    }
+    this.cache.set(path, { ...entry, weight });
+    this.cachedItems += weight;
+  }
+
+  private async getJson<T>(path: string, ttlMs: number, shape?: (value: T) => T): Promise<T> {
     const cached = this.cache.get(path);
     if (cached && cached.expires > Date.now()) {
       // Re-throw cached misses without another request.
@@ -86,14 +107,14 @@ export class TcgdexClient {
     const shared = this.inFlight.get(path);
     if (shared) return shared as Promise<T>;
 
-    const request = this.request<T>(path, ttlMs).finally(() => {
+    const request = this.request<T>(path, ttlMs, shape).finally(() => {
       this.inFlight.delete(path);
     });
     this.inFlight.set(path, request);
     return request;
   }
 
-  private async request<T>(path: string, ttlMs: number): Promise<T> {
+  private async request<T>(path: string, ttlMs: number, shape?: (value: T) => T): Promise<T> {
     let lastError: unknown;
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
       try {
@@ -116,7 +137,15 @@ export class TcgdexClient {
             }
             throw new TcgdexError(`request failed: ${response.status}`, response.status);
           }
-          return (await response.json()) as T;
+          const body = (await response.json()) as T;
+          if (shape) {
+            // A malformed body must fail once, not retry: a TypeError here reads as
+            // retryable and costs every attempt.
+            // The path carries the query, and this message reaches the console.
+            if (!Array.isArray(body)) throw new TcgdexError("malformed body from the card search", 422);
+            return shape(body);
+          }
+          return body;
         });
         this.remember(path, { expires: Date.now() + ttlMs, value });
         return value;
@@ -132,10 +161,13 @@ export class TcgdexClient {
     throw lastError instanceof Error ? lastError : new TcgdexError(String(lastError));
   }
 
-  /** Searches by name and returns at most `limit` summaries. */
+  /** Searches by name and returns at most `limit` summaries, never more than SEARCH_RESULT_CAP. */
   async searchByName(name: string, limit = 500, lang = "en"): Promise<CardSummary[]> {
     const query = new URLSearchParams({ name });
-    const cards = await this.getJson<CardSummary[]>(`/${lang}/cards?${query.toString()}`, this.cardTtlMs);
+    // Trim before caching: the cache holds at most SEARCH_RESULT_CAP summaries per query.
+    const cards = await this.getJson<CardSummary[]>(`/${lang}/cards?${query.toString()}`, this.cardTtlMs, (all) =>
+      all.slice(0, SEARCH_RESULT_CAP),
+    );
     return cards.slice(0, limit);
   }
 

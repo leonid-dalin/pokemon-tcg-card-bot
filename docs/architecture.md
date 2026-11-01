@@ -59,7 +59,7 @@ Handlers that fetch card records defer their interaction before the lookup. [src
 
 | Store | Default lifetime | Capacity |
 | --- | --- | --- |
-| TCGdex card records and name searches | 10 minutes | Shared API cache, 1,000 entries |
+| TCGdex card records and name searches | 10 minutes | Shared API cache: 1,000 entries, 60 000 summaries; a name search keeps 500 |
 | TCGdex sets and card/set listings | 1 hour | Same API cache |
 | Paged lists | 15 minutes from creation | 500 lists |
 | Loaded Pocket data and wording index | Process lifetime | Loaded dataset |

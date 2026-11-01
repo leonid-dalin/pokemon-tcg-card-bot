@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MessageFlags } from "discord.js";
+import { SETTINGS_FAILURE } from "../src/discord/interaction-failure.js";
 import type { GuildSettings } from "../src/settings-store.js";
 import { SettingsPanelController, baselineOf } from "../src/discord/settings-controller.js";
 import { SettingsSessions } from "../src/discord/settings-session.js";
@@ -693,5 +694,61 @@ describe("empty channel selection always asks first", () => {
 
     expect(fxStore(fx).autoReplyChannelMode).toBe("selected");
     expect(fxStore(fx).selectedChannelIds).toEqual(["ch-1"]);
+  });
+});
+
+describe("settings panel cooldown input", () => {
+  async function submit(fx: Fixture, sessionId: string, raw: string): Promise<void> {
+    const modal = fx.interaction(`st:cooldown-modal:${sessionId}`, { admin: true }) as unknown as { interaction: { fields: unknown } };
+    modal.interaction.fields = { getTextInputValue: () => raw };
+    await fx.controller.handleComponent(modal.interaction as never);
+  }
+
+  it.each(["", "   ", "1e3", "0x1F", "+5", "-1", "1.5", "123456", "86401"])("refuses %j and leaves the cooldown alone", async (raw) => {
+    const fx = fixture({ cooldownSeconds: 30 });
+    await submit(fx, openServerPanel(fx), raw);
+    expect(fxStore(fx).cooldownSeconds).toBe(30);
+    expect(fx.recorded).toEqual([]);
+  });
+
+  it.each([["0", 0], [" 45 ", 45], ["86400", 86400]])("accepts %j as %i seconds", async (raw, seconds) => {
+    const fx = fixture({ cooldownSeconds: 30 });
+    await submit(fx, openServerPanel(fx), raw);
+    expect(fxStore(fx).cooldownSeconds).toBe(seconds);
+    expect(fx.recorded).toHaveLength(1);
+  });
+});
+
+describe("settings panel custom cooldown button", () => {
+  it("reports a failed modal open with settings wording", async () => {
+    const fx = fixture();
+    const sessionId = openServerPanel(fx);
+    const press = fx.interaction(`st:cooldown-custom:${sessionId}`, { admin: true }) as unknown as {
+      interaction: { showModal: () => Promise<void> };
+    };
+    press.interaction.showModal = async () => {
+      throw new Error("modal rejected");
+    };
+    const said = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(fx.controller.handleComponent(press.interaction as never)).resolves.toBeUndefined();
+    } finally {
+      said.mockRestore();
+    }
+    const text = JSON.stringify(press.sent);
+    expect(text).toContain(SETTINGS_FAILURE);
+    expect(text).not.toContain("Card lookup failed");
+  });
+
+  it("opens the cooldown modal for the session", async () => {
+    const fx = fixture();
+    const sessionId = openServerPanel(fx);
+    const press = fx.interaction(`st:cooldown-custom:${sessionId}`, { admin: true }) as unknown as {
+      interaction: { showModal: (modal: { toJSON(): { custom_id: string } }) => Promise<void> };
+    };
+    const opened: string[] = [];
+    press.interaction.showModal = async (modal) => void opened.push(modal.toJSON().custom_id);
+    await fx.controller.handleComponent(press.interaction as never);
+    expect(opened).toEqual([`st:cooldown-modal:${sessionId}`]);
   });
 });
