@@ -21,6 +21,7 @@ coverage/
 *.rej
 
 # runtime state
+.bot.lock*
 .bot.pid
 *.log
 preview/

@@ -68,4 +68,4 @@ TCGdex 404 responses use the same expiry as the requested endpoint. The client m
 
 All these stores are in memory. A restart clears paged lists and reloads data on demand. Reads do not extend page expiry, and capacity eviction can remove a list earlier
 
-[src/single-instance.ts](../src/single-instance.ts) checks a `.bot.pid` file, kept in `DATA_DIR` when that is configured and in the working directory otherwise, against the local process table. Run one instance per bot token, including across separate checkouts or hosts
+[src/single-instance.ts](../src/single-instance.ts) holds the instance lock through a SQLite file (`.bot.lock`) in `DATA_DIR` (or the working directory). The kernel drops the lock when the process dies, so a crash needs no cleanup. `DATA_DIR` must be a local filesystem, since network mounts make SQLite locking unreliable. Run one instance per bot token, including across separate checkouts or hosts
