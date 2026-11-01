@@ -1,7 +1,11 @@
 import { MessageFlags, type Interaction } from "discord.js";
 import { OverloadedError } from "../api/limiter.js";
 
-const FAILURE = "Card lookup failed, try again.";
+/** Message the failure reporter uses for a settings panel that cannot open part of its UI. */
+export const SETTINGS_FAILURE = "The settings panel could not open that control. Try /settings again.";
+
+/** Message the generic reporter must not use for a settings surface. */
+export const FAILURE = "Card lookup failed, try again.";
 
 /** Maps an admission refusal to the hint a member can act on. */
 export function overloadHint(error: unknown): number | undefined {
@@ -13,9 +17,9 @@ export function busyMessage(retryAfterSeconds: number): string {
 }
 
 /** Reports failure through a reply, deferred-command edit or ephemeral follow-up. */
-export async function reportInteractionFailure(interaction: Interaction, error?: unknown): Promise<void> {
+export async function reportInteractionFailure(interaction: Interaction, error?: unknown, message = FAILURE): Promise<void> {
   const hint = overloadHint(error);
-  const content = hint === undefined ? FAILURE : busyMessage(hint);
+  const content = hint === undefined ? message : busyMessage(hint);
   // Autocomplete has no reply channel, so a refused lookup answers with an empty list.
   if (interaction.isAutocomplete()) {
     await interaction.respond([]).catch(() => {});

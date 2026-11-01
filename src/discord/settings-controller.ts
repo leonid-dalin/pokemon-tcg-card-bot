@@ -14,6 +14,7 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { renderPanel } from "./settings-panel.js";
+import { SETTINGS_FAILURE } from "./interaction-failure.js";
 import { SettingsSessions, type SettingsSession } from "./settings-session.js";
 
 export interface SettingsPanelContext {
@@ -332,7 +333,9 @@ export class SettingsPanelController {
                 .setRequired(true),
             ),
           );
-        await interaction.showModal(modal);
+        await Promise.resolve(interaction.showModal(modal)).catch(async (error: unknown) => {
+          await this.reportOpenFailure(interaction, error);
+        });
         return;
       }
       case "reset":
@@ -643,6 +646,20 @@ export class SettingsPanelController {
 
   private async announceChange(interaction: PanelInteraction & { guildId: string }, lines: string[]): Promise<void> {
     await this.announce?.(interaction.guildId, interaction.channelId, lines);
+  }
+
+  /**
+   * Answers a panel failure with settings wording. The generic reporter's text
+   * names a card lookup, which reads as a bug on a settings control.
+   */
+  private async reportOpenFailure(interaction: PanelInteraction, error: unknown): Promise<void> {
+    console.error(`settings panel control failed (${errorCategory(error)})`);
+    const notice = { content: SETTINGS_FAILURE, flags: MessageFlags.Ephemeral };
+    const sent = await (interaction.deferred || interaction.replied
+      ? interaction.followUp(notice as never)
+      : interaction.reply(notice as never)
+    ).then(() => true, () => false);
+    if (!sent) throw error;
   }
 }
 

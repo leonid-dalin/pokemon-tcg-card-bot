@@ -719,7 +719,7 @@ describe("settings panel cooldown input", () => {
 });
 
 describe("settings panel custom cooldown button", () => {
-  it("lets a failed modal open reach the caller's failure handling", async () => {
+  it("reports a failed modal open with settings wording", async () => {
     const fx = fixture();
     const sessionId = openServerPanel(fx);
     const press = fx.interaction(`st:cooldown-custom:${sessionId}`, { admin: true }) as unknown as {
@@ -728,7 +728,15 @@ describe("settings panel custom cooldown button", () => {
     press.interaction.showModal = async () => {
       throw new Error("modal rejected");
     };
-    await expect(fx.controller.handleComponent(press.interaction as never)).rejects.toThrow("modal rejected");
+    const said = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(fx.controller.handleComponent(press.interaction as never)).resolves.toBeUndefined();
+    } finally {
+      said.mockRestore();
+    }
+    const text = JSON.stringify(press.sent);
+    expect(text).toContain("settings panel could not open");
+    expect(text).not.toContain("Card lookup failed");
   });
 
   it("opens the cooldown modal for the session", async () => {
