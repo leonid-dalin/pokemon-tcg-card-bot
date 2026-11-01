@@ -73,33 +73,50 @@ function nameTokens(name: string): string[] {
 }
 
 /**
- * True when the candidate is a printing of what the query asked for: the query's
- * words appear whole, in order and contiguous, with only an owner or mechanic
- * prefix before them and at most one mechanic suffix after. Words are never
- * removed or swapped, so "mega charizard x ex" cannot match Mega Charizard Y ex,
- * and "mew" cannot match Mewtwo.
+ * True when the candidate is a printing of what the query asked for. A prefix the
+ * user typed (mega, an owner name) is part of the query, so it must appear in the
+ * candidate; the candidate may add more prefixes before it, a Mega letter after
+ * the name, and at most one mechanic suffix. Words are compared whole, so "mew"
+ * never matches Mewtwo and "mega charizard x" never matches the Y.
  */
 export function isPrintingOf(query: string, candidate: string): boolean {
   const wanted = nameTokens(query);
   const words = nameTokens(candidate);
   if (wanted.length === 0 || words.length < wanted.length) return false;
 
-  let start = 0;
-  while (start < words.length && start < words.length - wanted.length) {
-    const token = words[start]!;
-    if (!POSSESSIVE.test(token) && !NAME_PREFIXES.has(token)) break;
-    start += 1;
-  }
-  const core = words.slice(start, start + wanted.length);
-  if (core.length !== wanted.length || core.some((token, index) => token !== wanted[index])) return false;
+  // A trailing mechanic suffix in the query is matched as the candidate's suffix
+  // rather than as part of the name, so the core is the query without it.
+  const lastWanted = wanted.at(-1)!;
+  const wantedHasSuffix = wanted.length > 1 && NAME_SUFFIXES.has(lastWanted);
+  const nameWords = wantedHasSuffix ? wanted.slice(0, -1) : wanted;
+  const wantedEndsMega = /^[xy]$/.test(lastWanted);
 
-  // A Mega letter follows the name only when the query did not name one itself.
-  const rest = words.slice(start + wanted.length);
-  if (rest[0] && /^[xy]$/.test(rest[0]) && words.slice(0, start).includes("mega") && !/^[xy]$/.test(wanted.at(-1)!)) {
-    rest.shift();
+  for (let start = 0; start <= words.length - nameWords.length; start += 1) {
+    // Every word before the match must be an R3 prefix.
+    const before = words.slice(0, start);
+    if (!before.every((token) => POSSESSIVE.test(token) || NAME_PREFIXES.has(token))) continue;
+
+    // The match itself must equal the query core, token for token.
+    const core = words.slice(start, start + nameWords.length);
+    if (core.some((token, index) => token !== nameWords[index])) continue;
+
+    // After the match the candidate may add a Mega letter and one suffix.
+    const rest = words.slice(start + nameWords.length);
+    let cursor = 0;
+    const megaAllowed = (before.includes("mega") || nameWords.includes("mega")) && !wantedEndsMega;
+    if (rest[cursor] && /^[xy]$/.test(rest[cursor]!) && megaAllowed) cursor += 1;
+
+    const suffixToken = rest[cursor];
+    if (wantedHasSuffix) {
+      // The query named a suffix, so the candidate must carry exactly it.
+      if (suffixToken !== lastWanted) continue;
+      cursor += 1;
+    } else if (suffixToken && NAME_SUFFIXES.has(suffixToken)) {
+      cursor += 1;
+    }
+    if (cursor === rest.length) return true;
   }
-  if (rest.length === 0) return true;
-  return rest.length === 1 && NAME_SUFFIXES.has(rest[0]!);
+  return false;
 }
 
 /**

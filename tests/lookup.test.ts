@@ -334,6 +334,24 @@ describe("lookupCard", () => {
     expect(lookup?.card.id).toBe("me02-014");
   });
 
+  it("answers iono's bellibolt with the newest printing and lists the older one", async () => {
+    stubFetch({
+      "/cards?name=": {
+        body: [
+          { id: "sv08-043", name: "Iono's Bellibolt ex", localId: "043", image: "https://assets.tcgdex.net/en/sv/sv08/043" },
+          { id: "sv10-059", name: "Iono's Bellibolt ex", localId: "059", image: "https://assets.tcgdex.net/en/sv/sv10/059" },
+        ],
+      },
+      "/cards/sv10-059": { body: { ...dragapult, id: "sv10-059", name: "Iono's Bellibolt ex", localId: "059" } },
+      "/cards/sv08-043": { body: { ...dragapult, id: "sv08-043", name: "Iono's Bellibolt ex", localId: "043" } },
+    });
+    const client = new TcgdexClient({ retries: 0 });
+    const lookup = await lookupCard(client, "iono's bellibolt");
+    expect(lookup?.card.id).toBe("sv10-059");
+    const alternates = lookup?.alternates.map((card) => card.id) ?? [];
+    expect(alternates).toContain("sv08-043");
+  });
+
   it("prefers the newest series among art-bearing printings", async () => {
     stubFetch({
       "/cards?name=": {

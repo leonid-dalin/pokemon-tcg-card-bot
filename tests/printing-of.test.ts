@@ -61,4 +61,23 @@ describe("isPrintingOf", () => {
   it("never matches an empty query", () => {
     expect(isPrintingOf("", "Charizard")).toBe(false);
   });
+
+  it("matches a query that starts with a prefix word", () => {
+    expect(isPrintingOf("mega charizard ex", "Mega Charizard X ex")).toBe(true);
+    expect(isPrintingOf("mega charizard", "Mega Charizard X ex")).toBe(true);
+    expect(isPrintingOf("mega charizard y", "Mega Charizard Y ex")).toBe(true);
+    expect(isPrintingOf("ethan's ho-oh", "Ethan's Ho-Oh ex")).toBe(true);
+    expect(isPrintingOf("team rocket's moltres", "Team Rocket's Moltres ex")).toBe(true);
+    expect(isPrintingOf("rocket's moltres ex", "Team Rocket's Moltres ex")).toBe(true);
+    expect(isPrintingOf("iono's bellibolt", "Iono's Bellibolt ex")).toBe(true);
+    expect(isPrintingOf("mega venusaur", "Mega Venusaur ex")).toBe(true);
+  });
+
+  it("keeps a typed prefix from being dropped", () => {
+    expect(isPrintingOf("mega charizard x", "Mega Charizard Y ex")).toBe(false);
+    expect(isPrintingOf("iono's bellibolt ex", "Iono's Bellibolt V")).toBe(false);
+    expect(isPrintingOf("team rocket's moltres", "Moltres ex")).toBe(false);
+    expect(isPrintingOf("ethan's ho-oh", "Ho-Oh ex")).toBe(false);
+    expect(isPrintingOf("mega charizard", "Charizard ex")).toBe(false);
+  });
 });
