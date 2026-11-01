@@ -8,11 +8,11 @@ let shutdownHandlersRegistered = false;
 
 export function acquireSingleInstanceLock(path = ".bot.lock"): boolean {
   if (held.has(path)) return true;
+  let db: DatabaseSync | undefined;
   try {
-    const db = new DatabaseSync(path, { timeout: 0 });
+    db = new DatabaseSync(path, { timeout: 0 });
     // journal_mode=MEMORY keeps the rollback journal in memory, so no .bot.lock-journal sidecar is written.
     db.exec("PRAGMA journal_mode=MEMORY");
-    db.exec("PRAGMA locking_mode=EXCLUSIVE");
     db.exec("BEGIN EXCLUSIVE");
     held.set(path, db);
     registerShutdownHandlers();
@@ -26,6 +26,7 @@ export function acquireSingleInstanceLock(path = ".bot.lock"): boolean {
     } else {
       console.error(`could not take the lock at ${path} (${(error as Error).message})`);
     }
+    db?.close();
     return false;
   }
 }

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,12 +28,24 @@ test("a second process is refused, then reacquires after the first is killed", a
       if (!out.includes("READY")) reject(new Error(`child exited before ready (code ${code})`));
     });
   });
-  await ready;
+  try {
+    await ready;
 
-  expect(acquireSingleInstanceLock(lock)).toBe(false);
+    expect(acquireSingleInstanceLock(lock)).toBe(false);
 
-  child.kill("SIGKILL");
-  await new Promise<void>((resolve) => child.on("exit", () => resolve()));
+    child.kill("SIGKILL");
+    await new Promise<void>((resolve) => child.on("exit", () => resolve()));
 
-  expect(acquireSingleInstanceLock(lock)).toBe(true);
+    expect(acquireSingleInstanceLock(lock)).toBe(true);
+  } finally {
+    if (!child.killed) child.kill("SIGKILL");
+    // Best effort: Windows refuses to remove a directory while a handle is open.
+    // A cleanup failure must not mask an assertion failure.
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // The module holds the lock file for the process life, so the directory can
+      // survive on Windows. The OS clears the temp tree later.
+    }
+  }
 }, 30_000);
