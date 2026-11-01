@@ -80,4 +80,12 @@ describe("isPrintingOf", () => {
     expect(isPrintingOf("ethan's ho-oh", "Ho-Oh ex")).toBe(false);
     expect(isPrintingOf("mega charizard", "Charizard ex")).toBe(false);
   });
+
+  it("does not skip a Mega letter when the query names a suffix", () => {
+    expect(isPrintingOf("charizard ex", "Mega Charizard X ex")).toBe(false);
+    expect(isPrintingOf("charizard ex", "Mega Charizard Y ex")).toBe(false);
+    expect(isPrintingOf("charizard EX", "Mega Charizard X ex")).toBe(false);
+    expect(isPrintingOf("charizard", "Mega Charizard X ex")).toBe(true);
+    expect(isPrintingOf("mega charizard ex", "Mega Charizard Y ex")).toBe(true);
+  });
 });

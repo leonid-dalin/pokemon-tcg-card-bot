@@ -103,7 +103,7 @@ export function isPrintingOf(query: string, candidate: string): boolean {
     // After the match the candidate may add a Mega letter and one suffix.
     const rest = words.slice(start + nameWords.length);
     let cursor = 0;
-    const megaAllowed = (before.includes("mega") || nameWords.includes("mega")) && !wantedEndsMega;
+    const megaAllowed = !wantedEndsMega && (nameWords.includes("mega") || (before.includes("mega") && !wantedHasSuffix));
     if (rest[cursor] && /^[xy]$/.test(rest[cursor]!) && megaAllowed) cursor += 1;
 
     const suffixToken = rest[cursor];
