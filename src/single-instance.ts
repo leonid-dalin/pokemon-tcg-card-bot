@@ -10,6 +10,8 @@ export function acquireSingleInstanceLock(path = ".bot.lock"): boolean {
   if (held.has(path)) return true;
   try {
     const db = new DatabaseSync(path, { timeout: 0 });
+    // journal_mode=MEMORY keeps the rollback journal in memory, so no .bot.lock-journal sidecar is written.
+    db.exec("PRAGMA journal_mode=MEMORY");
     db.exec("PRAGMA locking_mode=EXCLUSIVE");
     db.exec("BEGIN EXCLUSIVE");
     held.set(path, db);
