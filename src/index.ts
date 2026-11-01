@@ -51,7 +51,7 @@ if (config.dataDir) {
     process.exit(1);
   }
 }
-if (!acquireSingleInstanceLock(config.dataDir ? join(config.dataDir, ".bot.pid") : undefined)) {
+if (!acquireSingleInstanceLock(config.dataDir ? join(config.dataDir, ".bot.lock") : undefined)) {
   process.exit(1);
 }
 
