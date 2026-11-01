@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MessageFlags } from "discord.js";
+import { SETTINGS_FAILURE } from "../src/discord/interaction-failure.js";
 import type { GuildSettings } from "../src/settings-store.js";
 import { SettingsPanelController, baselineOf } from "../src/discord/settings-controller.js";
 import { SettingsSessions } from "../src/discord/settings-session.js";
@@ -735,7 +736,7 @@ describe("settings panel custom cooldown button", () => {
       said.mockRestore();
     }
     const text = JSON.stringify(press.sent);
-    expect(text).toContain("settings panel could not open");
+    expect(text).toContain(SETTINGS_FAILURE);
     expect(text).not.toContain("Card lookup failed");
   });
 
