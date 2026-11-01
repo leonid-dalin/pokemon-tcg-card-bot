@@ -260,7 +260,7 @@ function takeStale(candidate: string, path: string): boolean {
 }
 
 /** Moves a stale lock aside and claims the freed path, under the takeover marker. */
-function clearStale(candidate: string, path: string, pid: number | undefined): boolean {
+export function clearStale(candidate: string, path: string, pid: number | undefined): boolean {
   const aside = `${candidate}.stale`;
   try {
     renameSync(path, aside);
@@ -275,6 +275,12 @@ function clearStale(candidate: string, path: string, pid: number | undefined): b
     asidePid = holder(aside);
   } catch (error) {
     console.error(`could not read the moved lock at ${aside} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
+    // The moved copy cannot be read, so drop it rather than leave it behind.
+    try {
+      unlinkSync(aside);
+    } catch {
+      // The moved copy is gone already.
+    }
     return false;
   }
   if (asidePid !== pid) {

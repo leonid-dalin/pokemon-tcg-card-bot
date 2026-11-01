@@ -64,6 +64,32 @@ describe("an unreadable moved lock", () => {
   });
 });
 
+describe("a moved lock that cannot be read", () => {
+  it("drops the stale copy instead of leaving it behind", async () => {
+    let injected = false;
+    vi.doMock("node:fs", async () => {
+      const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+      return {
+        ...actual,
+        readFileSync: (path: never, options: never) => {
+          if (String(path).endsWith(".stale")) {
+            injected = true;
+            throw Object.assign(new Error("permission denied"), { code: "EACCES" });
+          }
+          return actual.readFileSync(path, options);
+        },
+      };
+    });
+    writeFileSync(lock, "2147483646");
+    const candidate = `${lock}.${process.pid}`;
+    const { clearStale } = await load();
+
+    expect(clearStale(candidate, lock, 2147483646)).toBe(false);
+    expect(injected).toBe(true);
+    expect(existsSync(`${candidate}.stale`)).toBe(false);
+  });
+});
+
 describe("a link that fails mid-claim", () => {
   it("declines instead of throwing", async () => {
     let injected = false;
