@@ -92,17 +92,28 @@ describe("search cache bounds", () => {
 });
 
 describe("a malformed 200 response", () => {
-  it("fails once without retrying or caching", async () => {
-    let fetches = 0;
+  function stubMalformed() {
+    const state = { fetches: 0 };
     vi.stubGlobal("fetch", async () => {
-      fetches += 1;
+      state.fetches += 1;
       return { ok: true, status: 200, json: async () => ({ notAnArray: true }) } as unknown as Response;
     });
+    return state;
+  }
+
+  it("fails once without retrying or caching", async () => {
+    const state = stubMalformed();
     const client = new TcgdexClient({ retries: 2 });
     await expect(client.searchByName("bad")).rejects.toBeInstanceOf(TcgdexError);
-    expect(fetches).toBe(1);
+    expect(state.fetches).toBe(1);
+    await expect(client.searchByName("bad")).rejects.toBeInstanceOf(TcgdexError);
+    expect(state.fetches).toBe(2);
+  });
+
+  it("keeps the search text out of the error message", async () => {
+    stubMalformed();
+    const client = new TcgdexClient({ retries: 0 });
     const error = await client.searchByName("my private words").catch((caught: unknown) => caught as Error);
     expect(error.message).not.toContain("private");
-    expect(fetches).toBe(2);
   });
 });
