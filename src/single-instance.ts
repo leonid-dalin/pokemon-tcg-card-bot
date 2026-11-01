@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 // and drops it when the process dies, so there is no stale lock, no pid reuse to
 // judge and no cleanup step. The handle is kept alive for the process life.
 const held = new Map<string, DatabaseSync>();
+let shutdownHandlersRegistered = false;
 
 export function acquireSingleInstanceLock(path = ".bot.lock"): boolean {
   if (held.has(path)) return true;
@@ -12,6 +13,7 @@ export function acquireSingleInstanceLock(path = ".bot.lock"): boolean {
     db.exec("PRAGMA locking_mode=EXCLUSIVE");
     db.exec("BEGIN EXCLUSIVE");
     held.set(path, db);
+    registerShutdownHandlers();
     return true;
   } catch (error) {
     const errcode = (error as { errcode?: number }).errcode;
@@ -26,5 +28,10 @@ export function acquireSingleInstanceLock(path = ".bot.lock"): boolean {
   }
 }
 
-process.on("SIGINT", () => process.exit(0));
-process.on("SIGTERM", () => process.exit(0));
+function registerShutdownHandlers(): void {
+  if (shutdownHandlersRegistered) return;
+  shutdownHandlersRegistered = true;
+  // index.ts registers no shutdown handler of its own, so exit on these signals.
+  process.on("SIGINT", () => process.exit(0));
+  process.on("SIGTERM", () => process.exit(0));
+}
