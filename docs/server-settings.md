@@ -24,7 +24,7 @@ Threads use their parent channel's selection. These restrictions apply to automa
 
 Card games accepts Physical, Pocket or Both. When both are allowed, a second choice picks which game wins an ambiguous card name. New servers allow both and prefer the physical game
 
-The allowed games limit what every card path may return: `/card`, card-name mentions, `/search`, mention search and card-name autocomplete, so a physical-only server does not return Pocket cards from any of them. The default game only settles an ambiguous name for `/card` and card-name mentions, which are the paths that answer with one card; `/search`, mention search and autocomplete list what the allowed games permit and keep their own order. An explicit game or set hint, or an exact card ID, takes precedence. Picking a card from a search result always opens that card, whatever the setting
+By default, the allowed games limit what these paths may return: `/card`, card-name mentions, `/search`, mention search and card-name autocomplete, so a physical-only server does not return Pocket cards from any of them. The default game only settles an ambiguous name for `/card` and card-name mentions, which are the paths that answer with one card; `/search`, mention search and autocomplete list what the allowed games permit and keep their own order. An explicit game or set hint, or an exact card ID, takes precedence. Picking a card from a search result always opens that card, whatever the setting
 
 ## Currency
 
