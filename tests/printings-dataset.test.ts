@@ -38,25 +38,28 @@ describe("printings across the committed index", () => {
   const entries = JSON.parse(readFileSync("src/data/text-index.json", "utf8")) as Entry[];
   const names = [...new Set(entries.map((entry) => entry.name))];
 
-  // Names grouped by their first token, so a printing query only meets the
-  // candidates that could actually carry its words rather than every name.
-  const byFirstToken = new Map<string, string[]>();
+  // Every token points at the names that carry it, so a query meets the
+  // candidates whose first token matches yet which add a prefix of their own
+  // (Ethan's Ho-Oh ex for ho-oh ex, Mega Charizard X ex for charizard ex).
+  const byToken = new Map<string, string[]>();
   for (const name of names) {
-    const first = tokensOf(name)[0];
-    if (!first) continue;
-    const bucket = byFirstToken.get(first) ?? [];
-    bucket.push(name);
-    byFirstToken.set(first, bucket);
+    for (const token of tokensOf(name)) {
+      const bucket = byToken.get(token) ?? [];
+      bucket.push(name);
+      byToken.set(token, bucket);
+    }
   }
 
   it("relates only names whose tokens appear whole and in order", () => {
     let related = 0;
+    let prefixed = 0;
     for (const name of names) {
       const needle = tokensOf(name);
-      const bucket = byFirstToken.get(needle[0] ?? "") ?? [];
+      const bucket = byToken.get(needle[0] ?? "") ?? [];
       for (const other of bucket) {
         if (other === name || !isPrintingOf(name, other)) continue;
         related += 1;
+        if (tokensOf(other)[0] !== needle[0]) prefixed += 1;
         // The matcher must not strip a suffix or swap one word for another; the
         // query's full token list has to sit inside the candidate as typed.
         expect(containsContiguous(tokensOf(other), needle), `${name} -> ${other}`).toBe(true);
@@ -64,7 +67,8 @@ describe("printings across the committed index", () => {
       }
     }
     expect(related).toBeGreaterThan(0);
-    console.log(`printings checked ${names.length} names, ${related} relations`);
+    expect(prefixed).toBeGreaterThan(0);
+    console.log(`printings checked ${names.length} names, ${related} relations, ${prefixed} with an added prefix`);
   });
 
   it("never drops a typed prefix or suffix on prefixed printings", () => {
