@@ -365,7 +365,7 @@ export class SettingsStore {
     this.db.prepare("DELETE FROM guild_settings WHERE guild_id = ?").run(guildId);
   }
 
-  /** Returns the user's stored currency, or undefined when they have not chosen one. */
+  /** Records a temporary exchange for deletion, evicting the earliest jobs beyond the cap. */
   scheduleCleanup(job: CleanupJob): void {
     const count = (this.db.prepare("SELECT COUNT(*) AS n FROM cleanup_jobs").get() as { n: number }).n;
     if (count >= MAX_CLEANUP_JOBS) {
@@ -401,6 +401,7 @@ export class SettingsStore {
     return (this.db.prepare("SELECT COUNT(*) AS n FROM cleanup_jobs").get() as { n: number }).n;
   }
 
+  /** Returns the user's stored currency, or undefined when they have not chosen one. */
   currencyFor(userId: string): Currency | undefined {
     const row = this.db.prepare("SELECT currency FROM user_settings WHERE user_id = ?").get(userId) as
       | { currency: string | null }
