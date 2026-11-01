@@ -5,7 +5,6 @@ interface RankedPrinting {
   score: number;
 }
 
-/** Normalises case, accents, apostrophes and whitespace for name comparison. */
 export function normaliseName(value: string): string {
   return value
     .normalize("NFKD")
@@ -16,13 +15,11 @@ export function normaliseName(value: string): string {
     .trim();
 }
 
-/** Extracts the set prefix before the final hyphen, or an empty string if absent. */
 export function setIdOf(cardId: string): string {
   const at = cardId.lastIndexOf("-");
   return at > 0 ? cardId.slice(0, at) : "";
 }
 
-/** Matches an exact set ID or a prefix/suffix hint after normalisation. */
 export function setIdMatches(cardId: string, hint: string): boolean {
   const setId = normaliseName(setIdOf(cardId));
   const wanted = normaliseName(hint);
@@ -92,15 +89,12 @@ export function isPrintingOf(query: string, candidate: string): boolean {
   const wantedEndsMega = /^[xy]$/.test(lastWanted);
 
   for (let start = 0; start <= words.length - nameWords.length; start += 1) {
-    // Every word before the match must be an R3 prefix.
     const before = words.slice(0, start);
     if (!before.every((token) => POSSESSIVE.test(token) || NAME_PREFIXES.has(token))) continue;
 
-    // The match itself must equal the query core, token for token.
     const core = words.slice(start, start + nameWords.length);
     if (core.some((token, index) => token !== nameWords[index])) continue;
 
-    // After the match the candidate may add a Mega letter and one suffix.
     const rest = words.slice(start + nameWords.length);
     let cursor = 0;
     const megaAllowed = !wantedEndsMega && (nameWords.includes("mega") || (before.includes("mega") && !wantedHasSuffix));

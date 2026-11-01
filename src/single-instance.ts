@@ -29,7 +29,6 @@ function holder(path: string): number | undefined {
 /** Filesystems that cannot hard link report one of these instead of creating it. */
 const LINK_UNSUPPORTED = new Set(["EPERM", "ENOTSUP", "EOPNOTSUPP", "EXDEV", "EMLINK", "EACCES"]);
 
-/** A holder that is gone, unreadable or this same pid cannot be running. */
 function isStale(pid: number | undefined): boolean {
   return pid === undefined || pid === process.pid || !isRunning(pid);
 }
@@ -106,7 +105,6 @@ function isEmptyMarker(path: string): boolean {
   }
 }
 
-/** True while a start that created the lock empty is still writing its pid. */
 function isFreshEmptyLock(path: string): boolean {
   try {
     return readFileSync(path, "utf8").trim() === "" && Date.now() - statSync(path).mtimeMs <= MARKER_WRITE_GRACE_MS;
@@ -115,7 +113,6 @@ function isFreshEmptyLock(path: string): boolean {
   }
 }
 
-/** True for an empty marker old enough that its writer is not coming back. */
 function isAbandonedMarker(path: string): boolean {
   try {
     return isEmptyMarker(path) && Date.now() - statSync(path).mtimeMs > MARKER_WRITE_GRACE_MS;
@@ -259,7 +256,6 @@ function takeStale(candidate: string, path: string): boolean {
   }
 }
 
-/** Moves a stale lock aside and claims the freed path, under the takeover marker. */
 export function clearStale(candidate: string, path: string, pid: number | undefined): boolean {
   const aside = `${candidate}.stale`;
   try {
@@ -275,7 +271,6 @@ export function clearStale(candidate: string, path: string, pid: number | undefi
     asidePid = holder(aside);
   } catch (error) {
     console.error(`could not read the moved lock at ${aside} (${(error as NodeJS.ErrnoException).code ?? "unknown"})`);
-    // The moved copy cannot be read, so drop it rather than leave it behind.
     try {
       unlinkSync(aside);
     } catch {
