@@ -119,7 +119,7 @@ SHA-256 checks detect transfer corruption. The release and checksum share GitHub
 | `/var/lib/pokemon-card-bot/data/settings.db` | Persistent per-server settings |
 | `/var/lib/pokemon-card-bot/invocations/` | Optional full invocation logs, enabled only by configuration |
 | `/run/pokemon-card-bot/` | Readiness file, recreated at boot |
-| `/var/lib/pokemon-card-bot/data/.bot.pid` | Single-instance lock inside the data directory |
+| `/var/lib/pokemon-card-bot/data/.bot.lock` | Instance lock (SQLite file) inside the data directory |
 | `/opt/pokemon-card-bot/releases/` | Installed release bundles |
 | `/opt/pokemon-card-bot/backups/` | Settings snapshots, owned by root |
 | `/opt/pokemon-card-bot/rollback.json` | Previous release and settings checkpoint |
