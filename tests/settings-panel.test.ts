@@ -717,3 +717,29 @@ describe("settings panel cooldown input", () => {
     expect(fx.recorded).toHaveLength(1);
   });
 });
+
+describe("settings panel custom cooldown button", () => {
+  it("lets a failed modal open reach the caller's failure handling", async () => {
+    const fx = fixture();
+    const sessionId = openServerPanel(fx);
+    const press = fx.interaction(`st:cooldown-custom:${sessionId}`, { admin: true }) as unknown as {
+      interaction: { showModal: () => Promise<void> };
+    };
+    press.interaction.showModal = async () => {
+      throw new Error("modal rejected");
+    };
+    await expect(fx.controller.handleComponent(press.interaction as never)).rejects.toThrow("modal rejected");
+  });
+
+  it("opens the cooldown modal for the session", async () => {
+    const fx = fixture();
+    const sessionId = openServerPanel(fx);
+    const press = fx.interaction(`st:cooldown-custom:${sessionId}`, { admin: true }) as unknown as {
+      interaction: { showModal: (modal: { toJSON(): { custom_id: string } }) => Promise<void> };
+    };
+    const opened: string[] = [];
+    press.interaction.showModal = async (modal) => void opened.push(modal.toJSON().custom_id);
+    await fx.controller.handleComponent(press.interaction as never);
+    expect(opened).toEqual([`st:cooldown-modal:${sessionId}`]);
+  });
+});

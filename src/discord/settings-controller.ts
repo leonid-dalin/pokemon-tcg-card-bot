@@ -332,7 +332,7 @@ export class SettingsPanelController {
                 .setRequired(true),
             ),
           );
-        interaction.showModal(modal);
+        await interaction.showModal(modal);
         return;
       }
       case "reset":
