@@ -1,8 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
 
-// The lock is a SQLite database, not a pid file. The kernel holds the file lock
-// and drops it when the process dies, so there is no stale lock, no pid reuse to
-// judge and no cleanup step. The handle is kept alive for the process life.
 const held = new Map<string, DatabaseSync>();
 let shutdownHandlersRegistered = false;
 
