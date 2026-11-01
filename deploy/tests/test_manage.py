@@ -482,6 +482,19 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue((self.root / "backups" / "2-old").exists())
         self.assertFalse((self.root / "backups" / "1-old").exists())
 
+    def test_prune_keeps_the_running_release_when_the_install_root_is_a_symlink(self):
+        link = self.base / "opt-link"
+        link.symlink_to(self.root, target_is_directory=True)
+        with patch.object(m, "ROOT", link):
+            running, previous = self.release(NEW), self.release(OLD)
+            (self.root / "backups" / "0-ref").mkdir()
+            (self.root / "backups" / "0-ref" / "previous").write_text(OLD)
+            (self.root / "rollback.json").write_text(json.dumps({"backup": "0-ref", "from": NEW}))
+            m.point_to(running)
+            m.prune()
+        self.assertTrue(running.exists())
+        self.assertTrue(previous.exists())
+
     def test_success_keeps_previous_release_and_rollback_restores_settings(self):
         previous, release = self.release(OLD), self.release(NEW)
         abandoned = self.release("c" * 40)
