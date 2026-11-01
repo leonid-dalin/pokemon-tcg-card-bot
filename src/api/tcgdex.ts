@@ -79,12 +79,14 @@ export class TcgdexClient {
   private remember(path: string, entry: Omit<CacheEntry, "weight">): void {
     const weight = Array.isArray(entry.value) ? entry.value.length : 1;
     this.forget(path);
+    // An entry that cannot fit the budget would evict everything else and then
+    // stay, so skip caching it rather than churn the cache around it.
+    if (weight > this.maxCachedItems) return;
     if (this.cache.size >= this.maxEntries) {
       const now = Date.now();
       for (const [key, held] of this.cache) if (held.expires <= now) this.forget(key);
     }
-    // Map iteration follows insertion order, so the first key is the oldest. A
-    // lone oversized entry is kept: the loop stops once nothing else is left.
+    // Map iteration follows insertion order, so the first key is the oldest.
     while (this.cache.size > 0 && (this.cache.size >= this.maxEntries || this.cachedItems + weight > this.maxCachedItems)) {
       const oldest = this.cache.keys().next().value;
       if (oldest === undefined) break;

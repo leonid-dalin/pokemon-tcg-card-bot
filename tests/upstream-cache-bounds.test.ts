@@ -8,7 +8,9 @@ function summaries(prefix: string, count: number) {
 function stubSearch(sizes: Record<string, number>) {
   const calls: string[] = [];
   vi.stubGlobal("fetch", async (url: string) => {
-    const name = new URL(String(url)).searchParams.get("name") ?? "";
+    const parsed = new URL(String(url));
+    const name = parsed.searchParams.get("name");
+    if (parsed.pathname !== "/v2/en/cards" || name === null) return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
     calls.push(name);
     return { ok: true, status: 200, json: async () => summaries(name, sizes[name] ?? 10) } as unknown as Response;
   });
@@ -64,12 +66,24 @@ describe("search cache bounds", () => {
     expect(calls).toEqual([]);
   });
 
-  it("keeps a lone oversized entry rather than refusing to cache it", async () => {
+  it("returns an oversized response without caching it", async () => {
     const calls = stubSearch({ aa: 2000 });
     const client = new TcgdexClient({ retries: 0, maxCachedItems: 100 });
+    expect(await client.searchByName("aa")).toHaveLength(500);
+    expect(await client.searchByName("aa")).toHaveLength(500);
+    expect(calls).toEqual(["aa", "aa"]);
+  });
+
+  it("leaves the entries within the budget alone when a large one arrives", async () => {
+    const calls = stubSearch({ aa: 10, bb: 10, big: 2000 });
+    const client = new TcgdexClient({ retries: 0, maxCachedItems: 100 });
     await client.searchByName("aa");
+    await client.searchByName("bb");
+    await client.searchByName("big");
+    calls.length = 0;
     await client.searchByName("aa");
-    expect(calls).toEqual(["aa"]);
+    await client.searchByName("bb");
+    expect(calls).toEqual([]);
   });
 
   it("releases the weight of an expired entry that is refreshed", async () => {
@@ -94,7 +108,11 @@ describe("search cache bounds", () => {
 describe("a malformed 200 response", () => {
   function stubMalformed() {
     const state = { fetches: 0 };
-    vi.stubGlobal("fetch", async () => {
+    vi.stubGlobal("fetch", async (input: string) => {
+      const parsed = new URL(String(input));
+      if (parsed.pathname !== "/v2/en/cards" || !parsed.searchParams.has("name")) {
+        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+      }
       state.fetches += 1;
       return { ok: true, status: 200, json: async () => ({ notAnArray: true }) } as unknown as Response;
     });
@@ -115,5 +133,13 @@ describe("a malformed 200 response", () => {
     const client = new TcgdexClient({ retries: 0 });
     const error = await client.searchByName("my private words").catch((caught: unknown) => caught as Error);
     expect(error.message).not.toContain("private");
+  });
+});
+
+describe("the stub only answers the search route", () => {
+  it("returns a 404 for a listing request", async () => {
+    stubSearch({ ar: 10 });
+    const client = new TcgdexClient({ retries: 0 });
+    await expect(client.listCards()).rejects.toBeInstanceOf(TcgdexError);
   });
 });
