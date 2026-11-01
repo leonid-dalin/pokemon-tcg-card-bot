@@ -5,6 +5,7 @@ interface RankedPrinting {
   score: number;
 }
 
+/** Normalises case, accents, apostrophes and whitespace for name comparison. */
 export function normaliseName(value: string): string {
   return value
     .normalize("NFKD")
@@ -15,11 +16,13 @@ export function normaliseName(value: string): string {
     .trim();
 }
 
+/** Returns the set id before the final hyphen, or an empty string when the id has none. */
 export function setIdOf(cardId: string): string {
   const at = cardId.lastIndexOf("-");
   return at > 0 ? cardId.slice(0, at) : "";
 }
 
+/** Matches an exact set id or a prefix or suffix hint after normalisation. */
 export function setIdMatches(cardId: string, hint: string): boolean {
   const setId = normaliseName(setIdOf(cardId));
   const wanted = normaliseName(hint);
@@ -46,7 +49,6 @@ export function scoreCandidate(query: string, candidate: string): number {
   if (tokens.length > 1 && tokens.every((token) => c.includes(token))) return 30 - extra;
   return 0;
 }
-
 
 /** Prefixes the data uses ahead of a card name without changing which Pokémon it is. */
 const NAME_PREFIXES = new Set(["mega", "team", "radiant", "shining", "dark", "light"]);
