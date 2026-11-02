@@ -519,10 +519,31 @@ class DeploymentTests(unittest.TestCase):
                                     "previous": previous.name, "backup": backup.name})
             (backup / "previous").write_text(previous.name)
             m.point_to(release)
-            with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"),                     patch.object(m.os, "chown"):
+            with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"), \
+                    patch.object(m.os, "chown"):
                 m.recover()
         self.assertEqual(m.current(), previous)
         self.assertEqual(self.value(), "original")
+
+    def test_recover_keeps_live_settings_when_a_manual_rollback_already_switched_under_a_symlinked_root(self):
+        link = self.base / "opt-manual"
+        link.symlink_to(self.root, target_is_directory=True)
+        with patch.object(m, "ROOT", link):
+            previous, release = self.release(OLD), self.release(NEW)
+            m.point_to(previous)
+            self.database("checkpoint")
+            backup = self.root / "backups" / "manual-linked"
+            m.snapshot(backup)
+            (backup / "previous").write_text(previous.name)
+            m.atomic_json(m.STATE, {"phase": "manual", "release": release.name,
+                                    "previous": previous.name, "backup": backup.name})
+            self.database("live")
+            with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control, \
+                    patch.object(m.os, "chown"):
+                m.recover()
+        self.assertEqual(self.value(), "live")
+        self.assertEqual([call.args for call in control.call_args_list], [("start", m.SERVICE)])
+        self.assertFalse(m.STATE.exists())
 
     def test_success_keeps_previous_release_and_rollback_restores_settings(self):
         previous, release = self.release(OLD), self.release(NEW)
