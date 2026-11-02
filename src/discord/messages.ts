@@ -5,7 +5,7 @@ import { MentionBudget } from "../cooldown.js";
 import { MAX_DECK_LINES, parseDecklist } from "../decklist.js";
 import { resolveDeckCards } from "../deck-check.js";
 import { errorCategory } from "../diagnostics.js";
-import { lookupCard, splitTrailingSet, suggestNames, type CardLookup } from "../lookup.js";
+import { lookupCard, suggestNames, type CardLookup } from "../lookup.js";
 import { extractMentions, parseHelpCommand, parseInlineCommand, parseSearchCommand } from "../mentions.js";
 import { listReply, type ListPage } from "./pages.js";
 import { printingsOf, printingItems } from "../printings.js";
@@ -295,10 +295,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         ...(gamePreference ? { gamePreference } : {}),
       };
       for (const mention of mentions) {
-        let lookup = await lookupCard(api, mention.name, mention.setHint, options);
-        // "kingdra swsh10" names its set after a space instead of a pipe.
-        const split = !lookup && !mention.setHint ? splitTrailingSet(mention.name) : undefined;
-        if (split) lookup = await lookupCard(api, split.name, split.setHint, options);
+        const lookup = await lookupCard(api, mention.name, mention.setHint, options);
         console.log(`mention lookup -> ${lookup ? lookup.card.id : "no match"}`);
         if (lookup) found.push(mention.imageOnly ? { ...lookup, imageOnly: true } : lookup);
         else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5) });

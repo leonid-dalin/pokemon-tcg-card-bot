@@ -51,17 +51,24 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
   return [...printings, ...others];
 }
 
-/**
- * Splits "kingdra swsh10" into a name and a trailing set hint when the last
- * word is an exact set code or id. A word that ends real card names ("ex" is
- * also Expedition's code) never counts as a set.
- */
 export function splitTrailingSet(query: string): { name: string; setHint: string } | undefined {
   const words = query.trim().split(/\s+/);
   if (words.length < 2) return undefined;
   const last = words[words.length - 1]!;
+  const name = words.slice(0, -1).join(" ");
+  const printed = /^(.+)-(\d{1,3}[a-z]?)$/i.exec(last);
+  if (printed && exactSetHint(printed[1]!) && !isCardNameEnding(printed[1]!)) {
+    return { name, setHint: `${printed[1]} ${printed[2]}` };
+  }
   if (!exactSetHint(last) || isCardNameEnding(last)) return undefined;
-  return { name: words.slice(0, -1).join(" "), setHint: last };
+  return { name, setHint: last };
+}
+
+async function lookupTrailingSet(client: TcgdexClient, query: string, options: LookupOptions): Promise<CardLookup | undefined> {
+  const split = splitTrailingSet(query);
+  if (!split) return undefined;
+  const found = await lookupCard(client, split.name, split.setHint, options);
+  return found && isPrintingOf(split.name, found.card.name) ? found : undefined;
 }
 
 /** Within each match tier, the hinted set's own cards come before its subsets'. */
@@ -364,6 +371,8 @@ export async function lookupCard(
     : rankedBySet;
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
+    const viaSet = setHint ? undefined : await lookupTrailingSet(client, query, options);
+    if (viaSet) return viaSet;
     if (preference?.allowed === "ptcg" || forcedPhysical) return undefined;
     // A concrete hint stays a requirement here: an empty filtered set must not
     // widen to every package printing.
