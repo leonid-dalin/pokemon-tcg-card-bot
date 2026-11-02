@@ -15,7 +15,7 @@ describe("splitTrailingSet", () => {
     expect(splitTrailingSet(query)).toEqual(expected);
   });
 
-  it.each([["kingdra"], ["pikachu ex"], ["kingdra notaset"]])("leaves %s alone", (query) => {
+  it.each([["kingdra"], ["pikachu ex"], ["kingdra notaset"], ["ASR"]])("leaves %s alone", (query) => {
     expect(splitTrailingSet(query)).toBeUndefined();
   });
 

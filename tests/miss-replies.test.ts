@@ -7,6 +7,7 @@ import { handleOpenCardMenu } from "../src/discord/commands.js";
 import { CleanupWorker, MISS_DELETE_AFTER_MS } from "../src/discord/cleanup-worker.js";
 import { createMessageHandler, type IncomingMessage } from "../src/discord/messages.js";
 import { PageStore } from "../src/discord/pages.js";
+import { splitTrailingSet } from "../src/lookup.js";
 
 const dragapult = JSON.parse(readFileSync(new URL("./fixtures/dragapult-ex-sv08.5-073.json", import.meta.url), "utf8")) as Card;
 const SUMMARIES: CardSummary[] = [
@@ -169,5 +170,83 @@ describe("cleanup worker for a bot-only job", () => {
     const worker = new CleanupWorker({} as never, { completeCleanup: (id: string) => void completed.push(id) } as never);
     worker.cancel("reply-1");
     expect(completed).toEqual(["reply-1"]);
+  });
+});
+
+describe("several misses in one message", () => {
+  it("gives each unmatched mention its own reply and its own timer", async () => {
+    const { replies, cleanup } = await mention("[[Dragapult zzz]] [[Dragapult qqq]]");
+    expect(replies).toHaveLength(2);
+    expect(replies[0]?.content).toBe("No card matched `Dragapult zzz`. Pick the closest below.");
+    expect(replies[1]?.content).toBe("No card matched `Dragapult qqq`. Pick the closest below.");
+    expect(cleanup.scheduled.map((entry) => entry.job.botMessageId)).toEqual(["bot-1", "bot-2"]);
+  });
+
+  it("keeps an explicit set hint that matches nothing as a miss", async () => {
+    const { replies } = await mention("[[Dragapult sv06|zzz]]");
+    expect(replies).toHaveLength(1);
+    expect(String(replies[0]?.content)).toContain("No card matched");
+    expect(replies[0]?.embeds).toBeUndefined();
+  });
+});
+
+describe("picking from a miss menu when the pick cannot complete", () => {
+  it("restarts the timer and answers privately when the member is over budget", async () => {
+    const cleanup = cleanupSpy();
+    const { interaction, calls, followUps } = pick("sv08.5-073");
+    const context = { ...commandContext(cleanup), requests: { take: () => ({ allowed: false as const, retryAfterSeconds: 3 }) } };
+    await handleOpenCardMenu(context as never, interaction as never);
+    expect(calls).toEqual(["deferUpdate", "followUp"]);
+    expect(followUps[0]?.flags).toBe(MessageFlags.Ephemeral);
+    expect(cleanup.cancelled).toEqual(["bot-1"]);
+    expect(cleanup.scheduled).toEqual([{ job: { botMessageId: "bot-1", channelId: "c" }, after: MISS_DELETE_AFTER_MS }]);
+  });
+
+  it("restarts the timer and rethrows when the lookup fails upstream", async () => {
+    const cleanup = cleanupSpy();
+    const { interaction } = pick("sv01-999");
+    const failing = { getCard: async () => { throw new TcgdexError("upstream 500", 500); } } as unknown as TcgdexClient;
+    const context = { ...commandContext(cleanup), client: failing };
+    await expect(handleOpenCardMenu(context as never, interaction as never)).rejects.toBeInstanceOf(TcgdexError);
+    expect(cleanup.cancelled).toEqual(["bot-1"]);
+    expect(cleanup.scheduled).toEqual([{ job: { botMessageId: "bot-1", channelId: "c" }, after: MISS_DELETE_AFTER_MS }]);
+  });
+});
+
+describe("splitTrailingSet reads an exact set only", () => {
+  it("splits an exact set id and keeps the name", () => {
+    expect(splitTrailingSet("Kingdra swsh10")).toEqual({ name: "Kingdra", setHint: "swsh10" });
+  });
+
+  it("does not read a partial set name as a set", () => {
+    expect(splitTrailingSet("Pikachu violet")).toBeUndefined();
+  });
+});
+
+describe("a miss menu belongs to the member who asked", () => {
+  it("puts the asker's id in the menu's component id", async () => {
+    const { replies } = await mention("[[Dragapult zzz]]");
+    expect(customIds(replies[0]!)).toContain("open:miss0:1");
+  });
+
+  it("refuses a pick from anyone else and leaves the reply and its timer alone", async () => {
+    const cleanup = cleanupSpy();
+    const { interaction, calls, edits } = pick("sv08.5-073");
+    interaction.customId = "open:miss0:1";
+    interaction.user = { id: "2" };
+    await handleOpenCardMenu(commandContext(cleanup) as never, interaction as never);
+    expect(calls).toEqual(["reply"]);
+    expect(edits).toEqual([]);
+    expect(cleanup.cancelled).toEqual([]);
+    expect(cleanup.scheduled).toEqual([]);
+  });
+
+  it("lets the asker pick", async () => {
+    const cleanup = cleanupSpy();
+    const { interaction, calls, edits } = pick("sv08.5-073");
+    interaction.customId = "open:miss0:1";
+    await handleOpenCardMenu(commandContext(cleanup) as never, interaction as never);
+    expect(calls).toEqual(["deferUpdate", "editReply"]);
+    expect(JSON.stringify(edits[0])).toContain("printing:sv06-130:1");
   });
 });

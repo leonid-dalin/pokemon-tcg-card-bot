@@ -10,6 +10,7 @@ const context = (pages = new PageStore()) => ({
   attribution: "Card data from TCGdex",
   energyEmoji: {},
   pages,
+  cleanup: { schedule: () => undefined, cancel: () => undefined },
 });
 
 describe("details button", () => {

@@ -35,7 +35,7 @@ export function setRecency(cardId: string): number {
  */
 export function setFamily(setId: string): string[] {
   const entry = byId.get(normaliseName(setId));
-  if (!entry?.code || entry.code.includes(":")) return [setId];
+  if (!entry?.code) return [setId];
   const prefix = `${entry.code.toUpperCase()}:`;
   const subsets = SET_INDEX.filter((candidate) => candidate.code?.toUpperCase().startsWith(prefix)).map((candidate) => candidate.id);
   return [entry.id, ...subsets];

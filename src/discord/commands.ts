@@ -45,11 +45,10 @@ export interface CommandContext {
   typing?: {
     take: (key: string) => { allowed: true } | { allowed: false; retryAfterSeconds: number };
   } | undefined;
-  /** Deletes an unpicked "No card matched" reply; a pick cancels the deletion. */
-  cleanup?: {
+  cleanup: {
     schedule: (job: { botMessageId: string; channelId: string }, deleteAfterMs?: number) => void;
     cancel: (botMessageId: string) => void;
-  } | undefined;
+  };
 }
 
 /** Admits an expensive lookup, or reports the wait so the caller can answer before starting work. */
@@ -334,6 +333,14 @@ export async function handleOpenCardMenu(
   const cardId = interaction.values[0];
   if (!cardId) return;
   if (interaction.customId === MISS_MENU_ID || interaction.customId.startsWith(MISS_MENU_PREFIX)) {
+    const owner = interaction.customId.split(":")[2];
+    if (owner && owner !== interaction.user.id) {
+      await interaction.reply({
+        content: "Only the person who asked can pick from this. Ask for your own copy with [[name]] or /card.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
     await replaceMissWithCard(context, interaction, cardId);
     return;
   }
@@ -370,8 +377,8 @@ async function replaceMissWithCard(
 ): Promise<void> {
   await interaction.deferUpdate();
   const messageId = interaction.message.id;
-  context.cleanup?.cancel(messageId);
-  const keepTimer = () => context.cleanup?.schedule({ botMessageId: messageId, channelId: interaction.channelId }, MISS_DELETE_AFTER_MS);
+  context.cleanup.cancel(messageId);
+  const keepTimer = () => context.cleanup.schedule({ botMessageId: messageId, channelId: interaction.channelId }, MISS_DELETE_AFTER_MS);
   const admission = admitRequest(context, interaction.guildId, interaction.user.id);
   if (!admission.allowed) {
     keepTimer();
@@ -390,7 +397,7 @@ async function replaceMissWithCard(
     await interaction.followUp({ content: `No card matched \`${cardId}\`.`, flags: MessageFlags.Ephemeral });
     return;
   }
-  await interaction.editReply({ content: "", components: [], ...cardReply(lookup, interaction.user.id) });
+  await interaction.editReply({ content: "", ...cardReply(lookup, interaction.user.id) });
 }
 
 export async function handleSearchCommand(

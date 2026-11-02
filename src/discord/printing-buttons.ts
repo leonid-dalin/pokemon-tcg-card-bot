@@ -58,14 +58,14 @@ export function cardmarketRow(cardId: string, name: string): ActionRowBuilder<Bu
 }
 
 /** Builds a suggestion menu with a distinct component ID for each miss. */
-export function missMenu(closest: CardSummary[], index = 0): ActionRowBuilder<StringSelectMenuBuilder>[] {
+export function missMenu(closest: CardSummary[], index = 0, ownerId?: string): ActionRowBuilder<StringSelectMenuBuilder>[] {
   if (closest.length === 0) return [];
   const options = closest.slice(0, MAX_OPTIONS).map((card) => ({
     label: `${card.name} · ${printedNumber(card.id)}`.slice(0, 100),
     value: card.id,
   }));
   const menu = new StringSelectMenuBuilder()
-    .setCustomId(`${MISS_MENU_PREFIX}${index}`)
+    .setCustomId(`${MISS_MENU_PREFIX}${index}${ownerId ? `:${ownerId}` : ""}`)
     .setPlaceholder("Pick the closest card")
     .addOptions(options);
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];
