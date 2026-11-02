@@ -7,7 +7,7 @@ import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { findExactCardName } from "./text-search.js";
 import { isPocketCard, isPocketSet } from "./prizes.js";
-import { isPocketHint, packageSetId, resolveSetHint, setRecency } from "./set-index.js";
+import { isPocketHint, packageSetId, resolveSetHint, setFamily, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
 
 export interface CardLookup {
@@ -49,6 +49,16 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
       return score !== 0 ? score : byDisplay(a, b);
     });
   return [...printings, ...others];
+}
+
+/** Within each match tier, the hinted set's own cards come before its subsets'. */
+function hintedSetFirst(ordered: CardSummary[], query: string, setId: string): CardSummary[] {
+  const tier = (card: CardSummary) => (isPrintingOf(query, card.name) ? 0 : 1);
+  const own = (card: CardSummary) => (normaliseName(setIdOf(card.id)) === normaliseName(setId) ? 0 : 1);
+  return ordered
+    .map((card, index) => ({ card, index }))
+    .sort((a, b) => tier(a.card) - tier(b.card) || own(a.card) - own(b.card) || a.index - b.index)
+    .map((entry) => entry.card);
 }
 
 // Locale fallback order for card responses without displayable prices.
@@ -333,9 +343,11 @@ export async function lookupCard(
   const matched = (preference?.allowed === "ptcg" ? summaries.filter((card) => !isPocketCard(card as Card)) : summaries).filter(Boolean) as CardSummary[];
   const rankedBySet = rankPrintings(matched, query, resolved);
 
-  // Enforce the exact resolved set after rankPrintings' partial set matching.
-  const ranked = resolved
-    ? rankedBySet.filter((card) => normaliseName(setIdOf(card.id)) === normaliseName(resolved))
+  // Enforce the resolved set and its subsets after rankPrintings' partial set
+  // matching: a Trainer Gallery card is printed under its main set's code.
+  const family = resolved ? new Set(setFamily(resolved).map(normaliseName)) : undefined;
+  const ranked = family
+    ? rankedBySet.filter((card) => family.has(normaliseName(setIdOf(card.id))))
     : rankedBySet;
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
@@ -347,10 +359,11 @@ export async function lookupCard(
 
   // For a shared name, the preferred game wins before artwork or recency comparisons.
   const physicalRanked = ranked.filter((card) => !isPocketCard(card as Card));
-  const ordered = orderForDisplay(
+  const displayed = orderForDisplay(
     preference?.allowed === "both" && preference.default === "ptcg" && physicalRanked.length ? physicalRanked : ranked,
     query,
   );
+  const ordered = resolved ? hintedSetFirst(displayed, query, resolved) : displayed;
   const [primary] = ordered;
   if (!primary) return undefined;
 

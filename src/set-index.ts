@@ -30,6 +30,18 @@ export function setRecency(cardId: string): number {
 }
 
 /**
+ * A set and the subsets printed under its code: swsh10 also covers swsh10tg
+ * (ASR:TG). A subset or an uncoded set covers only itself.
+ */
+export function setFamily(setId: string): string[] {
+  const entry = byId.get(normaliseName(setId));
+  if (!entry?.code || entry.code.includes(":")) return [setId];
+  const prefix = `${entry.code.toUpperCase()}:`;
+  const subsets = SET_INDEX.filter((candidate) => candidate.code?.toUpperCase().startsWith(prefix)).map((candidate) => candidate.id);
+  return [entry.id, ...subsets];
+}
+
+/**
  * Resolves a printed code, set ID, or full/partial set name against the index.
  * Returns undefined when the hint has no match.
  */
