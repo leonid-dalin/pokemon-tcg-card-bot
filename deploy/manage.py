@@ -214,8 +214,8 @@ def recover():
     try:
         state = json.loads(STATE.read_text())
         phase = state["phase"]
-        release = ROOT / "releases" / valid_sha(state["release"])
-        previous = ROOT / "releases" / valid_sha(state["previous"])
+        release = (ROOT / "releases" / valid_sha(state["release"])).resolve()
+        previous = (ROOT / "releases" / valid_sha(state["previous"])).resolve()
         backup = ROOT / "backups" / state["backup"]
     except (OSError, ValueError, KeyError, TypeError):
         print("Unreadable update state; see docs/deployment.md for manual recovery", file=sys.stderr)
@@ -322,7 +322,7 @@ def activate(release):
 
 def fetch(sha):
     valid_sha(sha)
-    target = ROOT / "releases" / sha
+    target = (ROOT / "releases" / sha).resolve()
     if target.exists():
         manifest(target, sha)
         return target
@@ -411,6 +411,8 @@ def restore(source):
 
 
 def prune():
+    # current() returns a resolved path, so compare resolved paths: iterdir() on a
+    # symlinked install root yields unresolved ones and would miss the running release.
     keep = {current()}
     rollback = ROOT / "rollback.json"
     keep_backups = set()
@@ -418,9 +420,9 @@ def prune():
         info = json.loads(rollback.read_text())
         keep_backups.add(info["backup"])
         previous = (ROOT / "backups" / info["backup"] / "previous").read_text().strip()
-        keep.add(ROOT / "releases" / valid_sha(previous))
+        keep.add((ROOT / "releases" / valid_sha(previous)).resolve())
     for release in (ROOT / "releases").iterdir():
-        if SHA.fullmatch(release.name) and release not in keep and not release.is_symlink():
+        if SHA.fullmatch(release.name) and release.resolve() not in keep and not release.is_symlink():
             shutil.rmtree(release)
     checkpoints = [path for path in (ROOT / "backups").iterdir()
                    if path.is_dir() and not path.name.endswith("-manual")]

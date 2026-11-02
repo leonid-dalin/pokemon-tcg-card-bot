@@ -1,7 +1,7 @@
 import { MessageFlags, type Interaction } from "discord.js";
 import { OverloadedError } from "../api/limiter.js";
 
-/** Message the failure reporter uses for a settings panel that cannot open part of its UI. */
+/** Message the failure reporter uses for any failure on a settings surface. */
 export const SETTINGS_FAILURE = "Something went wrong in the settings panel. Try /settings again.";
 
 /** Message the generic reporter must not use for a settings surface. */
