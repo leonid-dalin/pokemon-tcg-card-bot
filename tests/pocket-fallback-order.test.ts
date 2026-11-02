@@ -37,6 +37,10 @@ describe("a trailing set code beats the package's partial name match", () => {
     expect(lookup?.card.id).toBe("me01-031");
   });
 
+  it("does not let Pocket preference bypass a trailing physical set", async () => {
+    const lookup = await lookupCard(client, "chi-yu meg-31", undefined, { gamePreference: { allowed: "pocket", default: "pocket" } });
+    expect(lookup?.card.id).toBe("me01-031");
+  });
   it("finds it with no preference stored", async () => {
     const lookup = await lookupCard(client, "chi-yu meg-31", undefined, {});
     expect(lookup?.card.id).toBe("me01-031");

@@ -364,6 +364,8 @@ export async function lookupCard(
   // fallback keep their existing behaviour.
   const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
   const preference = options.gamePreference;
+  const viaSet = setHint ? undefined : await lookupTrailingSet(client, query, options);
+  if (viaSet !== undefined) return viaSet.lookup;
   if (hintPocketSet && preference && preference.allowed !== "both") {
     return lookupPocket(query, setHint, options, true, packageSetId(resolved));
   }
@@ -378,20 +380,12 @@ export async function lookupCard(
   }
   const summaries = await searchWithAccents(client, query);
   const matched = (preference?.allowed === "ptcg" ? summaries.filter((card) => !isPocketCard(card as Card)) : summaries).filter(Boolean) as CardSummary[];
-  const rankedBySet = rankPrintings(matched, query, resolved);
-
-  // Enforce the resolved set and its subsets after rankPrintings' partial set
-  // matching: a Trainer Gallery card is printed under its main set's code.
   const family = resolved ? new Set(setFamily(resolved).map(normaliseName)) : undefined;
-  const ranked = family
-    ? rankedBySet.filter((card) => family.has(normaliseName(setIdOf(card.id))))
-    : rankedBySet;
+  const familyMatched = family ? matched.filter((card) => family.has(normaliseName(setIdOf(card.id)))) : matched;
+  const ranked = rankPrintings(familyMatched, query);
+
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
-    // A trailing set code ("chi-yu meg") is a set request, not a name: the package
-    // matches any text that contains one of its names, so it must not answer first.
-    const viaSet = setHint ? undefined : await lookupTrailingSet(client, query, options);
-    if (viaSet) return viaSet.lookup;
     if (preference?.allowed === "ptcg" || forcedPhysical) return undefined;
     // A concrete hint stays a requirement here: an empty filtered set must not
     // widen to every package printing.

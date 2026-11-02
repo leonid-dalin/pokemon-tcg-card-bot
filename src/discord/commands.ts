@@ -27,7 +27,7 @@ import { MISS_DELETE_AFTER_MS } from "./cleanup-worker.js";
 import { versionActions, versionDetailsEmbed, versionEmbed } from "./version-view.js";
 
 const AUTOCOMPLETE_DEADLINE_MS = 2000;
-const missTransitions = new Map<string, { converted: boolean; running?: Promise<void> }>();
+const missTransitions = new Map<string, { converted: boolean; running?: Promise<void>; cleanupTimer?: NodeJS.Timeout }>();
 
 export interface CommandContext {
   client: TcgdexClient;
@@ -382,11 +382,20 @@ async function replaceMissWithCard(
   const state = missTransitions.get(messageId) ?? { converted: false };
   missTransitions.set(messageId, state);
   if (state.converted) return;
+  // A second selection waits for the first result so one reply cannot be converted twice.
   if (state.running) return state.running;
   const run = (async () => {
     context.cleanup.cancel(messageId);
+    const releaseState = () => {
+      if (state.cleanupTimer) clearTimeout(state.cleanupTimer);
+      state.cleanupTimer = setTimeout(() => missTransitions.delete(messageId), MISS_DELETE_AFTER_MS + 1_000);
+      state.cleanupTimer.unref?.();
+    };
     const keepTimer = () => {
-      if (!state.converted) context.cleanup.schedule({ botMessageId: messageId, channelId: interaction.channelId }, MISS_DELETE_AFTER_MS);
+      if (!state.converted) {
+        context.cleanup.schedule({ botMessageId: messageId, channelId: interaction.channelId }, MISS_DELETE_AFTER_MS);
+        releaseState();
+      }
     };
     const admission = admitRequest(context, interaction.guildId, interaction.user.id);
     if (!admission.allowed) {
@@ -409,6 +418,7 @@ async function replaceMissWithCard(
     try {
       await interaction.editReply({ content: "", ...cardReply(lookup, interaction.user.id) });
       state.converted = true;
+      releaseState();
     } catch (error) {
       keepTimer();
       throw error;

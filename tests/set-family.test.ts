@@ -13,6 +13,8 @@ const CARDS = [
   summary("swsh11-037", "Kingdra"),
   summary("swsh10-085", "Kleavor"),
   summary("swsh10tg-TG08", "Kleavor"),
+  summary("sma-SV10", "Quagsire"),
+  summary("xy10-105a", "N"),
 ];
 
 /** Name search and card fetch over a fixed list; no network. */
@@ -48,6 +50,10 @@ describe("a main-set hint covers its gallery subsets", () => {
     expect(found?.card.id).toBe("swsh11-037");
   });
 
+  it("finds an uncoded Shiny Vault card through the main set hint", async () => {
+    const found = await lookupCard(client, "Quagsire", "sm115");
+    expect(found?.card.id).toBe("sma-SV10");
+  });
   it("includes the uncoded Hidden Fates Shiny Vault family", () => {
     expect(setFamily("sm115")).toContain("sma");
   });
