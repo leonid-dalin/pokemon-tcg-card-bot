@@ -214,8 +214,8 @@ def recover():
     try:
         state = json.loads(STATE.read_text())
         phase = state["phase"]
-        release = ROOT / "releases" / valid_sha(state["release"])
-        previous = ROOT / "releases" / valid_sha(state["previous"])
+        release = (ROOT / "releases" / valid_sha(state["release"])).resolve()
+        previous = (ROOT / "releases" / valid_sha(state["previous"])).resolve()
         backup = ROOT / "backups" / state["backup"]
     except (OSError, ValueError, KeyError, TypeError):
         print("Unreadable update state; see docs/deployment.md for manual recovery", file=sys.stderr)
@@ -322,7 +322,7 @@ def activate(release):
 
 def fetch(sha):
     valid_sha(sha)
-    target = ROOT / "releases" / sha
+    target = (ROOT / "releases" / sha).resolve()
     if target.exists():
         manifest(target, sha)
         return target

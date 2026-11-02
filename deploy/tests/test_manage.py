@@ -495,6 +495,35 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(running.exists())
         self.assertTrue(previous.exists())
 
+    def test_activate_finds_the_running_release_when_the_install_root_is_a_symlink(self):
+        link = self.base / "opt-activate"
+        link.symlink_to(self.root, target_is_directory=True)
+        with patch.object(m, "ROOT", link):
+            running = self.release(NEW)
+            m.point_to(running)
+            with patch.object(m, "active", return_value=True), patch.object(m, "systemctl") as control:
+                m.activate(m.fetch(NEW))
+        self.assertEqual(control.call_count, 0)
+
+    def test_recover_restores_settings_when_the_install_root_is_a_symlink(self):
+        link = self.base / "opt-recover"
+        link.symlink_to(self.root, target_is_directory=True)
+        with patch.object(m, "ROOT", link):
+            previous, release = self.release(OLD), self.release(NEW)
+            m.point_to(previous)
+            self.database("original")
+            backup = self.root / "backups" / "linked"
+            m.snapshot(backup)
+            m.begin_activation(release, previous, backup)
+            m.atomic_json(m.STATE, {"phase": "switched", "release": release.name,
+                                    "previous": previous.name, "backup": backup.name})
+            (backup / "previous").write_text(previous.name)
+            m.point_to(release)
+            with patch.object(m, "active", return_value=True), patch.object(m, "systemctl"),                     patch.object(m.os, "chown"):
+                m.recover()
+        self.assertEqual(m.current(), previous)
+        self.assertEqual(self.value(), "original")
+
     def test_success_keeps_previous_release_and_rollback_restores_settings(self):
         previous, release = self.release(OLD), self.release(NEW)
         abandoned = self.release("c" * 40)
