@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    allow:
+      - dependency-name: "@fawazahmed0/currency-api"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    commit-message:
+      prefix: "chore"
