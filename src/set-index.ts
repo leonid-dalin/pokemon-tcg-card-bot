@@ -41,6 +41,13 @@ export function setFamily(setId: string): string[] {
   return [entry.id, ...subsets];
 }
 
+/** Resolves only an exact printed code or set id, never a partial set name. */
+export function exactSetHint(hint: string): string | undefined {
+  const trimmed = hint.trim();
+  if (!trimmed) return undefined;
+  return byCode.get(trimmed.toUpperCase()) ?? byId.get(normaliseName(trimmed))?.id;
+}
+
 /**
  * Resolves a printed code, set ID, or full/partial set name against the index.
  * Returns undefined when the hint has no match.

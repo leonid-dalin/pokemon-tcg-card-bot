@@ -16,7 +16,7 @@ Use these commands in a Discord server where the bot is installed, or in a direc
 
 ## Card mentions
 
-In chat, use `[[Card name]]`, with up to three distinct names per message. Add a set ID, printed set code or set name after `|` to choose a printing, such as `[[Charizard ex|sv03]]`. A main set also covers its gallery subsets, so `[[Kingdra|ASR]]` finds the Astral Radiance Trainer Gallery card. An exact card ID also works: `[[Dragapult ex|sv08.5-073]]`
+In chat, use `[[Card name]]`, with up to three distinct names per message. Add a set ID, printed set code or set name after `|` to choose a printing, such as `[[Charizard ex|sv03]]`. A main set also covers its gallery subsets, so `[[Kingdra|ASR]]` finds the Astral Radiance Trainer Gallery card. When a name finds nothing, a set ID or printed code as its last word counts as the hint: `[[Kingdra swsh10]]` works like `[[Kingdra|swsh10]]`. An exact card ID also works: `[[Dragapult ex|sv08.5-073]]`
 
 Use `pocket`, `ptcgp` or `tcgp` as the hint for Pocket cards, or `[[!Card name]]` for the scan alone. Names tolerate differences in case, accents and apostrophes. Card mentions inside inline code or code blocks are ignored
 

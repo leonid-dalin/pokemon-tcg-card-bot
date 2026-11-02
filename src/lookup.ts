@@ -5,9 +5,9 @@ import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
 import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
-import { findExactCardName } from "./text-search.js";
+import { findExactCardName, isCardNameEnding } from "./text-search.js";
 import { isPocketCard, isPocketSet } from "./prizes.js";
-import { isPocketHint, packageSetId, resolveSetHint, setFamily, setRecency } from "./set-index.js";
+import { isPocketHint, packageSetId, resolveSetHint, exactSetHint, setFamily, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
 
 export interface CardLookup {
@@ -49,6 +49,19 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
       return score !== 0 ? score : byDisplay(a, b);
     });
   return [...printings, ...others];
+}
+
+/**
+ * Splits "kingdra swsh10" into a name and a trailing set hint when the last
+ * word is an exact set code or id. A word that ends real card names ("ex" is
+ * also Expedition's code) never counts as a set.
+ */
+export function splitTrailingSet(query: string): { name: string; setHint: string } | undefined {
+  const words = query.trim().split(/\s+/);
+  if (words.length < 2) return undefined;
+  const last = words[words.length - 1]!;
+  if (!exactSetHint(last) || isCardNameEnding(last)) return undefined;
+  return { name: words.slice(0, -1).join(" "), setHint: last };
 }
 
 /** Within each match tier, the hinted set's own cards come before its subsets'. */
