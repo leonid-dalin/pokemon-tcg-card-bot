@@ -81,7 +81,11 @@ async function lookupTrailingSet(client: TcgdexClient, query: string, options: L
   const split = splitTrailingSet(query);
   if (!split) return undefined;
   const found = await lookupCard(client, split.name, split.setHint, options);
-  return found && isPrintingOf(split.name, found.card.name) ? { lookup: found } : {};
+  if (!found || !isPrintingOf(split.name, found.card.name)) return {};
+  const hintToken = split.setHint.trim().split(/\s+/, 1)[0]!;
+  const resolved = exactSetHint(hintToken) ?? resolveSetHint(split.setHint);
+  if (!resolved || !setFamily(resolved).some((setId) => normaliseName(setId) === normaliseName(setIdOf(found.card.id)))) return {};
+  return { lookup: found };
 }
 
 /** Within each match tier, the hinted set's own cards come before its subsets'. */

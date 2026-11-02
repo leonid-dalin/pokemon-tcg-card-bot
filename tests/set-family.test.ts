@@ -48,6 +48,10 @@ describe("a main-set hint covers its gallery subsets", () => {
     expect(found?.card.id).toBe("swsh11-037");
   });
 
+  it("includes the uncoded Hidden Fates Shiny Vault family", () => {
+    expect(setFamily("sm115")).toContain("sma");
+  });
+
   it("pairs every indexed subset with a main set whose partial match keeps it", () => {
     const subsets = SET_INDEX.filter((entry) => entry.code?.includes(":"));
     expect(subsets.length).toBeGreaterThan(0);

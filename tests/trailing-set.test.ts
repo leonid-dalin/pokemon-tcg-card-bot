@@ -59,6 +59,6 @@ describe("a mention with a trailing set code", () => {
     expect(replies).toHaveLength(1);
     expect(replies[0]?.content).toBeUndefined();
     const embeds = replies[0]?.embeds as { data: { footer?: { text: string } } }[];
-    expect(JSON.stringify(embeds)).toContain("PRE");
+    expect(embeds[0]?.data.footer?.text).toContain("PRE");
   });
 });

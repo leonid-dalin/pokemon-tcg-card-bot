@@ -27,6 +27,7 @@ import { MISS_DELETE_AFTER_MS } from "./cleanup-worker.js";
 import { versionActions, versionDetailsEmbed, versionEmbed } from "./version-view.js";
 
 const AUTOCOMPLETE_DEADLINE_MS = 2000;
+const missTransitions = new Map<string, { converted: boolean; running?: Promise<void> }>();
 
 export interface CommandContext {
   client: TcgdexClient;
@@ -341,6 +342,7 @@ export async function handleOpenCardMenu(
       });
       return;
     }
+    if (missTransitions.get(interaction.message.id)?.converted) return;
     await replaceMissWithCard(context, interaction, cardId);
     return;
   }
@@ -377,27 +379,47 @@ async function replaceMissWithCard(
 ): Promise<void> {
   await interaction.deferUpdate();
   const messageId = interaction.message.id;
-  context.cleanup.cancel(messageId);
-  const keepTimer = () => context.cleanup.schedule({ botMessageId: messageId, channelId: interaction.channelId }, MISS_DELETE_AFTER_MS);
-  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
-  if (!admission.allowed) {
-    keepTimer();
-    await interaction.followUp({ content: busyMessage(admission.retryAfterSeconds), flags: MessageFlags.Ephemeral });
-    return;
-  }
-  let lookup;
+  const state = missTransitions.get(messageId) ?? { converted: false };
+  missTransitions.set(messageId, state);
+  if (state.converted) return;
+  if (state.running) return state.running;
+  const run = (async () => {
+    context.cleanup.cancel(messageId);
+    const keepTimer = () => {
+      if (!state.converted) context.cleanup.schedule({ botMessageId: messageId, channelId: interaction.channelId }, MISS_DELETE_AFTER_MS);
+    };
+    const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+    if (!admission.allowed) {
+      keepTimer();
+      await interaction.followUp({ content: busyMessage(admission.retryAfterSeconds), flags: MessageFlags.Ephemeral });
+      return;
+    }
+    let lookup;
+    try {
+      lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
+    } catch (error) {
+      keepTimer();
+      throw error;
+    }
+    if (!lookup) {
+      keepTimer();
+      await interaction.followUp({ content: `No card matched \`${cardId}\`.`, flags: MessageFlags.Ephemeral });
+      return;
+    }
+    try {
+      await interaction.editReply({ content: "", ...cardReply(lookup, interaction.user.id) });
+      state.converted = true;
+    } catch (error) {
+      keepTimer();
+      throw error;
+    }
+  })();
+  state.running = run;
   try {
-    lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
-  } catch (error) {
-    keepTimer();
-    throw error;
+    await run;
+  } finally {
+    if (state.running === run) state.running = undefined;
   }
-  if (!lookup) {
-    keepTimer();
-    await interaction.followUp({ content: `No card matched \`${cardId}\`.`, flags: MessageFlags.Ephemeral });
-    return;
-  }
-  await interaction.editReply({ content: "", ...cardReply(lookup, interaction.user.id) });
 }
 
 export async function handleSearchCommand(

@@ -30,7 +30,12 @@ function cleanupSpy() {
     scheduled,
     cancelled,
     schedule: (job: { botMessageId: string; channelId: string; invokeMessageId?: string }, after?: number) => void scheduled.push({ job, after }),
-    cancel: (id: string) => void cancelled.push(id),
+    cancel: (id: string) => {
+      cancelled.push(id);
+      for (let index = scheduled.length - 1; index >= 0; index -= 1) {
+        if (scheduled[index]?.job.botMessageId === id) scheduled.splice(index, 1);
+      }
+    },
   };
 }
 
@@ -84,21 +89,26 @@ describe("a miss reply", () => {
   });
 });
 
-function pick(value: string) {
+function pick(value: string, editReplyOverride?: (payload: Record<string, unknown>) => Promise<void>, messageId = "bot-1") {
   const calls: string[] = [];
   const edits: Record<string, unknown>[] = [];
+  const editReply = editReplyOverride ?? (async (payload: Record<string, unknown>) => void edits.push(payload));
   const followUps: Record<string, unknown>[] = [];
+
   const interaction = {
     customId: "open:miss0",
     values: [value],
-    message: { id: "bot-1" },
+    message: { id: messageId },
     channelId: "c",
     guildId: null,
     user: { id: "1" },
     deferUpdate: async () => void calls.push("deferUpdate"),
     deferReply: async () => void calls.push("deferReply"),
     reply: async () => void calls.push("reply"),
-    editReply: async (payload: Record<string, unknown>) => void (calls.push("editReply"), edits.push(payload)),
+    editReply: async (payload: Record<string, unknown>) => {
+      calls.push("editReply");
+      await editReply(payload);
+    },
     followUp: async (payload: Record<string, unknown>) => void (calls.push("followUp"), followUps.push(payload)),
   };
   return { interaction, calls, edits, followUps };
@@ -125,14 +135,42 @@ describe("picking from a miss menu", () => {
     expect(customIds(edits[0]!)).not.toContain("open:miss");
   });
 
+  it("reschedules the miss when converting the reply fails", async () => {
+    const cleanup = cleanupSpy();
+    const failingEdit = async () => { throw new Error("edit failed"); };
+    const { interaction } = pick("sv08.5-073", failingEdit, "bot-edit-failure");
+    await expect(handleOpenCardMenu(commandContext(cleanup) as never, interaction as never)).rejects.toThrow("edit failed");
+    expect(cleanup.cancelled).toEqual(["bot-edit-failure"]);
+    expect(cleanup.scheduled).toEqual([{ job: { botMessageId: "bot-edit-failure", channelId: "c" }, after: MISS_DELETE_AFTER_MS }]);
+  });
+  it("serializes overlapping picks for one reply", async () => {
+    const cleanup = cleanupSpy();
+    let release!: () => void;
+    let started!: () => void;
+    const editGate = new Promise<void>((resolve) => { release = resolve; });
+    const editStarted = new Promise<void>((resolve) => { started = resolve; });
+    const first = pick("sv08.5-073", async () => {
+      started();
+      await editGate;
+    }, "bot-overlap");
+    const second = pick("sv08.5-073", undefined, "bot-overlap");
+    const context = commandContext(cleanup) as never;
+    const firstRun = handleOpenCardMenu(context, first.interaction as never);
+    await editStarted;
+    const secondRun = handleOpenCardMenu(context, second.interaction as never);
+    release();
+    await Promise.all([firstRun, secondRun]);
+    expect(cleanup.cancelled).toEqual(["bot-overlap"]);
+    expect(cleanup.scheduled).toEqual([]);
+  });
   it("keeps the miss and its timer when the picked card cannot be found", async () => {
     const cleanup = cleanupSpy();
-    const { interaction, calls, followUps } = pick("sv01-999");
+    const { interaction, calls, followUps } = pick("sv01-999", undefined, "bot-not-found");
     await handleOpenCardMenu(commandContext(cleanup) as never, interaction as never);
     expect(calls).toEqual(["deferUpdate", "followUp"]);
     expect(followUps[0]?.flags).toBe(MessageFlags.Ephemeral);
-    expect(cleanup.cancelled).toEqual(["bot-1"]);
-    expect(cleanup.scheduled).toEqual([{ job: { botMessageId: "bot-1", channelId: "c" }, after: MISS_DELETE_AFTER_MS }]);
+    expect(cleanup.cancelled).toEqual(["bot-not-found"]);
+    expect(cleanup.scheduled).toEqual([{ job: { botMessageId: "bot-not-found", channelId: "c" }, after: MISS_DELETE_AFTER_MS }]);
   });
 });
 
@@ -193,23 +231,23 @@ describe("several misses in one message", () => {
 describe("picking from a miss menu when the pick cannot complete", () => {
   it("restarts the timer and answers privately when the member is over budget", async () => {
     const cleanup = cleanupSpy();
-    const { interaction, calls, followUps } = pick("sv08.5-073");
+    const { interaction, calls, followUps } = pick("sv08.5-073", undefined, "bot-budget");
     const context = { ...commandContext(cleanup), requests: { take: () => ({ allowed: false as const, retryAfterSeconds: 3 }) } };
     await handleOpenCardMenu(context as never, interaction as never);
     expect(calls).toEqual(["deferUpdate", "followUp"]);
     expect(followUps[0]?.flags).toBe(MessageFlags.Ephemeral);
-    expect(cleanup.cancelled).toEqual(["bot-1"]);
-    expect(cleanup.scheduled).toEqual([{ job: { botMessageId: "bot-1", channelId: "c" }, after: MISS_DELETE_AFTER_MS }]);
+    expect(cleanup.cancelled).toEqual(["bot-budget"]);
+    expect(cleanup.scheduled).toEqual([{ job: { botMessageId: "bot-budget", channelId: "c" }, after: MISS_DELETE_AFTER_MS }]);
   });
 
   it("restarts the timer and rethrows when the lookup fails upstream", async () => {
     const cleanup = cleanupSpy();
-    const { interaction } = pick("sv01-999");
+    const { interaction } = pick("sv01-999", undefined, "bot-upstream");
     const failing = { getCard: async () => { throw new TcgdexError("upstream 500", 500); } } as unknown as TcgdexClient;
     const context = { ...commandContext(cleanup), client: failing };
     await expect(handleOpenCardMenu(context as never, interaction as never)).rejects.toBeInstanceOf(TcgdexError);
-    expect(cleanup.cancelled).toEqual(["bot-1"]);
-    expect(cleanup.scheduled).toEqual([{ job: { botMessageId: "bot-1", channelId: "c" }, after: MISS_DELETE_AFTER_MS }]);
+    expect(cleanup.cancelled).toEqual(["bot-upstream"]);
+    expect(cleanup.scheduled).toEqual([{ job: { botMessageId: "bot-upstream", channelId: "c" }, after: MISS_DELETE_AFTER_MS }]);
   });
 });
 
@@ -243,8 +281,7 @@ describe("a miss menu belongs to the member who asked", () => {
 
   it("lets the asker pick", async () => {
     const cleanup = cleanupSpy();
-    const { interaction, calls, edits } = pick("sv08.5-073");
-    interaction.customId = "open:miss0:1";
+    const { interaction, calls, edits } = pick("sv08.5-073", undefined, "bot-asker");
     await handleOpenCardMenu(commandContext(cleanup) as never, interaction as never);
     expect(calls).toEqual(["deferUpdate", "editReply"]);
     expect(JSON.stringify(edits[0])).toContain("printing:sv06-130:1");

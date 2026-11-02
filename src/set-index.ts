@@ -38,6 +38,7 @@ export function setFamily(setId: string): string[] {
   if (!entry?.code) return [setId];
   const prefix = `${entry.code.toUpperCase()}:`;
   const subsets = SET_INDEX.filter((candidate) => candidate.code?.toUpperCase().startsWith(prefix)).map((candidate) => candidate.id);
+  if (entry.id === "sm115") subsets.push("sma");
   return [entry.id, ...subsets];
 }
 
