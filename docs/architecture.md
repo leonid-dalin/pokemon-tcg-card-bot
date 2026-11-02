@@ -20,7 +20,7 @@ For a name lookup:
 2. A Pocket alias selects the local Pocket package
 3. Other set hints resolve through [src/set-index.ts](../src/set-index.ts). An unknown hint returns no match
 4. The bot searches TCGdex by name, trying supported accent substitutions if the literal search is empty
-5. Candidates rank by name score, image availability, then set recency. A resolved set hint restricts the candidates to that exact set
+5. Candidates rank by name score, image availability, then set recency. A resolved set hint restricts the candidates to that set and the subsets printed under its code, such as `swsh10tg` (ASR:TG) for `swsh10`, with the set's own cards first
 6. If no candidates remain, the bot tries the Pocket package
 7. The selected TCGdex card loads with pricing fallback through French, German, Spanish, Italian and Portuguese records. The first record with displayable prices replaces the card response, including its other fields
 

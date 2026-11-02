@@ -5,9 +5,9 @@ import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
 import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
-import { findExactCardName } from "./text-search.js";
+import { findExactCardName, isCardNameEnding } from "./text-search.js";
 import { isPocketCard, isPocketSet } from "./prizes.js";
-import { isPocketHint, packageSetId, resolveSetHint, setRecency } from "./set-index.js";
+import { isPocketHint, packageSetId, resolveSetHint, exactSetHint, setFamily, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
 
 export interface CardLookup {
@@ -49,6 +49,56 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
       return score !== 0 ? score : byDisplay(a, b);
     });
   return [...printings, ...others];
+}
+
+/**
+ * Splits "kingdra swsh10" into a name and a trailing set hint when the last
+ * word is an exact set code or id, and "chi-yu meg-31" into a name and the
+ * printed code "meg 31". A word that ends real card names ("ex" is also
+ * Expedition's code) never counts as a set.
+ */
+export function splitTrailingSet(query: string): { name: string; setHint: string } | undefined {
+  const words = query.trim().split(/\s+/);
+  if (words.length < 2) return undefined;
+  const last = words[words.length - 1]!;
+  const name = words.slice(0, -1).join(" ");
+  const printed = /^(.+)-(\d{1,3}[a-z]?)$/i.exec(last);
+  if (printed && exactSetHint(printed[1]!) && !isCardNameEnding(printed[1]!)) {
+    return { name, setHint: `${printed[1]} ${printed[2]}` };
+  }
+  if (!exactSetHint(last) || isCardNameEnding(last)) return undefined;
+  return { name, setHint: last };
+}
+
+/**
+ * Looks up "name set" before the package's partial name match can answer for the
+ * whole text. Returns undefined when the text has no trailing set. Otherwise the
+ * set is binding, as in the pipe form, so the card may be absent: a printed code
+ * addresses a card by id and skips name matching, so the card must still carry
+ * the name that was typed.
+ */
+async function lookupTrailingSet(client: TcgdexClient, query: string, options: LookupOptions): Promise<{ lookup?: CardLookup } | undefined> {
+  const split = splitTrailingSet(query);
+  if (!split) return undefined;
+  const found = await lookupCard(client, split.name, split.setHint, options);
+  if (!found || !isPrintingOf(split.name, found.card.name)) return {};
+  const hintToken = split.setHint.trim().split(/\s+/, 1)[0]!;
+  const resolved = exactSetHint(hintToken) ?? resolveSetHint(split.setHint);
+  if (!resolved || !setFamily(resolved).some((setId) => {
+    const cardSetId = normaliseName(setIdOf(found.card.id));
+    return cardSetId === normaliseName(setId) || cardSetId === normaliseName(packageSetId(setId));
+  })) return {};
+  return { lookup: found };
+}
+
+/** Within each match tier, the hinted set's own cards come before its subsets'. */
+function hintedSetFirst(ordered: CardSummary[], query: string, setId: string): CardSummary[] {
+  const tier = (card: CardSummary) => (isPrintingOf(query, card.name) ? 0 : 1);
+  const own = (card: CardSummary) => (normaliseName(setIdOf(card.id)) === normaliseName(setId) ? 0 : 1);
+  return ordered
+    .map((card, index) => ({ card, index }))
+    .sort((a, b) => tier(a.card) - tier(b.card) || own(a.card) - own(b.card) || a.index - b.index)
+    .map((entry) => entry.card);
 }
 
 // Locale fallback order for card responses without displayable prices.
@@ -317,6 +367,8 @@ export async function lookupCard(
   // fallback keep their existing behaviour.
   const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
   const preference = options.gamePreference;
+  const viaSet = setHint ? undefined : await lookupTrailingSet(client, query, options);
+  if (viaSet !== undefined) return viaSet.lookup;
   if (hintPocketSet && preference && preference.allowed !== "both") {
     return lookupPocket(query, setHint, options, true, packageSetId(resolved));
   }
@@ -331,12 +383,10 @@ export async function lookupCard(
   }
   const summaries = await searchWithAccents(client, query);
   const matched = (preference?.allowed === "ptcg" ? summaries.filter((card) => !isPocketCard(card as Card)) : summaries).filter(Boolean) as CardSummary[];
-  const rankedBySet = rankPrintings(matched, query, resolved);
+  const family = resolved ? new Set(setFamily(resolved).map(normaliseName)) : undefined;
+  const familyMatched = family ? matched.filter((card) => family.has(normaliseName(setIdOf(card.id)))) : matched;
+  const ranked = rankPrintings(familyMatched, query);
 
-  // Enforce the exact resolved set after rankPrintings' partial set matching.
-  const ranked = resolved
-    ? rankedBySet.filter((card) => normaliseName(setIdOf(card.id)) === normaliseName(resolved))
-    : rankedBySet;
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
     if (preference?.allowed === "ptcg" || forcedPhysical) return undefined;
@@ -347,10 +397,11 @@ export async function lookupCard(
 
   // For a shared name, the preferred game wins before artwork or recency comparisons.
   const physicalRanked = ranked.filter((card) => !isPocketCard(card as Card));
-  const ordered = orderForDisplay(
+  const displayed = orderForDisplay(
     preference?.allowed === "both" && preference.default === "ptcg" && physicalRanked.length ? physicalRanked : ranked,
     query,
   );
+  const ordered = resolved ? hintedSetFirst(displayed, query, resolved) : displayed;
   const [primary] = ordered;
   if (!primary) return undefined;
 

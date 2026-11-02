@@ -207,6 +207,20 @@ export function searchCardText(query: string, limit = Number.POSITIVE_INFINITY):
     .map(({ card }) => ({ id: card.id, name: card.name, text: card.text, category: card.category, parts: card.parts }));
 }
 
+let nameEndings: Set<string> | undefined;
+
+/** True when the word ends some multi-word card name, such as "ex" in "Pikachu ex". */
+export function isCardNameEnding(word: string): boolean {
+  if (!nameEndings) {
+    nameEndings = new Set();
+    for (const entry of load()) {
+      const words = entry.name.trim().toLowerCase().split(/\s+/);
+      if (words.length > 1) nameEndings.add(words[words.length - 1]!);
+    }
+  }
+  return nameEndings.has(word.trim().toLowerCase());
+}
+
 /**
  * The newest card that carries exactly this name, if any. A short name such as
  * "N" cannot be searched upstream: the service treats it as a substring filter

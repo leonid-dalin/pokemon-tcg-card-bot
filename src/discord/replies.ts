@@ -110,7 +110,7 @@ export function mentionReply(found: CardLookup[], misses: MentionMiss[], ownerId
         ? []
         : [...printingRows(found[0].matchingPrintings ?? found[0].alternates, ownerId), ...detailsRow(found[0].card.id)]
       : detailsRows(found.filter((lookup) => !isImageOnly(lookup)))),
-    ...misses.flatMap((miss, index) => missMenu(miss.closest, index)),
+    ...misses.flatMap((miss, index) => missMenu(miss.closest, index, ownerId)),
   ];
   return {
     ...(embeds.length > 0 ? { embeds } : {}),

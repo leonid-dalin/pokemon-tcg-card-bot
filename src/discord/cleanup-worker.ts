@@ -3,6 +3,8 @@ import { errorCategory } from "../diagnostics.js";
 import type { SettingsStore } from "../settings-store.js";
 
 const DELETE_AFTER_MS = 90_000;
+/** An unpicked "No card matched" reply deletes itself after this long. */
+export const MISS_DELETE_AFTER_MS = 60_000;
 const DRAIN_INTERVAL_MS = 30_000;
 const MAX_TIMER_MS = 2_147_483_647;
 const RETRY_BASE_MS = 60_000;
@@ -19,7 +21,8 @@ function isGone(error: unknown): boolean {
 }
 
 /**
- * Deletes temporary mention-command exchanges after 90 seconds. Jobs are
+ * Deletes temporary replies: mention-command exchanges after 90 seconds and
+ * unpicked "No card matched" replies after 60. Jobs are
  * durable in the settings database, so an outage defers the deletion instead
  * of losing it. The member's own message needs Manage Messages and a guild
  * channel; the bot's reply in a direct message needs nothing but the channel.
@@ -34,16 +37,22 @@ export class CleanupWorker {
     private readonly store: SettingsStore,
   ) {}
 
-  schedule(job: { botMessageId: string; channelId: string; invokeMessageId: string }): void {
-    const deleteAfter = Date.now() + DELETE_AFTER_MS;
+  /** Without an invokeMessageId only the bot's reply is deleted. */
+  schedule(job: { botMessageId: string; channelId: string; invokeMessageId?: string }, deleteAfterMs = DELETE_AFTER_MS): void {
+    const deleteAfter = Date.now() + deleteAfterMs;
     this.store.scheduleCleanup({
       messageId: job.botMessageId,
       channelId: job.channelId,
-      invokeMessageId: job.invokeMessageId,
+      invokeMessageId: job.invokeMessageId ?? "",
       deleteAfter,
       attempts: 0,
     });
     this.wakeAt(deleteAfter);
+  }
+
+  /** Drops a pending deletion for a reply that should now stay. */
+  cancel(botMessageId: string): void {
+    this.store.completeCleanup(botMessageId);
   }
 
   /** Drains at the job's own deadline, so polling never adds a whole interval of delay. */
@@ -117,7 +126,7 @@ export class CleanupWorker {
   async drain(): Promise<void> {
     for (const job of this.store.dueCleanup(Date.now())) {
       const reply = await this.deleteMessage(job.channelId, job.messageId, false);
-      const invoked = await this.deleteMessage(job.channelId, job.invokeMessageId, true);
+      const invoked = job.invokeMessageId ? await this.deleteMessage(job.channelId, job.invokeMessageId, true) : "absent";
       if (reply !== "failed" && invoked !== "failed") {
         this.store.completeCleanup(job.messageId);
         continue;

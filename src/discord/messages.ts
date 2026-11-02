@@ -19,6 +19,7 @@ import { versionActions, versionEmbed } from "./version-view.js";
 import { busyMessage, overloadHint } from "./interaction-failure.js";
 import { helpView } from "../help.js";
 import { MAX_EMBEDS_PER_MESSAGE, mentionReply, searchReply, type MentionMiss } from "./replies.js";
+import { MISS_DELETE_AFTER_MS } from "./cleanup-worker.js";
 
 export interface MessageContext {
   api: TcgdexClient;
@@ -33,8 +34,8 @@ export interface MessageContext {
   } | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
-  /** Durable 90-second cleanup for temporary mention-command exchanges. */
-  cleanup?: { schedule: (job: { botMessageId: string; channelId: string; invokeMessageId: string }) => void } | undefined;
+  /** Durable cleanup for temporary replies: 90-second exchanges, 60-second misses. */
+  cleanup?: { schedule: (job: { botMessageId: string; channelId: string; invokeMessageId?: string }, deleteAfterMs?: number) => void } | undefined;
 }
 
 export interface EffectiveGuildSettings {
@@ -288,18 +289,29 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
     try {
       const found: CardLookup[] = [];
       const misses: MentionMiss[] = [];
+      const options = {
+        attribution: config.attribution,
+        energyEmoji: config.energyEmoji,
+        ...(gamePreference ? { gamePreference } : {}),
+      };
       for (const mention of mentions) {
-        const lookup = await lookupCard(api, mention.name, mention.setHint, {
-          attribution: config.attribution,
-          energyEmoji: config.energyEmoji,
-          ...(gamePreference ? { gamePreference } : {}),
-        });
+        const lookup = await lookupCard(api, mention.name, mention.setHint, options);
         console.log(`mention lookup -> ${lookup ? lookup.card.id : "no match"}`);
         if (lookup) found.push(mention.imageOnly ? { ...lookup, imageOnly: true } : lookup);
         else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5) });
         if (found.length >= MAX_EMBEDS_PER_MESSAGE) break;
       }
-      await logReply(mentionReply(found, misses, message.author.id) as ReplyPayload);
+      if (found.length > 0) await logReply(mentionReply(found, [], message.author.id) as ReplyPayload);
+      // Each miss is its own reply, so a pick can replace it and an unpicked one can go.
+      for (const miss of misses) {
+        const sent = await logReply(mentionReply([], [miss], message.author.id) as ReplyPayload);
+        if (!context.cleanup || !sent?.id) continue;
+        try {
+          context.cleanup.schedule({ botMessageId: sent.id, channelId: message.channelId }, MISS_DELETE_AFTER_MS);
+        } catch (error) {
+          console.error(`cleanup schedule failed (${errorCategory(error)})`);
+        }
+      }
     } catch (error) {
       console.error(`mention lookup failed (${errorCategory(error)})`);
       await logReply({ content: "Card lookup failed, try again in a moment." });

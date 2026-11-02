@@ -19,7 +19,7 @@ const COMMANDS: { name: string; value: string }[] = [
 
 export const MENTIONS_VALUE = [
   "`[[Card name]]` answers with the card, up to three in one message",
-  "`[[Card name|sv07]]` picks a printing: a set id, a printed code or a set name",
+  "`[[Card name|sv07]]` picks a printing: a set id, a printed code or a set name. A main set includes its Trainer Gallery",
   "`[[Card name|pocket]]` picks the Pocket version",
   "`[[!Card name]]` answers with the scan alone",
   "`@bot search <words>` runs the same search from the message box",

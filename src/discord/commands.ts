@@ -23,9 +23,11 @@ import { cardReply, searchReply } from "./replies.js";
 import { settingsCommand } from "./settings-command.js";
 
 import { busyMessage, overloadHint } from "./interaction-failure.js";
+import { MISS_DELETE_AFTER_MS } from "./cleanup-worker.js";
 import { versionActions, versionDetailsEmbed, versionEmbed } from "./version-view.js";
 
 const AUTOCOMPLETE_DEADLINE_MS = 2000;
+const missTransitions = new Map<string, { converted: boolean; running?: Promise<void>; cleanupTimer?: NodeJS.Timeout }>();
 
 export interface CommandContext {
   client: TcgdexClient;
@@ -44,6 +46,10 @@ export interface CommandContext {
   typing?: {
     take: (key: string) => { allowed: true } | { allowed: false; retryAfterSeconds: number };
   } | undefined;
+  cleanup: {
+    schedule: (job: { botMessageId: string; channelId: string }, deleteAfterMs?: number) => void;
+    cancel: (botMessageId: string) => void;
+  };
 }
 
 /** Admits an expensive lookup, or reports the wait so the caller can answer before starting work. */
@@ -327,13 +333,24 @@ export async function handleOpenCardMenu(
 ): Promise<void> {
   const cardId = interaction.values[0];
   if (!cardId) return;
-  if (interaction.customId !== MISS_MENU_ID && !interaction.customId.startsWith(MISS_MENU_PREFIX)) {
-    const token = pageTokenFrom(interaction.customId);
-    if (!token) return;
-    if (!context.pages.get(token)) {
-      await interaction.reply({ content: "This list has expired. Run the command again.", flags: MessageFlags.Ephemeral });
+  if (interaction.customId === MISS_MENU_ID || interaction.customId.startsWith(MISS_MENU_PREFIX)) {
+    const owner = interaction.customId.split(":")[2];
+    if (owner && owner !== interaction.user.id) {
+      await interaction.reply({
+        content: "Only the person who asked can pick from this. Ask for your own copy with [[name]] or /card.",
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
+    if (missTransitions.get(interaction.message.id)?.converted) return;
+    await replaceMissWithCard(context, interaction, cardId);
+    return;
+  }
+  const token = pageTokenFrom(interaction.customId);
+  if (!token) return;
+  if (!context.pages.get(token)) {
+    await interaction.reply({ content: "This list has expired. Run the command again.", flags: MessageFlags.Ephemeral });
+    return;
   }
   // A card lookup may exceed Discord's three-second interaction response window.
   await interaction.deferReply();
@@ -348,6 +365,71 @@ export async function handleOpenCardMenu(
     return;
   }
   await interaction.editReply(cardReply(lookup, interaction.user.id));
+}
+
+/**
+ * Turns a "No card matched" reply into the picked card in place. The deletion
+ * timer stops first so it cannot remove the message mid-lookup; a failed pick
+ * restarts it and answers privately.
+ */
+async function replaceMissWithCard(
+  context: CommandContext,
+  interaction: StringSelectMenuInteraction,
+  cardId: string,
+): Promise<void> {
+  await interaction.deferUpdate();
+  const messageId = interaction.message.id;
+  const state = missTransitions.get(messageId) ?? { converted: false };
+  missTransitions.set(messageId, state);
+  if (state.converted) return;
+  // A second selection waits for the first result so one reply cannot be converted twice.
+  if (state.running) return state.running;
+  const run = (async () => {
+    context.cleanup.cancel(messageId);
+    const releaseState = () => {
+      if (state.cleanupTimer) clearTimeout(state.cleanupTimer);
+      state.cleanupTimer = setTimeout(() => missTransitions.delete(messageId), MISS_DELETE_AFTER_MS + 1_000);
+      state.cleanupTimer.unref?.();
+    };
+    const keepTimer = () => {
+      if (!state.converted) {
+        context.cleanup.schedule({ botMessageId: messageId, channelId: interaction.channelId }, MISS_DELETE_AFTER_MS);
+        releaseState();
+      }
+    };
+    const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+    if (!admission.allowed) {
+      keepTimer();
+      await interaction.followUp({ content: busyMessage(admission.retryAfterSeconds), flags: MessageFlags.Ephemeral });
+      return;
+    }
+    let lookup;
+    try {
+      lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
+    } catch (error) {
+      keepTimer();
+      throw error;
+    }
+    if (!lookup) {
+      keepTimer();
+      await interaction.followUp({ content: `No card matched \`${cardId}\`.`, flags: MessageFlags.Ephemeral });
+      return;
+    }
+    try {
+      await interaction.editReply({ content: "", ...cardReply(lookup, interaction.user.id) });
+      state.converted = true;
+      releaseState();
+    } catch (error) {
+      keepTimer();
+      throw error;
+    }
+  })();
+  state.running = run;
+  try {
+    await run;
+  } finally {
+    if (state.running === run) state.running = undefined;
+  }
 }
 
 export async function handleSearchCommand(

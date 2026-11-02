@@ -74,6 +74,8 @@ const memberBudget = new MentionBudget({
 });
 // Autocomplete fires on each keystroke, so it gets a wider but separate allowance.
 const typingBudget = new MentionBudget({ capacity: 40, refillSeconds: 2, maxKeys: 10_000 });
+const client = new Client(clientOptions(config));
+const cleanupWorker = new CleanupWorker(client, settings);
 const context: CommandContext = {
   client: api,
   attribution: config.attribution,
@@ -82,6 +84,10 @@ const context: CommandContext = {
   settings,
   requests: memberBudget,
   typing: typingBudget,
+  cleanup: {
+    schedule: (...args) => cleanupWorker.schedule(...args),
+    cancel: (messageId) => cleanupWorker.cancel(messageId),
+  },
 };
 
 function settingsAnnouncement(description: string): EmbedBuilder {
@@ -112,9 +118,6 @@ const settingsPanel = new SettingsPanelController(
     }
   },
 );
-
-const client = new Client(clientOptions(config));
-const cleanupWorker = new CleanupWorker(client, settings);
 startRuntimeStatus(createShardReadiness(client));
 const budget =
   config.mentionCooldownSeconds > 0
