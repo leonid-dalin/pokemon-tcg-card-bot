@@ -38,7 +38,8 @@ jobs:
         run: |
           files="src/data/set-index.ts src/data/text-index.json src/data/data-manifest.json"
           remote="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
-          if [ -z "$(git status --porcelain -- $files)" ]; then
+          changes="$(git status --porcelain -- $files)"
+          if [ -z "$changes" ]; then
             echo "card data unchanged"
             exit 0
           fi
