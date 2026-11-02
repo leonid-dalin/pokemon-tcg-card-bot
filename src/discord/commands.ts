@@ -23,6 +23,7 @@ import { cardReply, searchReply } from "./replies.js";
 import { settingsCommand } from "./settings-command.js";
 
 import { busyMessage, overloadHint } from "./interaction-failure.js";
+import { MISS_DELETE_AFTER_MS } from "./cleanup-worker.js";
 import { versionActions, versionDetailsEmbed, versionEmbed } from "./version-view.js";
 
 const AUTOCOMPLETE_DEADLINE_MS = 2000;
@@ -43,6 +44,11 @@ export interface CommandContext {
   /** Separate, smaller allowance for autocomplete so typing cannot spend the command budget. */
   typing?: {
     take: (key: string) => { allowed: true } | { allowed: false; retryAfterSeconds: number };
+  } | undefined;
+  /** Deletes an unpicked "No card matched" reply; a pick cancels the deletion. */
+  cleanup?: {
+    schedule: (job: { botMessageId: string; channelId: string }, deleteAfterMs?: number) => void;
+    cancel: (botMessageId: string) => void;
   } | undefined;
 }
 
@@ -327,13 +333,15 @@ export async function handleOpenCardMenu(
 ): Promise<void> {
   const cardId = interaction.values[0];
   if (!cardId) return;
-  if (interaction.customId !== MISS_MENU_ID && !interaction.customId.startsWith(MISS_MENU_PREFIX)) {
-    const token = pageTokenFrom(interaction.customId);
-    if (!token) return;
-    if (!context.pages.get(token)) {
-      await interaction.reply({ content: "This list has expired. Run the command again.", flags: MessageFlags.Ephemeral });
-      return;
-    }
+  if (interaction.customId === MISS_MENU_ID || interaction.customId.startsWith(MISS_MENU_PREFIX)) {
+    await replaceMissWithCard(context, interaction, cardId);
+    return;
+  }
+  const token = pageTokenFrom(interaction.customId);
+  if (!token) return;
+  if (!context.pages.get(token)) {
+    await interaction.reply({ content: "This list has expired. Run the command again.", flags: MessageFlags.Ephemeral });
+    return;
   }
   // A card lookup may exceed Discord's three-second interaction response window.
   await interaction.deferReply();
@@ -348,6 +356,41 @@ export async function handleOpenCardMenu(
     return;
   }
   await interaction.editReply(cardReply(lookup, interaction.user.id));
+}
+
+/**
+ * Turns a "No card matched" reply into the picked card in place. The deletion
+ * timer stops first so it cannot remove the message mid-lookup; a failed pick
+ * restarts it and answers privately.
+ */
+async function replaceMissWithCard(
+  context: CommandContext,
+  interaction: StringSelectMenuInteraction,
+  cardId: string,
+): Promise<void> {
+  await interaction.deferUpdate();
+  const messageId = interaction.message.id;
+  context.cleanup?.cancel(messageId);
+  const keepTimer = () => context.cleanup?.schedule({ botMessageId: messageId, channelId: interaction.channelId }, MISS_DELETE_AFTER_MS);
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    keepTimer();
+    await interaction.followUp({ content: busyMessage(admission.retryAfterSeconds), flags: MessageFlags.Ephemeral });
+    return;
+  }
+  let lookup;
+  try {
+    lookup = await lookupById(context.client, cardId, { attribution: context.attribution, energyEmoji: context.energyEmoji });
+  } catch (error) {
+    keepTimer();
+    throw error;
+  }
+  if (!lookup) {
+    keepTimer();
+    await interaction.followUp({ content: `No card matched \`${cardId}\`.`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+  await interaction.editReply({ content: "", components: [], ...cardReply(lookup, interaction.user.id) });
 }
 
 export async function handleSearchCommand(

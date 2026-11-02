@@ -115,6 +115,7 @@ const settingsPanel = new SettingsPanelController(
 
 const client = new Client(clientOptions(config));
 const cleanupWorker = new CleanupWorker(client, settings);
+context.cleanup = cleanupWorker;
 startRuntimeStatus(createShardReadiness(client));
 const budget =
   config.mentionCooldownSeconds > 0
