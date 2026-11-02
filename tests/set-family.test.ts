@@ -58,6 +58,9 @@ describe("a main-set hint covers its gallery subsets", () => {
     expect(setFamily("sm115")).toContain("sma");
   });
 
+  it("includes the 30th Classic Collection family", () => {
+    expect(setFamily("30th")).toContain("30th-c");
+  });
   it("pairs every indexed subset with a main set whose partial match keeps it", () => {
     const subsets = SET_INDEX.filter((entry) => entry.code?.includes(":"));
     expect(subsets.length).toBeGreaterThan(0);

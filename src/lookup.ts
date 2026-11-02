@@ -84,7 +84,10 @@ async function lookupTrailingSet(client: TcgdexClient, query: string, options: L
   if (!found || !isPrintingOf(split.name, found.card.name)) return {};
   const hintToken = split.setHint.trim().split(/\s+/, 1)[0]!;
   const resolved = exactSetHint(hintToken) ?? resolveSetHint(split.setHint);
-  if (!resolved || !setFamily(resolved).some((setId) => normaliseName(setId) === normaliseName(setIdOf(found.card.id)))) return {};
+  if (!resolved || !setFamily(resolved).some((setId) => {
+    const cardSetId = normaliseName(setIdOf(found.card.id));
+    return cardSetId === normaliseName(setId) || cardSetId === normaliseName(packageSetId(setId));
+  })) return {};
   return { lookup: found };
 }
 
