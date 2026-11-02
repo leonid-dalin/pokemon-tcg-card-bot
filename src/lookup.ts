@@ -51,6 +51,12 @@ function orderForDisplay(ranked: CardSummary[], query: string): CardSummary[] {
   return [...printings, ...others];
 }
 
+/**
+ * Splits "kingdra swsh10" into a name and a trailing set hint when the last
+ * word is an exact set code or id, and "chi-yu meg-31" into a name and the
+ * printed code "meg 31". A word that ends real card names ("ex" is also
+ * Expedition's code) never counts as a set.
+ */
 export function splitTrailingSet(query: string): { name: string; setHint: string } | undefined {
   const words = query.trim().split(/\s+/);
   if (words.length < 2) return undefined;
@@ -64,11 +70,18 @@ export function splitTrailingSet(query: string): { name: string; setHint: string
   return { name, setHint: last };
 }
 
-async function lookupTrailingSet(client: TcgdexClient, query: string, options: LookupOptions): Promise<CardLookup | undefined> {
+/**
+ * Looks up "name set" before the package's partial name match can answer for the
+ * whole text. Returns undefined when the text has no trailing set. Otherwise the
+ * set is binding, as in the pipe form, so the card may be absent: a printed code
+ * addresses a card by id and skips name matching, so the card must still carry
+ * the name that was typed.
+ */
+async function lookupTrailingSet(client: TcgdexClient, query: string, options: LookupOptions): Promise<{ lookup?: CardLookup } | undefined> {
   const split = splitTrailingSet(query);
   if (!split) return undefined;
   const found = await lookupCard(client, split.name, split.setHint, options);
-  return found && isPrintingOf(split.name, found.card.name) ? found : undefined;
+  return found && isPrintingOf(split.name, found.card.name) ? { lookup: found } : {};
 }
 
 /** Within each match tier, the hinted set's own cards come before its subsets'. */
@@ -371,8 +384,10 @@ export async function lookupCard(
     : rankedBySet;
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
+    // A trailing set code ("chi-yu meg") is a set request, not a name: the package
+    // matches any text that contains one of its names, so it must not answer first.
     const viaSet = setHint ? undefined : await lookupTrailingSet(client, query, options);
-    if (viaSet) return viaSet;
+    if (viaSet) return viaSet.lookup;
     if (preference?.allowed === "ptcg" || forcedPhysical) return undefined;
     // A concrete hint stays a requirement here: an empty filtered set must not
     // widen to every package printing.

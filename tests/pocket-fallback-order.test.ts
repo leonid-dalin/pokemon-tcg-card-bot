@@ -43,9 +43,16 @@ describe("a trailing set code beats the package's partial name match", () => {
   });
 
   it("does not answer a code and number with a different card's name", async () => {
-    // me01-031 is Chi-Yu, so "pikachu meg-31" must not return it.
-    const lookup = await lookupCard(client, "pikachu meg-31", undefined, { gamePreference: PHYSICAL_ONLY });
-    expect(lookup?.card.id).not.toBe("me01-031");
+    // me01-031 is Chi-Yu, so "pikachu meg-31" must not return it, or a Pocket card either.
+    const lookup = await lookupCard(client, "pikachu meg-31", undefined, { gamePreference: PHYSICAL_FIRST });
+    expect(lookup).toBeUndefined();
+  });
+
+  it("treats a recognised set as binding, like the pipe form", async () => {
+    // Chi-Yu has no card in sv03. The pipe form is a miss, so the trailing form is too,
+    // rather than the package answering with an unrelated Pocket card.
+    expect(await lookupCard(client, "chi-yu", "sv03", { gamePreference: PHYSICAL_FIRST })).toBeUndefined();
+    expect(await lookupCard(client, "chi-yu sv03", undefined, { gamePreference: PHYSICAL_FIRST })).toBeUndefined();
   });
 
   it("keeps the package fallback when the last word is not a set", async () => {
