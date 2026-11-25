@@ -32,6 +32,7 @@ export interface MessageContext {
   settings?: {
     get: (guildId: string) => import("../settings-store.js").GuildSettings;
     messageRepliesFor?: (userId: string) => boolean | undefined;
+    resolveCurrency?: (userId: string, guildId: string | null) => import("../settings-store.js").Currency;
   } | undefined;
   /** The bot's own user id, once the gateway has reported it. */
   selfId: () => string | undefined;
@@ -252,7 +253,8 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         return;
       }
       const resolution = await resolveDeckCards(api, deck).catch(() => undefined);
-      const view = renderDecklist(deck, resolution?.lines);
+      const currency = context.settings?.resolveCurrency?.(message.author.id, message.guildId) ?? "EUR";
+      const view = renderDecklist(deck, resolution?.lines, currency);
       const notes = [
         ...(deck.truncated ? [`only the first ${MAX_DECK_LINES} lines were read`] : []),
         ...(resolution?.exhausted ? ["some lines were not checked"] : []),
