@@ -336,15 +336,33 @@ export async function lookupCard(
   setHint?: string,
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
-  // Exact card IDs bypass name and set matching.
+  // Exact card IDs bypass name and set matching, including printed code forms.
   if (setHint && isCardId(setHint.trim())) {
     return lookupById(client, printedAsId(setHint.trim()), options);
   }
+  if (isCardId(query.trim())) {
+    return lookupById(client, printedAsId(query.trim()), options);
+  }
+
+  // An explicit hint resolves before the default game or the short-name shortcut.
+  const pocketOnly = setHint ? isPocketHint(setHint) : false;
+  const resolved = setHint && !pocketOnly ? resolveSetHint(setHint) : undefined;
+  if (setHint && !pocketOnly && !resolved) return undefined;
+  const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
+  const requireResolved = hintPocketSet;
+  const requireArg = requireResolved ? packageSetId(resolved) : undefined;
+  if (pocketOnly) return lookupPocket(query, setHint, options);
 
   // A one-character name cannot be resolved by upstream search: TCGdex treats it
   // as a substring filter and returns unrelated cards first. A real card with
   // that exact name ("N") resolves through the local index by its id instead.
   if (normaliseName(query).length < 2) {
+    if (resolved) {
+      const exact = findExactCardName(query);
+      if (!exact) return undefined;
+      const byId = await lookupCard(client, exact.id, setHint, options);
+      return byId;
+    }
     const shortGame = effectiveGame(options.gamePreference);
     const pocket = shortGame === "ptcg" ? undefined : getPocketCard(query.trim());
     if (pocket) return toLookup(pocket, searchPocketByName(pocket.name), POCKET_ATTRIBUTION, options.energyEmoji, options.alternateLimit);
@@ -354,27 +372,13 @@ export async function lookupCard(
     return lookupById(client, exact.id, options);
   }
 
-  if (isCardId(query.trim())) {
-    return lookupById(client, printedAsId(query.trim()), options);
-  }
-
-  // A Pocket alias selects the package catalogue; forcing a game always wins.
-  const pocketOnly = setHint ? isPocketHint(setHint) : false;
-  const resolved = setHint && !pocketOnly ? resolveSetHint(setHint) : undefined;
-  if (setHint && !pocketOnly && !resolved) return undefined;
-  const requireResolved = resolved !== undefined && isPocketSet(resolved);
-  const requireArg = requireResolved ? packageSetId(resolved) : undefined;
-  if (pocketOnly) return lookupPocket(query, setHint, options);
   // An explicit Pocket set hint is a game choice: it overrides a physical-only
   // preference, while without a preference the TCGdex path and its package
   // fallback keep their existing behaviour.
-  const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
   const preference = options.gamePreference;
   const viaSet = setHint ? undefined : await lookupTrailingSet(client, query, options);
   if (viaSet !== undefined) return viaSet.lookup;
-  if (hintPocketSet && preference && preference.allowed !== "both") {
-    return lookupPocket(query, setHint, options, true, packageSetId(resolved));
-  }
+  if (hintPocketSet && preference) return lookupPocket(query, setHint, options, true, requireArg);
   const forcedPhysical = Boolean(setHint) && !hintPocketSet;
   const game = forcedPhysical ? "ptcg" : effectiveGame(preference);
   if (!forcedPhysical && preference?.allowed === "pocket") return lookupPocket(query, setHint, options, requireResolved, requireArg);
