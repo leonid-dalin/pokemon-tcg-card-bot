@@ -268,6 +268,7 @@ export class SettingsPanelController {
 
     switch (action) {
       case "refresh":
+        if (session.scope === "server" && session.guildId) session.baseline = baselineOf(this.store.get(session.guildId));
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin);
         return;
@@ -279,7 +280,11 @@ export class SettingsPanelController {
         const value = interaction.values?.[0] as SettingsSession["screen"] | undefined;
         if (!value) return;
         session.screen = value;
-        if (value === "channels") session.draftChannelIds = session.guildId ? [...this.store.get(session.guildId).selectedChannelIds] : [];
+        if (value === "channels" && session.guildId) {
+          const stored = this.store.get(session.guildId);
+          session.draftChannelIds = [...stored.selectedChannelIds];
+          if (session.scope === "server") session.baseline = baselineOf(stored);
+        }
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin);
         return;
@@ -292,6 +297,7 @@ export class SettingsPanelController {
         }
         session.scope = target === "server" ? "server" : "personal";
         session.screen = session.scope === "server" ? "overview" : "personal";
+        if (session.scope === "server" && session.guildId) session.baseline = baselineOf(this.store.get(session.guildId));
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin);
         return;
