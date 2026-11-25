@@ -48,7 +48,7 @@ export function parseDecklist(text: string): ParsedDeck | undefined {
     const name = (card[2] ?? "").trim();
     // Reject malformed rows before the cap, so a stray row after a full deck does
     // not make the list look truncated.
-    if (!Number.isFinite(count) || count < 1 || count > 20 || name.length < 2) continue;
+    if (!Number.isFinite(count) || count < 1 || count > 20 || name.length < 1 || !/[a-z0-9]/i.test(name)) continue;
     if (lines.length >= MAX_DECK_LINES) {
       truncated = true;
       break;
