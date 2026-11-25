@@ -33,6 +33,12 @@ describe("R5 the default game applies symmetrically", () => {
     expect(result === undefined || isPocketCardId(result.card.id)).toBe(true);
   });
 
+  it("uses the bundled Pocket card when upstream only carries physical rows", async () => {
+    const summaries: CardSummary[] = [{ id: "sv08.5-073", name: "Genome Converter", localId: "073" }];
+    const result = await lookupCard(client(summaries), "Genome Converter", undefined, { gamePreference: pocketDefault });
+    expect(result?.card.id.toLowerCase()).toBe("pc-009");
+  });
+
   it("never returns a physical card for a short name on Pocket-default", async () => {
     const summaries: CardSummary[] = [{ id: "xy10-105a", name: "N", localId: "105a" }];
     const result = await lookupCard(client(summaries), "N", undefined, { gamePreference: pocketDefault });
