@@ -299,7 +299,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         const lookup = await lookupCard(api, mention.name, mention.setHint, options);
         console.log(`mention lookup -> ${lookup ? lookup.card.id : "no match"}`);
         if (lookup) found.push(mention.imageOnly ? { ...lookup, imageOnly: true } : lookup);
-        else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5) });
+        else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5, { gamePreference, setHint: mention.setHint }) });
         if (found.length >= MAX_EMBEDS_PER_MESSAGE) break;
       }
       if (found.length > 0) await logReply(mentionReply(found, [], message.author.id) as ReplyPayload);

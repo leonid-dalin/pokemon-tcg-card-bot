@@ -6,8 +6,8 @@ import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdMatche
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { findExactCardName, isCardNameEnding } from "./text-search.js";
-import { effectiveGame } from "./game-preference.js";
-import { isPocketCard, isPocketSet } from "./prizes.js";
+import { effectiveGame, type GamePreference } from "./game-preference.js";
+import { isPocketCard, isPocketCardId, isPocketSet } from "./prizes.js";
 import { isPocketHint, packageSetId, resolveSetHint, exactSetHint, setFamily, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
 
@@ -452,13 +452,25 @@ export async function suggestNames(
   client: TcgdexClient,
   query: string,
   limit = 3,
+  options: { gamePreference?: GamePreference; setHint?: string } = {},
 ): Promise<CardSummary[]> {
   const words = query.trim().split(/\s+/).filter(Boolean);
   if (words.length < 2) return [];
   const shortened = words.slice(0, -1).join(" ");
   try {
     const cards = await client.searchByName(shortened);
-    return orderForDisplay(rankPrintings(cards, shortened), shortened).slice(0, limit);
+    const hint = options.setHint;
+    const resolvedHint = hint ? resolveSetHint(hint) : undefined;
+    const hintedGame = hint
+      ? isPocketHint(hint) || (resolvedHint !== undefined && isPocketSet(resolvedHint)) ? "pocket" : "ptcg"
+      : undefined;
+    const game = hintedGame ?? effectiveGame(options.gamePreference);
+    let scoped = game === "both" ? cards : cards.filter((card) => isPocketCardId(card.id) === (game === "pocket"));
+    if (resolvedHint) {
+      const family = new Set(setFamily(resolvedHint).map(normaliseName));
+      scoped = scoped.filter((card) => family.has(normaliseName(setIdOf(card.id))));
+    }
+    return orderForDisplay(rankPrintings(scoped, shortened), shortened).slice(0, limit);
   } catch {
     return [];
   }
