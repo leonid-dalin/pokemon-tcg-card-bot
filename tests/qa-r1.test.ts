@@ -11,7 +11,7 @@ import { suggestNames } from "../src/lookup.js";
 import { isPocketCardId } from "../src/prizes.js";
 import { SettingsStore } from "../src/settings-store.js";
 
-const physical = readFileSync(new URL("./fixtures/selection-card-me03-030.json", import.meta.url), "utf8") as unknown as Card;
+const physical = JSON.parse(readFileSync(new URL("./fixtures/selection-card-me03-030.json", import.meta.url), "utf8")) as Card;
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), "qa-r1-")));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 

@@ -397,7 +397,10 @@ export async function handleOpenCardMenu(
       });
       return;
     }
-    if (missTransitions.get(interaction.message.id)?.converted) return;
+    if (missTransitions.get(interaction.message.id)?.converted) {
+      await interaction.deferUpdate();
+      return;
+    }
     await replaceMissWithCard(context, interaction, cardId);
     return;
   }
