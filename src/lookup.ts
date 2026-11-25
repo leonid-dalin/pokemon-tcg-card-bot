@@ -2,10 +2,11 @@ import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
 import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
-import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
+import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdMatches, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { findExactCardName, isCardNameEnding } from "./text-search.js";
+import { effectiveGame } from "./game-preference.js";
 import { isPocketCard, isPocketSet } from "./prizes.js";
 import { isPocketHint, packageSetId, resolveSetHint, exactSetHint, setFamily, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
@@ -373,34 +374,38 @@ export async function lookupCard(
     return lookupPocket(query, setHint, options, true, packageSetId(resolved));
   }
   const forcedPhysical = Boolean(setHint) && !hintPocketSet;
+  const game = forcedPhysical ? "ptcg" : effectiveGame(preference);
   if (!forcedPhysical && preference?.allowed === "pocket") return lookupPocket(query, setHint, options, requireResolved, requireArg);
 
   // The preference's default game applies only to unhinted names, and only when the
   // package has the exact requested name; partial package matches must not win.
-  if (preference?.allowed === "both" && preference.default === "pocket" && !setHint) {
+  if (game === "pocket" && !setHint) {
     const pocket = lookupPocket(query, undefined, options);
     if (pocket && normaliseName(pocket.card.name) === normaliseName(query)) return pocket;
   }
   const summaries = await searchWithAccents(client, query);
-  const matched = (preference?.allowed === "ptcg" ? summaries.filter((card) => !isPocketCard(card as Card)) : summaries).filter(Boolean) as CardSummary[];
+  const strict = preference !== undefined && preference.allowed !== "both";
+  const scoped = strict || game === "ptcg"
+    ? summaries.filter((card) => isPocketCard(card as Card) === (game === "pocket"))
+    : summaries;
+  const matched = scoped.filter(Boolean) as CardSummary[];
   const family = resolved ? new Set(setFamily(resolved).map(normaliseName)) : undefined;
   const familyMatched = family ? matched.filter((card) => family.has(normaliseName(setIdOf(card.id)))) : matched;
   const ranked = rankPrintings(familyMatched, query);
 
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
-    if (preference?.allowed === "ptcg" || forcedPhysical) return undefined;
+    if (game === "ptcg" || forcedPhysical) return undefined;
     // A concrete hint stays a requirement here: an empty filtered set must not
     // widen to every package printing.
     return lookupPocket(query, setHint, options, requireResolved, requireArg);
   }
 
-  // For a shared name, the preferred game wins before artwork or recency comparisons.
-  const physicalRanked = ranked.filter((card) => !isPocketCard(card as Card));
-  const displayed = orderForDisplay(
-    preference?.allowed === "both" && preference.default === "ptcg" && physicalRanked.length ? physicalRanked : ranked,
-    query,
-  );
+  const preferred = game === "both"
+    ? ranked
+    : ranked.filter((card) => isPocketCard(card as Card) === (game === "pocket"));
+  const pool = preferred.length > 0 || game !== "pocket" || strict ? preferred : ranked;
+  const displayed = orderForDisplay(pool, query);
   const ordered = resolved ? hintedSetFirst(displayed, query, resolved) : displayed;
   const [primary] = ordered;
   if (!primary) return undefined;

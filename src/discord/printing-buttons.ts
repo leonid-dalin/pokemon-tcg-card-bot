@@ -7,6 +7,7 @@ export const PRINTING_PREFIX = "printing:";
 export const DETAILS_PREFIX = "details:";
 /** Prefix for miss menus; the suffix gives each miss in a reply a distinct id. */
 export const MISS_MENU_PREFIX = "open:miss";
+export const ALL_PRINTINGS_PREFIX = "allprint:";
 export const MISS_MENU_ID = MISS_MENU_PREFIX;
 const MAX_BUTTONS = 5;
 const MAX_OPTIONS = 5;
@@ -46,6 +47,22 @@ export function detailsRow(cardId: string, label = "Details"): ActionRowBuilder<
       ...links,
     ),
   ];
+}
+
+export function allPrintingsRow(cardId: string, ownerId?: string): ActionRowBuilder<ButtonBuilder>[] {
+  return [new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${ALL_PRINTINGS_PREFIX}${cardId}${ownerId ? `:${ownerId}` : ""}`)
+      .setLabel("All printings")
+      .setStyle(ButtonStyle.Secondary),
+  )];
+}
+
+export function allPrintingsIdFrom(customId: string): PrintingButtonId | undefined {
+  if (!customId.startsWith(ALL_PRINTINGS_PREFIX)) return undefined;
+  const [cardId, ownerId, ...extra] = customId.slice(ALL_PRINTINGS_PREFIX.length).split(":");
+  if (!cardId || extra.length > 0) return undefined;
+  return { cardId, ...(ownerId ? { ownerId } : {}) };
 }
 
 /** Builds a Cardmarket search row when the card has an indexed set code. */

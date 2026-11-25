@@ -20,12 +20,12 @@ const labels = (reply: ReturnType<typeof cardReply>) =>
 
 describe("cardReply listing links", () => {
   it("carries Limitless beside Details, with Cardmarket reserved for the details embed", () => {
-    expect(labels(cardReply(lookup))).toEqual(["Details", "Limitless"]);
+    expect(labels(cardReply(lookup))).toEqual(["Details", "Limitless", "All printings"]);
   });
 
   it("carries Limitless for a pocket card too", () => {
     const pocket: CardLookup = { card: { id: "A1-001", name: "Bulbasaur", image: "https://example.test/b.webp" }, alternates: [] };
-    expect(labels(cardReply(pocket))).toEqual(["Details", "Limitless"]);
+    expect(labels(cardReply(pocket))).toEqual(["Details", "Limitless", "All printings"]);
   });
 
   it("gives the details embed a Cardmarket row for a physical card", () => {

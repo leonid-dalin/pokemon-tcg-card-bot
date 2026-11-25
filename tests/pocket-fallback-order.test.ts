@@ -59,9 +59,9 @@ describe("a trailing set code beats the package's partial name match", () => {
     expect(await lookupCard(client, "chi-yu sv03", undefined, { gamePreference: PHYSICAL_FIRST })).toBeUndefined();
   });
 
-  it("keeps the package fallback when the last word is not a set", async () => {
+  it("does not use the package fallback on a physical-default server", async () => {
     const lookup = await lookupCard(client, "chi-yu zzzz", undefined, { gamePreference: PHYSICAL_FIRST });
-    expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
+    expect(lookup).toBeUndefined();
   });
 
   it("keeps an explicit set hint in charge", async () => {
