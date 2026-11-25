@@ -1,4 +1,4 @@
-import { GatewayIntentBits } from "discord.js";
+import { GatewayIntentBits, Partials } from "discord.js";
 import { describe, expect, it } from "vitest";
 import { clientOptions } from "../src/discord/client-options.js";
 
@@ -12,7 +12,13 @@ describe("clientOptions", () => {
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
+      GatewayIntentBits.DirectMessages,
     ]);
     expect(clientOptions({ mentionEnabled: false }).intents).toEqual([GatewayIntentBits.Guilds]);
+  });
+
+  it("handles uncached DM channels only when message replies are on", () => {
+    expect(clientOptions({ mentionEnabled: true }).partials).toContain(Partials.Channel);
+    expect(clientOptions({ mentionEnabled: false }).partials).toBeUndefined();
   });
 });
