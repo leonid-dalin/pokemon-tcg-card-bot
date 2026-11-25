@@ -199,12 +199,17 @@ const printedAsId = (value: string): string => {
 };
 
 export const isCardId = (value: string): boolean => {
-  value = printedAsId(value);
+  value = printedAsId(value.trim());
+  if (SET_IDS.has(normaliseName(value))) return false;
   const at = value.lastIndexOf("-");
   if (at <= 0 || at === value.length - 1) return false;
-  if (!LOCAL_ID.test(value.slice(at + 1))) return false;
-  // The package includes Pocket sets absent from the TCGdex set index.
-  return SET_IDS.has(normaliseName(value.slice(0, at))) || getPocketCard(value) !== undefined;
+  const local = value.slice(at + 1);
+  if (!LOCAL_ID.test(local)) return false;
+  const setId = value.slice(0, at);
+  // Newer physical sets can be absent from the checked-in index. Their card ids
+  // still address an upstream record once the set part is numbered.
+  const unindexedPhysical = /\d/.test(setId) && !isPocketSet(setId) && /^\d{1,3}[a-z]?$/i.test(local);
+  return SET_IDS.has(normaliseName(setId)) || getPocketCard(value) !== undefined || unindexedPhysical;
 };
 
 /** Source credit for cards loaded from the Pocket package. */
