@@ -453,7 +453,15 @@ export class SettingsPanelController {
       return;
     }
 
+    if (sub === "remove-page") {
+      session.draftRemovePage = Number(interaction.values?.[0] ?? 0);
+      this.sessions.update(session);
+      await this.render(session, interaction, isAdmin);
+      return;
+    }
+
     if (sub === "remove") {
+      session.draftRemovePage = 0;
       this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "Choose the saved channels to remove from the menu below.");
       return;
