@@ -345,8 +345,10 @@ export async function lookupCard(
   // as a substring filter and returns unrelated cards first. A real card with
   // that exact name ("N") resolves through the local index by its id instead.
   if (normaliseName(query).length < 2) {
-    const pocket = getPocketCard(query.trim());
+    const shortGame = effectiveGame(options.gamePreference);
+    const pocket = shortGame === "ptcg" ? undefined : getPocketCard(query.trim());
     if (pocket) return toLookup(pocket, searchPocketByName(pocket.name), POCKET_ATTRIBUTION, options.energyEmoji, options.alternateLimit);
+    if (shortGame === "pocket") return undefined;
     const exact = findExactCardName(query);
     if (!exact) return undefined;
     return lookupById(client, exact.id, options);
@@ -384,10 +386,9 @@ export async function lookupCard(
     if (pocket && normaliseName(pocket.card.name) === normaliseName(query)) return pocket;
   }
   const summaries = await searchWithAccents(client, query);
-  const strict = preference !== undefined && preference.allowed !== "both";
-  const scoped = strict || game === "ptcg"
-    ? summaries.filter((card) => isPocketCard(card as Card) === (game === "pocket"))
-    : summaries;
+  const scoped = game === "both"
+    ? summaries
+    : summaries.filter((card) => isPocketCard(card as Card) === (game === "pocket"));
   const matched = scoped.filter(Boolean) as CardSummary[];
   const family = resolved ? new Set(setFamily(resolved).map(normaliseName)) : undefined;
   const familyMatched = family ? matched.filter((card) => family.has(normaliseName(setIdOf(card.id)))) : matched;
@@ -404,7 +405,7 @@ export async function lookupCard(
   const preferred = game === "both"
     ? ranked
     : ranked.filter((card) => isPocketCard(card as Card) === (game === "pocket"));
-  const pool = preferred.length > 0 || game !== "pocket" || strict ? preferred : ranked;
+  const pool = game === "both" && preferred.length === 0 ? ranked : preferred;
   const displayed = orderForDisplay(pool, query);
   const ordered = resolved ? hintedSetFirst(displayed, query, resolved) : displayed;
   const [primary] = ordered;
