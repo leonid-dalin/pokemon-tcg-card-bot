@@ -296,7 +296,7 @@ export async function handleAllPrintingsButton(
     await interaction.editReply({ content: `No card matched \`${parsed.cardId}\`.` });
     return;
   }
-  const allowed = effectiveGame(gamePreference(context, interaction.guildId));
+  const allowed = isPocketCardId(parsed.cardId) ? "pocket" : "ptcg";
   const printings = await printingsOf(context.client, pinned.card.name, allowed);
   if (printings.length === 0) {
     await interaction.editReply({ content: `No card matched \`${pinned.card.name}\`.` });
