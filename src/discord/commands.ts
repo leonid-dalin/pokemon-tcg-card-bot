@@ -196,8 +196,8 @@ export async function handleAutocomplete(
 
   // The name path reaches upstream too, so it needs the same deadline as the set list.
   const game = effectiveGame(gamePreference(context, interaction.guildId));
-  const summaries = await withDeadline(context.client.searchByName(query));
-  let allowed = summaries ?? [];
+  const summaries = (await withDeadline(context.client.searchByName(query).catch(() => undefined))) ?? [];
+  let allowed = summaries;
   if (game !== "both") {
     allowed = allowed.filter((card) => isPocketCardId(card.id) === (game === "pocket"));
   }
