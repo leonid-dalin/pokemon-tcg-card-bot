@@ -16,7 +16,7 @@ for (const entry of SET_INDEX) {
 const orderedByDate = [...SET_INDEX]
   .filter((entry) => entry.releaseDate)
   .sort((a, b) => (a.releaseDate ?? "").localeCompare(b.releaseDate ?? "") || a.id.localeCompare(b.id));
-const recency = new Map(orderedByDate.map((entry, index) => [entry.id, index]));
+const recency = new Map(orderedByDate.map((entry, index) => [normaliseName(entry.id), index]));
 
 /**
  * Returns a release-date rank for a card's set.
