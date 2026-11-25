@@ -9,7 +9,7 @@ import type { Card, CardSummary } from "../src/api/types.js";
 import { handleAutocomplete, handleCardCommand, handlePrintingsCommand } from "../src/discord/commands.js";
 import { createMessageHandler } from "../src/discord/messages.js";
 import { PageStore } from "../src/discord/pages.js";
-import { cardReply } from "../src/discord/replies.js";
+import { cardReply, searchReply } from "../src/discord/replies.js";
 import { SettingsStore, type CardGameDefault, type CardGameScope } from "../src/settings-store.js";
 import { extractMentions } from "../src/mentions.js";
 import { isPocketCardId } from "../src/prizes.js";
@@ -110,6 +110,23 @@ async function runLookup(entry: (typeof corpus.cases)[number], setting: (typeof 
   };
 }
 
+function payloadIds(payload: Record<string, unknown>): string[] {
+  return (payload.components as { toJSON: () => { components: { custom_id?: string }[] } }[] ?? [])
+    .flatMap((row) => row.toJSON().components.map((component) => component.custom_id ?? ""))
+    .flatMap((id) => [id.startsWith("allprint:") ? id.split(":")[1] : undefined, id.startsWith("printing:") ? id.split(":")[1] : undefined])
+    .filter((value): value is string => Boolean(value));
+}
+
+function assertDelivered(entry: (typeof corpus.cases)[number], setting: (typeof corpus.settings)[number], payload: Record<string, unknown>) {
+  const delivered = payloadIds(payload);
+  expect(delivered.length).toBeGreaterThan(0);
+  const expected = entry.expectedGame[setting.id];
+  if (expected === "none") return;
+  const pocket = delivered.some((id) => isPocketCardId(id));
+  if (expected === "ptcg") expect(pocket).toBe(false);
+  if (expected === "pocket") expect(delivered.every((id) => isPocketCardId(id))).toBe(true);
+}
+
 async function runMessage(entry: (typeof corpus.cases)[number], setting: (typeof corpus.settings)[number], settingsStore: SettingsStore) {
   const replies: Record<string, unknown>[] = [];
   const settings = { get: (guildId: string) => settingsStore.get(guildId) };
@@ -162,11 +179,11 @@ const settingsStore = store();
 
 function assertMeaning(entry: (typeof corpus.cases)[number], setting: (typeof corpus.settings)[number], result: Result) {
   const expected = entry.expectedGame[setting.id];
-  if (expected === "none") expect(result.game).toBe("none");
-  else if (expected === "ptcg") expect(["ptcg", "none"]).toContain(result.game);
+  if (entry.expectNoMatch || expected === "none") expect(result.game).toBe("none");
+  else if (expected === "ptcg") expect(result.game).toBe("ptcg");
   else if (expected === "pocket") expect(result.game).toBe("pocket");
-  else expect(["ptcg", "pocket", "none"]).toContain(result.game);
-  if (entry.mustNotReturn && expected !== "any") expect(result.id?.toLowerCase()).not.toBe(entry.mustNotReturn.toLowerCase());
+  else expect(result.id).not.toBeNull();
+  if (entry.mustNotReturn && (expected === "ptcg" || expected === "none")) expect(result.id?.toLowerCase()).not.toBe(entry.mustNotReturn.toLowerCase());
   if (entry.mustNotReturnName) expect(result.name).not.toBe(entry.mustNotReturnName);
   if (entry.setId && expected !== "pocket") expect(result.setReachable).toBe(true);
 }
@@ -204,11 +221,15 @@ describe("selection corpus: public entry points", () => {
       expect(mentionReplies).toHaveLength(1);
       expect(slashPayloads).toHaveLength(1);
       expect(choices.length).toBeGreaterThan(0);
-      if (setting.allowed === "ptcg" || (setting.allowed === "both" && setting.default === "ptcg")) {
-        expect(choices.some((choice) => isPocketCardId(choice.value))).toBe(false);
-      }
-      if (setting.allowed === "pocket" || (setting.allowed === "both" && setting.default === "pocket")) {
-        expect(choices.some((choice) => isPocketCardId(choice.value))).toBe(true);
+      assertDelivered(entry, setting, mentionReplies[0]!);
+      assertDelivered(entry, setting, slashPayloads[0]!);
+      const expected = entry.expectedGame[setting.id];
+      if (expected === "ptcg" || expected === "pocket") {
+        const wantsPocket = expected === "pocket";
+        expect(choices.every((choice) => isPocketCardId(choice.value) === wantsPocket)).toBe(true);
+        const mentionId = payloadIds(mentionReplies[0]!).find((id) => isPocketCardId(id) === wantsPocket)!;
+        const slashId = payloadIds(slashPayloads[0]!).find((id) => isPocketCardId(id) === wantsPocket)!;
+        expect(mentionId.toLowerCase()).toBe(slashId.toLowerCase());
       }
     });
   }
@@ -274,6 +295,40 @@ describe("selection corpus: result caps and order", () => {
       const forward = await runLookup(entry, setting);
       const reversed = await runLookup(entry, setting, true);
       expect(reversed.game).toBe(forward.game);
+    }
+  });
+});
+
+describe("selection corpus: declared caps are executed", () => {
+  it("caps quick swaps at ten candidates at the 9, 10 and 11 boundaries", async () => {
+    for (const count of [9, 10, 11]) {
+      const summaries = Array.from({ length: count + 1 }, (_, index) => ({
+        id: `sv01-${String(index + 1).padStart(3, "0")}`,
+        name: "Clefairy",
+        localId: String(index + 1),
+      })) as CardSummary[];
+      const client = {
+        searchByName: async () => summaries,
+        getCard: async (id: string) => ({ ...baseCard, id, name: "Clefairy" }),
+      } as unknown as TcgdexClient;
+      const result = await lookupCard(client, "Clefairy", undefined, { gamePreference: { allowed: "ptcg", default: "ptcg" } });
+      expect(result?.alternates).toHaveLength(Math.min(count, 10));
+    }
+  });
+
+  it("caps stored search rows at 250 at the 249, 250 and 251 boundaries", () => {
+    for (const count of [249, 250, 251]) {
+      const pages = new PageStore();
+      const groups = Array.from({ length: count }, (_, index) => ({
+        representative: { id: `sv01-${index + 1}`, name: "Clefairy", text: "Clefairy", category: "Pokemon" as const },
+        printings: 1,
+      }));
+      const reply = searchReply("Clefairy", groups, "TCGdex", "member", pages);
+      const token = (reply as { components: { toJSON: () => { components: { custom_id?: string }[] } }[] }).components
+        .flatMap((row) => row.toJSON().components.map((component) => component.custom_id ?? ""))
+        .map((id) => /^open:([^:]+)$/.exec(id)?.[1])
+        .find((value) => value !== undefined)!;
+      expect(pages.get(token)!.items).toHaveLength(Math.min(count, 250));
     }
   });
 });

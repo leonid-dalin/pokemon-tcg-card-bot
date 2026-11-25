@@ -14,7 +14,7 @@ const lor = fixture("selection-card-swsh11-062.json") as Card;
 const por = fixture("selection-card-me03-030.json") as Card;
 
 function client(summaries: CardSummary[], cards: Card[] = []): TcgdexClient {
-  const byId = new Map([...cards, ...summaries.map((entry) => ({ ...por, id: entry.id, name: entry.name }))].map((card) => [card.id, card]));
+  const byId = new Map([...summaries.map((entry) => ({ ...por, id: entry.id, name: entry.name })), ...cards].map((card) => [card.id, card]));
   return {
     searchByName: async () => summaries,
     getCard: async (id: string) => byId.get(id) ?? { ...por, id },
@@ -30,6 +30,7 @@ describe("effective-game selection contract", () => {
       gamePreference: physicalDefault,
     });
     expect(result?.card.id).toBe("swsh11-062");
+    expect(result?.card.abilities?.some((ability) => ability.name === "Moon-Watching Party")).toBe(true);
   });
 
   it("resolves clefairy|lor to the same printing", async () => {
@@ -38,6 +39,7 @@ describe("effective-game selection contract", () => {
       gamePreference: physicalDefault,
     });
     expect(result?.card.id).toBe("swsh11-062");
+    expect(result?.card.abilities?.some((ability) => ability.name === "Moon-Watching Party")).toBe(true);
   });
 
   it("does not send Exeggcute BW to Pocket on a physical-default server", async () => {
