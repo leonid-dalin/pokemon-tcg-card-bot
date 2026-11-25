@@ -5,7 +5,7 @@ import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
 import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdMatches, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
-import { findExactCardName, isCardNameEnding } from "./text-search.js";
+import { findExactCardName, findExactNames, isCardNameEnding } from "./text-search.js";
 import { effectiveGame, type GamePreference } from "./game-preference.js";
 import { isPocketCard, isPocketCardId, isPocketSet } from "./prizes.js";
 import { isPocketHint, packageSetId, resolveSetHint, exactSetHint, setFamily, setRecency } from "./set-index.js";
@@ -358,10 +358,16 @@ export async function lookupCard(
   // that exact name ("N") resolves through the local index by its id instead.
   if (normaliseName(query).length < 2) {
     if (resolved) {
-      const exact = findExactCardName(query);
-      if (!exact) return undefined;
-      const byId = await lookupCard(client, exact.id, setHint, options);
-      return byId;
+      const family = new Set(setFamily(resolved).map(normaliseName));
+      const inSet = findExactNames(query).filter((card) => family.has(normaliseName(setIdOf(card.id))));
+      const chosen = inSet.sort((a, b) => {
+        const number = (id: string) => Number(/(\d+)[a-z]?$/i.exec(id)?.[1] ?? 0);
+        return number(b.id) - number(a.id) || b.id.localeCompare(a.id);
+      })[0];
+      if (!chosen) return undefined;
+      const found = await lookupById(client, chosen.id, options);
+      if (!found || !family.has(normaliseName(setIdOf(found.card.id)))) return undefined;
+      return found;
     }
     const shortGame = effectiveGame(options.gamePreference);
     const pocket = shortGame === "ptcg" ? undefined : getPocketCard(query.trim());
