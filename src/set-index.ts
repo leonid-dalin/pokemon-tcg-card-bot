@@ -73,6 +73,10 @@ export function resolveSetHint(hint: string): string | undefined {
   const asName = byName.get(normalised);
   if (asName) return asName;
 
+  // An exact package set id outranks a physical set whose name merely contains it.
+  const packageSet = getPocketExpansion(trimmed)?.id;
+  if (packageSet) return packageSet;
+
   // Prefer the shortest indexed name containing the partial hint.
   const partial = SET_INDEX.filter((entry) => normaliseName(entry.name).includes(normalised)).sort(
     (a, b) => (a.name.length ?? 0) - (b.name.length ?? 0),
