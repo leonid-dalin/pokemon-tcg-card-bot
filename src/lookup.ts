@@ -352,7 +352,7 @@ export async function lookupCard(
     return lookupById(client, exact.id, options);
   }
 
-  if (isCardId(query.trim()) && printedAsId(query.trim()) !== query.trim()) {
+  if (isCardId(query.trim())) {
     return lookupById(client, printedAsId(query.trim()), options);
   }
 
