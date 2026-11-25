@@ -351,7 +351,10 @@ export async function lookupCard(
   const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
   const requireResolved = hintPocketSet;
   const requireArg = requireResolved ? packageSetId(resolved) : undefined;
-  if (pocketOnly) return lookupPocket(query, setHint, options);
+  if (pocketOnly) {
+    if (normaliseName(query).length < 2 && !searchPocketByName(query).some((card) => normaliseName(card.name) === normaliseName(query))) return undefined;
+    return lookupPocket(query, setHint, options);
+  }
 
   // A one-character name cannot be resolved by upstream search: TCGdex treats it
   // as a substring filter and returns unrelated cards first. A real card with
