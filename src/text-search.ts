@@ -87,7 +87,8 @@ export function textIndexSize(): number {
 
 /** Returns normalised indexed wording, or undefined for an unknown ID. */
 export function indexedText(id: string): string | undefined {
-  const hit = load().find((entry) => entry.id === id);
+  const wanted = normaliseName(id);
+  const hit = load().find((entry) => normaliseName(entry.id) === wanted);
   return hit ? normaliseName(hit.text) : undefined;
 }
 
