@@ -50,6 +50,17 @@ export function scoreCandidate(query: string, candidate: string): number {
   return 0;
 }
 
+/** True when the query names a mechanic suffix or an owner prefix. */
+export function hasQualifiedName(query: string): boolean {
+  const tokens = nameTokens(query);
+  return tokens.some((token) => NAME_SUFFIXES.has(token) || POSSESSIVE.test(token));
+}
+
+/** Splits attached mechanics so "Gengar-EX" searches the same names as "Gengar ex". */
+export function canonicalNameQuery(query: string): string {
+  return nameTokens(query).join(" ");
+}
+
 /** Prefixes the data uses ahead of a card name without changing which Pokémon it is. */
 const NAME_PREFIXES = new Set(["mega", "team", "radiant", "shining", "dark", "light"]);
 

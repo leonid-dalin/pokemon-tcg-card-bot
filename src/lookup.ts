@@ -4,7 +4,7 @@ import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } fr
 import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
 import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdMatches, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
-import { getPocketCard, searchPocketByName } from "./api/pocket.js";
+import { getPocketCard, pocketCandidates, searchPocketByName } from "./api/pocket.js";
 import { findExactCardName, findExactNames, isCardNameEnding } from "./text-search.js";
 import { effectiveGame, type GamePreference } from "./game-preference.js";
 import { isPocketCard, isPocketCardId, isPocketSet } from "./prizes.js";
@@ -224,7 +224,7 @@ function lookupPocket(
   requireSet = false,
   requiredSetId?: string,
 ): CardLookup | undefined {
-  const all = searchPocketByName(query);
+  const all = pocketCandidates(query);
   if (all.length === 0) return undefined;
 
   const hint = setHint && !isPocketHint(setHint) ? setHint.trim().toLowerCase() : undefined;
@@ -294,7 +294,7 @@ export async function lookupById(
 
   // Package cards use package alternates to keep the source catalogue consistent.
   const candidates = pocketCard
-    ? searchPocketByName(pinned.name)
+    ? pocketCandidates(pinned.name)
     : await client.searchByName(pinned.name).catch(() => []);
   return toLookup(pinned, candidates, pocketCard ? POCKET_ATTRIBUTION : options.attribution, options.energyEmoji, options.alternateLimit);
 }
@@ -357,7 +357,7 @@ export async function lookupCard(
   const requireResolved = hintPocketSet;
   const requireArg = requireResolved ? packageSetId(resolved) : undefined;
   if (pocketOnly) {
-    if (normaliseName(query).length < 2 && !searchPocketByName(query).some((card) => normaliseName(card.name) === normaliseName(query))) return undefined;
+    if (normaliseName(query).length < 2 && !pocketCandidates(query).some((card) => normaliseName(card.name) === normaliseName(query))) return undefined;
     return lookupPocket(query, setHint, options);
   }
 
@@ -379,7 +379,7 @@ export async function lookupCard(
     }
     const shortGame = effectiveGame(options.gamePreference);
     const pocket = shortGame === "ptcg" ? undefined : getPocketCard(query.trim());
-    if (pocket) return toLookup(pocket, searchPocketByName(pocket.name), POCKET_ATTRIBUTION, options.energyEmoji, options.alternateLimit);
+    if (pocket) return toLookup(pocket, pocketCandidates(pocket.name), POCKET_ATTRIBUTION, options.energyEmoji, options.alternateLimit);
     if (shortGame === "pocket") return undefined;
     const exact = findExactCardName(query);
     if (!exact) return undefined;

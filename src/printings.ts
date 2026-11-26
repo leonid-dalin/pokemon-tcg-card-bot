@@ -1,6 +1,6 @@
 import type { TcgdexClient } from "./api/tcgdex.js";
 import { OverloadedError } from "./api/limiter.js";
-import { getPocketCard, searchPocketByName } from "./api/pocket.js";
+import { getPocketCard, pocketCandidates, searchPocketByName } from "./api/pocket.js";
 import { printedNumber } from "./printed.js";
 import { normaliseName, setIdOf } from "./resolve.js";
 import { SET_INDEX } from "./data/set-index.js";
@@ -75,7 +75,7 @@ export async function printingsOf(client: TcgdexClient, name: string, allowed: "
     }
   }
 
-  for (const card of searchPocketByName(name)) {
+  for (const card of pocketCandidates(name)) {
     if (allowed === "ptcg") continue;
     if (normaliseName(card.name) !== wanted) continue;
     const date = releaseDateOf(card.id);

@@ -18,7 +18,7 @@ import { helpView } from "../help.js";
 import { allPrintingsIdFrom, printingIdFrom, detailsIdFrom, cardmarketRow, MISS_MENU_ID, MISS_MENU_PREFIX } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
 import { effectiveGame } from "../game-preference.js";
-import { searchPocketByName } from "../api/pocket.js";
+import { pocketCandidates, searchPocketByName } from "../api/pocket.js";
 import { toEmbed } from "./embeds.js";
 import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
@@ -203,7 +203,7 @@ export async function handleAutocomplete(
   }
   if (game === "pocket") {
     const merged = new Map<string, (typeof allowed)[number]>();
-    for (const card of searchPocketByName(query)) merged.set(card.id.toLowerCase(), card);
+    for (const card of pocketCandidates(query)) merged.set(card.id.toLowerCase(), card);
     for (const card of allowed) {
       const key = card.id.toLowerCase();
       if (!merged.has(key)) merged.set(key, card);
