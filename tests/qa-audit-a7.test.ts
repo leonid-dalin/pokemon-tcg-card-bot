@@ -45,4 +45,19 @@ describe("A7 decklists retain a real one-character name", () => {
     expect(fields.find((field) => field.name === "Cards")?.value).toBe("60");
     expect(renderDecklist(deck).description).toContain("4 N (NVI 101)");
   });
+
+  it("keeps a non-ASCII card name in a decklist", () => {
+    const nonAscii = [
+      "Pokemon: 12",
+      "4 バトルサーチ ME03 30",
+      "4 ポケモン ME03 31",
+      "4 Switch SVI 194",
+      "4 Nest Ball SVI 181",
+      "4 Ultra Ball SVI 196",
+      "Total Cards: 20",
+    ].join("\n");
+    const parsed = parseDecklist(nonAscii)!;
+    expect(parsed.lines.some((line) => line.name === "バトルサーチ")).toBe(true);
+    expect(parsed.lines.reduce((sum, line) => sum + line.count, 0)).toBe(20);
+  });
 });

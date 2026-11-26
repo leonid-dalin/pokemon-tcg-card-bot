@@ -5,8 +5,7 @@ import { handleCardCommand } from "../src/discord/commands.js";
 import { PageStore } from "../src/discord/pages.js";
 import { isCardId, lookupCard } from "../src/lookup.js";
 
-const card = JSON.parse(readFileSync(new URL("./fixtures/selection-card-swsh11-062.json", import.meta.url), "utf8")) as Card;
-const offered = { ...card, id: "me06-011", name: "Mega Golisopod ex" };
+const offered = JSON.parse(readFileSync(new URL("./fixtures/me06-011.json", import.meta.url), "utf8")) as Card;
 
 function client(): TcgdexClient {
   return {
