@@ -52,6 +52,11 @@ function isAdminNow(interaction: PanelInteraction): boolean {
   return Boolean(interaction.inGuild?.() && interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 }
 
+function setDraft(session: SettingsSession, ids: string[]): void {
+  session.draftChannelIds = [...ids];
+  session.draftBaselineIds = [...ids];
+}
+
 function reconcileBaseline(session: SettingsSession, store: SettingsStore): void {
   if (session.scope !== "server" || !session.guildId) return;
   const stored = store.get(session.guildId);
@@ -294,8 +299,7 @@ export class SettingsPanelController {
         session.screen = value;
         if (value === "channels" && session.guildId) {
           const stored = this.store.get(session.guildId);
-          session.draftChannelIds = [...stored.selectedChannelIds];
-          session.draftBaselineIds = [...stored.selectedChannelIds];
+          setDraft(session, stored.selectedChannelIds);
         }
         reconcileBaseline(session, this.store);
         this.sessions.update(session);
@@ -388,8 +392,7 @@ export class SettingsPanelController {
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
-      session.draftChannelIds = [...before.selectedChannelIds];
-      session.draftBaselineIds = [...session.draftChannelIds];
+      setDraft(session, before.selectedChannelIds);
 this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed while you were here. This screen shows the current values; make your choice again.");
       return;
@@ -458,8 +461,7 @@ this.sessions.update(session);
     }
 
     if (sub === "cancel") {
-      session.draftChannelIds = [...before.selectedChannelIds];
-      session.draftBaselineIds = [...session.draftChannelIds];
+      setDraft(session, before.selectedChannelIds);
 this.sessions.update(session);
       await this.render(session, interaction, isAdmin);
       return;
@@ -508,7 +510,7 @@ this.sessions.update(session);
     if (sub === "all" || sub === "selected") {
       if (baselineOf(before) !== session.baseline) {
         session.baseline = baselineOf(before);
-        session.draftChannelIds = [...before.selectedChannelIds];
+        setDraft(session, before.selectedChannelIds);
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin, "These settings changed while you were here. Choose again.");
         return;
@@ -529,7 +531,7 @@ this.sessions.update(session);
       this.store.update(session.guildId, { autoReplyChannelMode: sub });
       const after = this.store.get(session.guildId);
       session.baseline = baselineOf(after);
-      session.draftChannelIds = [...after.selectedChannelIds];
+      setDraft(session, after.selectedChannelIds);
       this.sessions.update(session);
       const previous = before.autoReplyChannelMode === "all" ? "Everywhere" : "Selected channels";
       const current = sub === "all" ? "Everywhere" : "Selected channels";
@@ -566,8 +568,7 @@ this.sessions.update(session);
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
-      session.draftChannelIds = [...before.selectedChannelIds];
-      session.draftBaselineIds = [...session.draftChannelIds];
+      setDraft(session, before.selectedChannelIds);
 this.sessions.update(session);
       await this.render(session, interaction, isAdminNow(interaction), "These settings changed while you were here. The draft was rebuilt from the current channels; make your choice again.");
       return;
@@ -579,8 +580,7 @@ this.sessions.update(session);
     this.store.update(session.guildId, { autoReplyChannelMode: "selected", selectedChannelIds: draft });
     const after = this.store.get(session.guildId);
     session.baseline = baselineOf(after);
-    session.draftChannelIds = [...after.selectedChannelIds];
-    session.draftBaselineIds = [...session.draftChannelIds];
+    setDraft(session, after.selectedChannelIds);
   this.sessions.update(session);
     const savedIds = [...after.selectedChannelIds].sort().join(",");
     const modeChanged = before.autoReplyChannelMode !== after.autoReplyChannelMode;
@@ -624,8 +624,7 @@ this.sessions.update(session);
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
-      session.draftChannelIds = [...before.selectedChannelIds];
-      session.draftBaselineIds = [...session.draftChannelIds];
+      setDraft(session, before.selectedChannelIds);
 this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed while you were here. Choose again.");
       return;
@@ -657,8 +656,7 @@ this.sessions.update(session);
     const before = this.store.get(session.guildId);
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
-      session.draftChannelIds = [...before.selectedChannelIds];
-      session.draftBaselineIds = [...session.draftChannelIds];
+      setDraft(session, before.selectedChannelIds);
 this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed since you opened the reset confirmation. Review them and confirm the reset again.");
       return;

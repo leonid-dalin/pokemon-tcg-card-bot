@@ -56,6 +56,24 @@ describe("Q1 stale channel drafts cannot overwrite another admin", () => {
     });
   }
 
+  it("keeps the second admin's channel after conflict recovery", async () => {
+    const a = "110000000000000001";
+    const b = "110000000000000002";
+    const { store, sessions, id } = setup();
+    store.update("g1", { selectedChannelIds: [a], autoReplyChannelMode: "selected" });
+    const press = panel(store, sessions, id);
+    await press("nav", ["channels"]);
+    store.update("g1", { selectedChannelIds: [b] });
+    const conflict = await press("ch:selected");
+    expect(JSON.stringify(conflict)).toContain("changed while");
+    store.update("g1", { selectedChannelIds: [a] });
+    await press("refresh");
+    const save = await press("ch:save");
+    expect(JSON.stringify(save)).toContain("changed while");
+    expect(store.get("g1").selectedChannelIds).toEqual([a]);
+    store.close();
+  });
+
   it("allows the next legitimate write after navigating to Currency", async () => {
     const { store, sessions, id } = setup();
     store.update("g1", { currency: "GBP" });
