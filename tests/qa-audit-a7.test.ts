@@ -1,3 +1,4 @@
+import { offlineClient } from "./fixtures/qa-offline-client.js";
 import { describe, expect, it } from "vitest";
 import { parseDecklist } from "../src/decklist.js";
 import { renderDecklist } from "../src/render.js";
@@ -32,8 +33,7 @@ describe("A7 decklists retain a real one-character name", () => {
 
   it("resolves the N line through the real index", async () => {
     const { resolveDeckCards } = await import("../src/deck-check.js");
-    const { TcgdexClient } = await import("../src/api/tcgdex.js");
-    const api = new TcgdexClient({ retries: 0, timeoutMs: 12000 });
+    const api = offlineClient(["bw3-101"]);
     const deck = parseDecklist(deckText)!;
     const resolution = await resolveDeckCards(api, deck);
     expect(resolution?.lines.find((entry) => entry.line.name === "N")?.card?.id).toBe("bw3-101");

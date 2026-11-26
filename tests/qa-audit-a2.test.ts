@@ -14,15 +14,20 @@ const empty: TcgdexClient = {
 
 async function publicList(name: string) {
   const replies: { components?: unknown[] }[] = [];
+  const pages = new PageStore();
   await handlePrintingsCommand({
-    client: empty, attribution: "TCGdex", energyEmoji: {}, pages: new PageStore(),
+    client: empty, attribution: "TCGdex", energyEmoji: {}, pages,
     settings: { get: () => ({ cardGames: "ptcg", defaultCardGame: "ptcg" }) },
   } as never, {
     guildId: "g1", user: { id: "member" },
     options: { getString: () => name },
     deferReply: async () => {}, editReply: async (payload) => { replies.push(payload as never); },
   } as never);
-  return replies[0]!;
+  const ids = ((replies[0]?.components ?? []) as { toJSON: () => { components: { custom_id?: string }[] } }[])
+    .flatMap((row) => row.toJSON().components.map((component) => component.custom_id ?? ""));
+  const token = ids.map((id) => /^open:([^:]+)$/.exec(id)?.[1]).find((value) => value !== undefined)!;
+  const page = pages.get(token)!;
+  return { items: page.items.map((item) => item.cardId), title: page.title };
 }
 
 describe("A2 physical printing discovery stays physical on empty upstream", () => {
@@ -37,10 +42,10 @@ describe("A2 physical printing discovery stays physical on empty upstream", () =
   });
 
   it("shows only physical cards in the public printings list", async () => {
-    const reply = await publicList("Clefairy");
-    const ids = ((reply.components ?? []) as { toJSON: () => { components: { custom_id?: string }[] } }[])
-      .flatMap((row) => row.toJSON().components.map((component) => component.custom_id ?? ""));
-    const token = ids.map((id) => /^open:([^:]+)$/.exec(id)?.[1]).find((value) => value !== undefined)!;
-    expect(token).toBeTruthy();
+    const { items, title } = await publicList("Clefairy");
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((id) => !isPocketCardId(id))).toBe(true);
+    expect(items.some((id) => id.toLowerCase() === "swsh11-062")).toBe(true);
+    expect(title).toContain("Clefairy");
   });
 });

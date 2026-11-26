@@ -1,10 +1,10 @@
+import { offlineClient } from "./fixtures/qa-offline-client.js";
 import { describe, expect, it } from "vitest";
-import { TcgdexClient } from "../src/api/tcgdex.js";
 import { lookupCard } from "../src/lookup.js";
 import { isPocketCardId } from "../src/prizes.js";
 import { resolveSetHint } from "../src/set-index.js";
 
-const api = new TcgdexClient({ retries: 0, timeoutMs: 12000 });
+const api = offlineClient(["pa-094"]);
 
 describe("A6 exact package set ids", () => {
   it("resolves pa to Promo-A before a partial physical name", () => {
