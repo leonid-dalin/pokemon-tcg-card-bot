@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 MANAGE = ROOT / "deploy" / "manage.py"
-SCRATCH = Path("/var/home/user/.hermes/profiles/pokemon/cache/scratch")
 
 
 class UnknownRecoveryPhase(unittest.TestCase):
@@ -15,7 +14,7 @@ class UnknownRecoveryPhase(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("manage_under_test", MANAGE)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        with tempfile.TemporaryDirectory(dir=SCRATCH, prefix="qa-p3-recovery-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="qa-p3-recovery-") as tmp:
             root = Path(tmp)
             (root / "releases").mkdir()
             (root / "backups").mkdir()

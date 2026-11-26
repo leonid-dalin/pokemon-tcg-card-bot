@@ -24,7 +24,7 @@ Threads use their parent channel's selection. These restrictions apply to automa
 
 Card games accepts Physical, Pocket or Both. When both are allowed, a second choice sets the default game. New servers allow both and prefer the physical game
 
-The allowed games bound every result, and the default game decides which one an unhinted request uses. `/card`, card-name mentions, `/search`, mention search, card-name autocomplete and printing discovery apply that choice before ranking or capping results, so a physical-default server does not surface Pocket cards through a miss or a fallback. An explicit game hint, set hint or exact card ID takes precedence over the default. Picking a card from a search result opens that card, whatever the setting
+The default game decides which game an unhinted request uses. `/card`, card-name mentions, `/search`, mention search, card-name autocomplete and printing discovery apply that choice before ranking or capping results, so a physical-default server does not surface Pocket cards through a miss or a fallback. An explicit game hint, set hint or exact card ID overrides this choice and may select a card from the other game: `|pocket` finds a Pocket card even on a physical-only server. Picking a card from a search result opens that card, whatever the setting
 
 ## Currency
 

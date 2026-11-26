@@ -52,6 +52,18 @@ function isAdminNow(interaction: PanelInteraction): boolean {
   return Boolean(interaction.inGuild?.() && interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 }
 
+function reconcileBaseline(session: SettingsSession, store: SettingsStore): void {
+  if (session.scope !== "server" || !session.guildId) return;
+  const stored = store.get(session.guildId);
+  const draftIds = session.draftChannelIds;
+  const originIds = session.draftBaselineIds;
+  if (draftIds && originIds) {
+    const same = (a: string[], b: string[]) => [...a].sort().join(",") === [...b].sort().join(",");
+    if (!same(originIds, stored.selectedChannelIds)) return;
+  }
+  session.baseline = baselineOf(stored);
+}
+
 export function baselineOf(settings: GuildSettings | undefined): string {
   if (!settings) return "no-server";
   const fields = [
@@ -268,7 +280,7 @@ export class SettingsPanelController {
 
     switch (action) {
       case "refresh":
-        if (session.scope === "server" && session.guildId) session.baseline = baselineOf(this.store.get(session.guildId));
+        reconcileBaseline(session, this.store);
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin);
         return;
@@ -283,8 +295,9 @@ export class SettingsPanelController {
         if (value === "channels" && session.guildId) {
           const stored = this.store.get(session.guildId);
           session.draftChannelIds = [...stored.selectedChannelIds];
-          if (session.scope === "server") session.baseline = baselineOf(stored);
+          session.draftBaselineIds = [...stored.selectedChannelIds];
         }
+        reconcileBaseline(session, this.store);
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin);
         return;
@@ -297,7 +310,7 @@ export class SettingsPanelController {
         }
         session.scope = target === "server" ? "server" : "personal";
         session.screen = session.scope === "server" ? "overview" : "personal";
-        if (session.scope === "server" && session.guildId) session.baseline = baselineOf(this.store.get(session.guildId));
+        reconcileBaseline(session, this.store);
         this.sessions.update(session);
         await this.render(session, interaction, isAdmin);
         return;
@@ -376,7 +389,8 @@ export class SettingsPanelController {
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
       session.draftChannelIds = [...before.selectedChannelIds];
-      this.sessions.update(session);
+      session.draftBaselineIds = [...session.draftChannelIds];
+this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed while you were here. This screen shows the current values; make your choice again.");
       return;
     }
@@ -445,7 +459,8 @@ export class SettingsPanelController {
 
     if (sub === "cancel") {
       session.draftChannelIds = [...before.selectedChannelIds];
-      this.sessions.update(session);
+      session.draftBaselineIds = [...session.draftChannelIds];
+this.sessions.update(session);
       await this.render(session, interaction, isAdmin);
       return;
     }
@@ -552,7 +567,8 @@ export class SettingsPanelController {
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
       session.draftChannelIds = [...before.selectedChannelIds];
-      this.sessions.update(session);
+      session.draftBaselineIds = [...session.draftChannelIds];
+this.sessions.update(session);
       await this.render(session, interaction, isAdminNow(interaction), "These settings changed while you were here. The draft was rebuilt from the current channels; make your choice again.");
       return;
     }
@@ -564,7 +580,8 @@ export class SettingsPanelController {
     const after = this.store.get(session.guildId);
     session.baseline = baselineOf(after);
     session.draftChannelIds = [...after.selectedChannelIds];
-    this.sessions.update(session);
+    session.draftBaselineIds = [...session.draftChannelIds];
+  this.sessions.update(session);
     const savedIds = [...after.selectedChannelIds].sort().join(",");
     const modeChanged = before.autoReplyChannelMode !== after.autoReplyChannelMode;
     const changed = modeChanged || previousIds !== savedIds;
@@ -608,7 +625,8 @@ export class SettingsPanelController {
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
       session.draftChannelIds = [...before.selectedChannelIds];
-      this.sessions.update(session);
+      session.draftBaselineIds = [...session.draftChannelIds];
+this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed while you were here. Choose again.");
       return;
     }
@@ -640,7 +658,8 @@ export class SettingsPanelController {
     if (baselineOf(before) !== session.baseline) {
       session.baseline = baselineOf(before);
       session.draftChannelIds = [...before.selectedChannelIds];
-      this.sessions.update(session);
+      session.draftBaselineIds = [...session.draftChannelIds];
+this.sessions.update(session);
       await this.render(session, interaction, isAdmin, "These settings changed since you opened the reset confirmation. Review them and confirm the reset again.");
       return;
     }

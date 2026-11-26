@@ -12,6 +12,7 @@ export interface SettingsSession {
   scope: "personal" | "server";
   /** Selected channel ids pending Save, only while on the channels screen. */
   draftChannelIds?: string[];
+  draftBaselineIds?: string[];
   draftRemovePage?: number;
   /** The stored values this screen was rendered from, for conflict detection. */
   baseline: string;
