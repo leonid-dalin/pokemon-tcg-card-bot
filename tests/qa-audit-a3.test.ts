@@ -15,6 +15,8 @@ describe("A3 a valid set id is not a card id", () => {
 
   it("keeps printed code and number as a real card id", async () => {
     expect(isCardId("30C 9")).toBe(true);
-    expect((await lookupCard(api, "Greninja BREAK", "30C 9"))?.card.id).toBe("30th-9");
+    const result = await lookupCard(api, "Greninja BREAK", "30C 9");
+    expect(result?.card.id).toBe("30th-009");
+    expect(result?.card.name).toBe("Vulpix");
   });
 });

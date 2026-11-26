@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import type { Card, TcgdexClient } from "../src/api/tcgdex.js";
+import type { Card } from "../../src/api/types.js";
+import { TcgdexError, type TcgdexClient } from "../../src/api/tcgdex.js";
 
 const captured = JSON.parse(
   readFileSync(new URL("./qa-offline-cards.json", import.meta.url), "utf8"),
@@ -16,6 +17,10 @@ export function offlineClient(ids: string[], extra: Card[] = []): TcgdexClient {
     .map((card) => ({ id: card.id, name: card.name, localId: card.id.slice(card.id.lastIndexOf("-") + 1) }));
   return {
     searchByName: async () => summaries,
-    getCard: async (id: string) => byId.get(id.toLowerCase()) ?? byId.get(`${id.toLowerCase().replace(/-(\d)$/, "-00$1")}`),
+    getCard: async (id: string) => {
+      const card = byId.get(id.toLowerCase());
+      if (!card) throw new TcgdexError(`not found: ${id}`, 404);
+      return card;
+    },
   } as unknown as TcgdexClient;
 }

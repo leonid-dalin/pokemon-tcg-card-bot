@@ -85,14 +85,18 @@ export function textIndexSize(): number {
   return load().length;
 }
 
+/** Maps a printed promo id to its native package alias, preserving the family letter. */
+export function promoNativeAlias(indexedId: string): string | undefined {
+  const promo = /^p-([abc])-(\d+[a-z]?)$/i.exec(normaliseName(indexedId));
+  return promo ? `p${promo[1]!.toLowerCase()}-${promo[2]}` : undefined;
+}
+
 /** Returns normalised indexed wording, or undefined for an unknown ID. */
 export function indexedText(id: string): string | undefined {
   const wanted = normaliseName(id);
   const hit = load().find((entry) => {
     const indexed = normaliseName(entry.id);
-    if (indexed === wanted) return true;
-    const promo = /^p-([abc])-(\d+[a-z]?)$/i.exec(indexed);
-    return promo !== null && normaliseName(`pa-${promo[2]}`) === wanted;
+    return indexed === wanted || promoNativeAlias(entry.id) === wanted;
   });
   return hit ? normaliseName(hit.text) : undefined;
 }
