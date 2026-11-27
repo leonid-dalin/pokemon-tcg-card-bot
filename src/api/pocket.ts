@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Card, CardSummary } from "./types.js";
-import { canonicalNameQuery, hasQualifiedName, isPrintingOf, normaliseName } from "../resolve.js";
+import { canonicalNameQuery, isPartialPrintingOf, isPrintingOf, normaliseName } from "../resolve.js";
 
 // Resolve package data relative to this module, independent of the working directory.
 const PACKAGE_ROOT = join(
@@ -247,7 +247,8 @@ export function pocketCandidates(name: string): CardSummary[] {
   const unique = pool.filter((card, index) => pool.findIndex((row) => row.id.toLowerCase() === card.id.toLowerCase()) === index);
   const compatible = unique.filter((card) => isPrintingOf(name, card.name));
   if (compatible.length > 0) return compatible;
-  return hasQualifiedName(name) ? [] : unique;
+  const partial = unique.filter((card) => isPartialPrintingOf(name, card.name));
+  return partial.length > 0 ? partial : [];
 }
 
 export function searchPocketByName(name: string): CardSummary[] {
