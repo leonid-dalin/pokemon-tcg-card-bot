@@ -59,7 +59,7 @@
       "upstream": "exeggcute-upstream.json",
       "physicalCandidates": ["bw9-4", "bw10-102"],
       "mustNotReturn": "a1-021",
-      "expectedGame": { "physical-only": "none", "pocket-only": "pocket", "both-physical-default": "none", "both-pocket-default": "pocket", "no-server-dm": "pocket" }
+      "expectedGame": { "physical-only": "none", "pocket-only": "none", "both-physical-default": "none", "both-pocket-default": "none", "no-server-dm": "none" }
     },
     {
       "id": "exeggcute-bw-pipe",
