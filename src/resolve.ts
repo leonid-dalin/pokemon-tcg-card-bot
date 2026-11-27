@@ -50,10 +50,12 @@ export function scoreCandidate(query: string, candidate: string): number {
   return 0;
 }
 
-/** True when the query names a mechanic suffix or an owner prefix. */
+/** True when a name core carries an explicit mechanic suffix or owner prefix. */
 export function hasQualifiedName(query: string): boolean {
   const tokens = nameTokens(query);
-  return tokens.some((token) => NAME_SUFFIXES.has(token) || POSSESSIVE.test(token));
+  if (tokens.length < 2) return false;
+  const core = tokens.filter((token) => !NAME_SUFFIXES.has(token) && !POSSESSIVE.test(token));
+  return core.length > 0 && tokens.some((token) => NAME_SUFFIXES.has(token) || POSSESSIVE.test(token));
 }
 
 /** Splits attached mechanics so "Gengar-EX" searches the same names as "Gengar ex". */

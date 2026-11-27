@@ -16,7 +16,7 @@ import { printingItems, printingsOf } from "../printings.js";
 import { setChecklistReply } from "../set-checklist.js";
 import { helpView } from "../help.js";
 import { allPrintingsIdFrom, printingIdFrom, detailsIdFrom, cardmarketRow, MISS_MENU_ID, MISS_MENU_PREFIX } from "./printing-buttons.js";
-import { rankPrintings } from "../resolve.js";
+import { canonicalNameQuery, rankPrintings } from "../resolve.js";
 import { effectiveGame } from "../game-preference.js";
 import { pocketCandidates, searchPocketByName } from "../api/pocket.js";
 import { toEmbed } from "./embeds.js";
@@ -210,7 +210,7 @@ export async function handleAutocomplete(
     }
     allowed = [...merged.values()];
   }
-  const ranked = rankPrintings(allowed, query).slice(0, 25);
+  const ranked = rankPrintings(allowed, canonicalNameQuery(query)).slice(0, 25);
   await interaction.respond(
     ranked.map((card) => ({ name: `${card.name} · ${printedNumber(card.id)}`.slice(0, 100), value: card.id })),
   );

@@ -245,7 +245,9 @@ export function pocketCandidates(name: string): CardSummary[] {
     ? direct
     : [...direct, ...searchPocketByName(canonical)];
   const unique = pool.filter((card, index) => pool.findIndex((row) => row.id.toLowerCase() === card.id.toLowerCase()) === index);
-  return hasQualifiedName(name) ? unique.filter((card) => isPrintingOf(name, card.name)) : unique;
+  const compatible = unique.filter((card) => isPrintingOf(name, card.name));
+  if (compatible.length > 0) return compatible;
+  return hasQualifiedName(name) ? [] : unique;
 }
 
 export function searchPocketByName(name: string): CardSummary[] {
