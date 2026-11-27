@@ -10,7 +10,7 @@ import { SettingsStore } from "../src/settings-store.js";
 import { readFileSync } from "node:fs";
 import type { Card } from "../src/api/types.js";
 
-const baseCard = JSON.parse(readFileSync(new URL("./fixtures/selection-card-me03-030.json", import.meta.url), "utf8")) as Card;
+const physicalCard = JSON.parse(readFileSync(new URL("./fixtures/swsh12.5-019.json", import.meta.url), "utf8")) as Card;
 
 const api = {
   searchByName: async () => [],
@@ -92,7 +92,7 @@ describe("N1 mechanics and owner prefixes survive package selection", () => {
     expect((await lookupCard(api, "Char"))?.card.name).toBeDefined();
     const physicalApi = {
       searchByName: async () => [{ id: "swsh12.5-019", name: "Charizard VSTAR", localId: "019" }],
-      getCard: async (id: string) => ({ ...baseCard, id, name: "Charizard VSTAR" }),
+      getCard: async (id: string) => ({ ...physicalCard, id }),
     } as unknown as TcgdexClient;
     const physical = await lookupCard(physicalApi, "Charizard VSTAR", undefined, { gamePreference: { allowed: "both", default: "ptcg" } });
     expect(physical?.card.id).toBe("swsh12.5-019");
