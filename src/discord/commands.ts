@@ -15,8 +15,10 @@ import { searchCardGroups } from "../text-search.js";
 import { printingItems, printingsOf } from "../printings.js";
 import { setChecklistReply } from "../set-checklist.js";
 import { helpView } from "../help.js";
-import { printingIdFrom, detailsIdFrom, cardmarketRow, MISS_MENU_ID, MISS_MENU_PREFIX } from "./printing-buttons.js";
+import { allPrintingsIdFrom, printingIdFrom, detailsIdFrom, cardmarketRow, MISS_MENU_ID, MISS_MENU_PREFIX } from "./printing-buttons.js";
 import { rankPrintings } from "../resolve.js";
+import { effectiveGame } from "../game-preference.js";
+import { searchPocketByName } from "../api/pocket.js";
 import { toEmbed } from "./embeds.js";
 import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
@@ -193,13 +195,21 @@ export async function handleAutocomplete(
   }
 
   // The name path reaches upstream too, so it needs the same deadline as the set list.
-  const summaries = await withDeadline(context.client.searchByName(query));
-  if (!summaries) {
-    await interaction.respond([]);
-    return;
+  const game = effectiveGame(gamePreference(context, interaction.guildId));
+  const summaries = (await withDeadline(context.client.searchByName(query).catch(() => undefined))) ?? [];
+  let allowed = summaries;
+  if (game !== "both") {
+    allowed = allowed.filter((card) => isPocketCardId(card.id) === (game === "pocket"));
   }
-  const scope = gamePreference(context, interaction.guildId)?.allowed ?? "both";
-  const allowed = scope === "both" ? summaries : summaries.filter((card) => isPocketCardId(card.id) === (scope === "pocket"));
+  if (game === "pocket") {
+    const merged = new Map<string, (typeof allowed)[number]>();
+    for (const card of searchPocketByName(query)) merged.set(card.id.toLowerCase(), card);
+    for (const card of allowed) {
+      const key = card.id.toLowerCase();
+      if (!merged.has(key)) merged.set(key, card);
+    }
+    allowed = [...merged.values()];
+  }
   const ranked = rankPrintings(allowed, query).slice(0, 25);
   await interaction.respond(
     ranked.map((card) => ({ name: `${card.name} · ${printedNumber(card.id)}`.slice(0, 100), value: card.id })),
@@ -256,6 +266,51 @@ export async function handlePrintingButton(
     return;
   }
   await interaction.editReply({ ...cardReply(lookup, parsed.ownerId), content: null });
+}
+
+
+export async function handleAllPrintingsButton(
+  context: CommandContext,
+  interaction: ButtonInteraction,
+): Promise<void> {
+  const parsed = allPrintingsIdFrom(interaction.customId);
+  if (!parsed) return;
+  if (parsed.ownerId && parsed.ownerId !== interaction.user.id) {
+    await interaction.reply({
+      content: "Only the person who asked can change this. Ask for your own copy with [[name]] or /card.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const admission = admitRequest(context, interaction.guildId, interaction.user.id);
+  if (!admission.allowed) {
+    await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
+    return;
+  }
+  const pinned = await lookupById(context.client, parsed.cardId, {
+    attribution: context.attribution,
+    energyEmoji: context.energyEmoji,
+  });
+  if (!pinned) {
+    await interaction.editReply({ content: `No card matched \`${parsed.cardId}\`.` });
+    return;
+  }
+  const allowed = isPocketCardId(parsed.cardId) ? "pocket" : "ptcg";
+  const printings = await printingsOf(context.client, pinned.card.name, allowed);
+  if (printings.length === 0) {
+    await interaction.editReply({ content: `No card matched \`${pinned.card.name}\`.` });
+    return;
+  }
+  const page: ListPage = {
+    title: `${printings.length} ${printings.length === 1 ? "printing" : "printings"} of ${printings[0]!.name}`,
+    items: printingItems(printings),
+    perPage: 10,
+    ownerId: interaction.user.id,
+    footer: footerFor(printings, context.attribution),
+  };
+  const token = context.pages.put(page);
+  await interaction.editReply(listReply(page, token, 0));
 }
 
 export async function handleDetailsButton(
@@ -438,7 +493,7 @@ export async function handleSearchCommand(
 ): Promise<void> {
   const query = interaction.options.getString("text", true).trim();
   await interaction.deferReply();
-  const scope = gamePreference(context, interaction.guildId)?.allowed ?? "both";
+  const scope = effectiveGame(gamePreference(context, interaction.guildId));
   await interaction.editReply(searchReply(query, searchCardGroups(query, scope), context.attribution, interaction.user.id, context.pages));
 }
 
@@ -504,7 +559,7 @@ export async function handlePrintingsCommand(
     await interaction.editReply({ content: busyMessage(admission.retryAfterSeconds) });
     return;
   }
-  const allowed = gamePreference(context, interaction.guildId)?.allowed ?? "both";
+  const allowed = effectiveGame(gamePreference(context, interaction.guildId));
 
   // Autocomplete values are card ids; use the resolved name for the listing.
   let printings: Awaited<ReturnType<typeof printingsOf>>;

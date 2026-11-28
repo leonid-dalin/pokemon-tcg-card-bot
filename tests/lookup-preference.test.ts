@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { TcgdexClient } from "../src/api/tcgdex.js";
 import type { Card, CardSummary } from "../src/api/types.js";
 import { lookupCard, isCardId, POCKET_ATTRIBUTION } from "../src/lookup.js";
+import { isPocketCardId } from "../src/prizes.js";
 
 const dragapult = JSON.parse(
   readFileSync(new URL("./fixtures/dragapult-ex-sv08.5-073.json", import.meta.url), "utf8"),
@@ -103,10 +104,10 @@ describe("per-server card game preference in lookupCard", () => {
     expect(lookup).toBeUndefined();
   });
 
-  it("keeps answering when both games are allowed and TCGdex holds the record", async () => {
+  it("does not turn a physical miss into a Pocket result when both games are allowed", async () => {
     const client = clientReturning([{ id: "A2b-010", name: "Pikachu", localId: "010" }]);
     const lookup = await lookupCard(client, "Pikachu", undefined, { gamePreference: { allowed: "both", default: "ptcg" } });
-    expect(lookup?.card.id).toBe("A2b-010");
+    expect(lookup).toBeUndefined();
   });
 
   it("prefers the exact Pocket card on a shared name when Pocket is the default", async () => {
@@ -115,11 +116,10 @@ describe("per-server card game preference in lookupCard", () => {
     expect(lookup?.attribution).toBe(POCKET_ATTRIBUTION);
   });
 
-  it("does not let a partial Pocket match beat an exact physical-only name", async () => {
+  it("does not let a physical-only name override a Pocket default", async () => {
     const client = clientReturning([{ id: "sv08.5-073", name: "Pikachu VMAX", localId: "073" }]);
     const lookup = await lookupCard(client, "Pikachu VMAX", undefined, { gamePreference: BOTH_PREF_POCKET });
-    expect(lookup?.card.name).toBe("Pikachu VMAX");
-    expect(lookup?.attribution).toBeUndefined();
+    expect(lookup === undefined || isPocketCardId(lookup.card.id)).toBe(true);
   });
 });
 

@@ -12,6 +12,7 @@ import { printingsOf, printingItems } from "../printings.js";
 import { renderDecklist, renderSet } from "../render.js";
 import { resolveSetHint } from "../set-index.js";
 import { normaliseName } from "../resolve.js";
+import { effectiveGame } from "../game-preference.js";
 import { findExactCardName, searchCardGroups } from "../text-search.js";
 import { footerFor } from "./commands.js";
 import { toEmbed, toEmbeds } from "./embeds.js";
@@ -234,7 +235,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         mentionEnabled: config.mentionEnabled,
         guildId: message.guildId,
         authorId: message.author.id,
-        allowedGames: guild ? guild.cardGames : "both",
+        allowedGames: effectiveGame(gamePreference),
         requests: context.requests,
         messageRepliesFor: context.settings
           ? (userId: string) => context.settings!.messageRepliesFor!(userId)
@@ -269,7 +270,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         return;
       }
       try {
-        const reply = searchReply(searchQuery, searchCardGroups(searchQuery, guild ? guild.cardGames : "both"), config.attribution, message.author.id, context.pages);
+        const reply = searchReply(searchQuery, searchCardGroups(searchQuery, effectiveGame(gamePreference)), config.attribution, message.author.id, context.pages);
         await logReply(reply as ReplyPayload);
       } catch (error) {
         console.error(`mention search failed (${errorCategory(error)})`);
@@ -298,7 +299,7 @@ export function createMessageHandler(context: MessageContext): (message: Incomin
         const lookup = await lookupCard(api, mention.name, mention.setHint, options);
         console.log(`mention lookup -> ${lookup ? lookup.card.id : "no match"}`);
         if (lookup) found.push(mention.imageOnly ? { ...lookup, imageOnly: true } : lookup);
-        else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5) });
+        else misses.push({ raw: mention.raw, closest: await suggestNames(api, mention.name, 5, { gamePreference, setHint: mention.setHint }) });
         if (found.length >= MAX_EMBEDS_PER_MESSAGE) break;
       }
       if (found.length > 0) await logReply(mentionReply(found, [], message.author.id) as ReplyPayload);

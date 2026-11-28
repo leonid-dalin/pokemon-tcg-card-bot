@@ -43,7 +43,7 @@ describe("mentionReply", () => {
     expect("components" in reply).toBe(false);
   });
 
-  it("keeps four rows for one found card and two misses", () => {
+  it("keeps five rows for one found card and two misses", () => {
     const reply = mentionReply(
       [{ card: { id: "sv01-001", name: "Bar" }, alternates: [{ id: "sv01-002", name: "Bar" }] }],
       [
@@ -51,6 +51,6 @@ describe("mentionReply", () => {
         { raw: "Qux", closest: [{ id: "sv01-004", name: "Qux" }] },
       ],
     );
-    expect("components" in reply && reply.components).toHaveLength(4);
+    expect("components" in reply && reply.components).toHaveLength(5);
   });
 });

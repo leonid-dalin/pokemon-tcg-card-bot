@@ -13,6 +13,7 @@ import {
   handlePageButton,
   handlePrintingButton,
   handlePrintingsCommand,
+  handleAllPrintingsButton,
   handleSearchCommand,
   handleSetCommand,
   type CommandContext,
@@ -177,6 +178,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       handled = true;
       if (interaction.customId.startsWith("iset:")) {
         await interaction.reply({ content: "The settings toggles moved into the settings panel. Run /settings to open it.", flags: MessageFlags.Ephemeral }).catch(() => {});
+      } else if (interaction.customId.startsWith("allprint:")) {
+        handled = true;
+        await handleAllPrintingsButton(context, interaction);
       } else if (interaction.customId.startsWith("details:")) {
         await handleDetailsButton(context, interaction);
       } else if (interaction.customId.startsWith("page:")) {

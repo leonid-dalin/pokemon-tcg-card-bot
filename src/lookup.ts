@@ -2,11 +2,12 @@ import type { Card, CardSummary } from "./api/types.js";
 import { TcgdexError, type TcgdexClient } from "./api/tcgdex.js";
 import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } from "./render.js";
 import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
-import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdOf } from "./resolve.js";
+import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdMatches, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
-import { findExactCardName, isCardNameEnding } from "./text-search.js";
-import { isPocketCard, isPocketSet } from "./prizes.js";
+import { findExactCardName, findExactNames, isCardNameEnding } from "./text-search.js";
+import { effectiveGame, type GamePreference } from "./game-preference.js";
+import { isPocketCard, isPocketCardId, isPocketSet } from "./prizes.js";
 import { isPocketHint, packageSetId, resolveSetHint, exactSetHint, setFamily, setRecency } from "./set-index.js";
 import { SET_INDEX } from "./data/set-index.js";
 
@@ -335,72 +336,87 @@ export async function lookupCard(
   setHint?: string,
   options: LookupOptions = {},
 ): Promise<CardLookup | undefined> {
-  // Exact card IDs bypass name and set matching.
+  // Exact card IDs bypass name and set matching, including printed code forms.
   if (setHint && isCardId(setHint.trim())) {
     return lookupById(client, printedAsId(setHint.trim()), options);
   }
+  if (isCardId(query.trim())) {
+    return lookupById(client, printedAsId(query.trim()), options);
+  }
+
+  // An explicit hint resolves before the default game or the short-name shortcut.
+  const pocketOnly = setHint ? isPocketHint(setHint) : false;
+  const resolved = setHint && !pocketOnly ? resolveSetHint(setHint) : undefined;
+  if (setHint && !pocketOnly && !resolved) return undefined;
+  const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
+  const requireResolved = hintPocketSet;
+  const requireArg = requireResolved ? packageSetId(resolved) : undefined;
+  if (pocketOnly) return lookupPocket(query, setHint, options);
 
   // A one-character name cannot be resolved by upstream search: TCGdex treats it
   // as a substring filter and returns unrelated cards first. A real card with
   // that exact name ("N") resolves through the local index by its id instead.
   if (normaliseName(query).length < 2) {
-    const pocket = getPocketCard(query.trim());
+    if (resolved) {
+      const family = new Set(setFamily(resolved).map(normaliseName));
+      const inSet = findExactNames(query).filter((card) => family.has(normaliseName(setIdOf(card.id))));
+      const chosen = inSet.sort((a, b) => {
+        const number = (id: string) => Number(/(\d+)[a-z]?$/i.exec(id)?.[1] ?? 0);
+        return number(b.id) - number(a.id) || b.id.localeCompare(a.id);
+      })[0];
+      if (!chosen) return undefined;
+      const found = await lookupById(client, chosen.id, options);
+      if (!found || !family.has(normaliseName(setIdOf(found.card.id)))) return undefined;
+      return found;
+    }
+    const shortGame = effectiveGame(options.gamePreference);
+    const pocket = shortGame === "ptcg" ? undefined : getPocketCard(query.trim());
     if (pocket) return toLookup(pocket, searchPocketByName(pocket.name), POCKET_ATTRIBUTION, options.energyEmoji, options.alternateLimit);
+    if (shortGame === "pocket") return undefined;
     const exact = findExactCardName(query);
     if (!exact) return undefined;
     return lookupById(client, exact.id, options);
   }
 
-  if (isCardId(query.trim()) && printedAsId(query.trim()) !== query.trim()) {
-    return lookupById(client, printedAsId(query.trim()), options);
-  }
-
-  // A Pocket alias selects the package catalogue; forcing a game always wins.
-  const pocketOnly = setHint ? isPocketHint(setHint) : false;
-  const resolved = setHint && !pocketOnly ? resolveSetHint(setHint) : undefined;
-  if (setHint && !pocketOnly && !resolved) return undefined;
-  const requireResolved = resolved !== undefined && isPocketSet(resolved);
-  const requireArg = requireResolved ? packageSetId(resolved) : undefined;
-  if (pocketOnly) return lookupPocket(query, setHint, options);
   // An explicit Pocket set hint is a game choice: it overrides a physical-only
   // preference, while without a preference the TCGdex path and its package
   // fallback keep their existing behaviour.
-  const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
   const preference = options.gamePreference;
   const viaSet = setHint ? undefined : await lookupTrailingSet(client, query, options);
   if (viaSet !== undefined) return viaSet.lookup;
-  if (hintPocketSet && preference && preference.allowed !== "both") {
-    return lookupPocket(query, setHint, options, true, packageSetId(resolved));
-  }
+  if (hintPocketSet && preference) return lookupPocket(query, setHint, options, true, requireArg);
   const forcedPhysical = Boolean(setHint) && !hintPocketSet;
+  const game = forcedPhysical ? "ptcg" : effectiveGame(preference);
   if (!forcedPhysical && preference?.allowed === "pocket") return lookupPocket(query, setHint, options, requireResolved, requireArg);
 
   // The preference's default game applies only to unhinted names, and only when the
   // package has the exact requested name; partial package matches must not win.
-  if (preference?.allowed === "both" && preference.default === "pocket" && !setHint) {
+  if (game === "pocket" && !setHint) {
     const pocket = lookupPocket(query, undefined, options);
     if (pocket && normaliseName(pocket.card.name) === normaliseName(query)) return pocket;
   }
   const summaries = await searchWithAccents(client, query);
-  const matched = (preference?.allowed === "ptcg" ? summaries.filter((card) => !isPocketCard(card as Card)) : summaries).filter(Boolean) as CardSummary[];
+  const scoped = game === "both"
+    ? summaries
+    : summaries.filter((card) => isPocketCard(card as Card) === (game === "pocket"));
+  const matched = scoped.filter(Boolean) as CardSummary[];
   const family = resolved ? new Set(setFamily(resolved).map(normaliseName)) : undefined;
   const familyMatched = family ? matched.filter((card) => family.has(normaliseName(setIdOf(card.id)))) : matched;
   const ranked = rankPrintings(familyMatched, query);
 
   // Try the package when TCGdex has no matching candidates and the server allows it.
   if (ranked.length === 0) {
-    if (preference?.allowed === "ptcg" || forcedPhysical) return undefined;
+    if (game === "ptcg" || forcedPhysical) return undefined;
     // A concrete hint stays a requirement here: an empty filtered set must not
     // widen to every package printing.
     return lookupPocket(query, setHint, options, requireResolved, requireArg);
   }
 
-  // For a shared name, the preferred game wins before artwork or recency comparisons.
-  const physicalRanked = ranked.filter((card) => !isPocketCard(card as Card));
-  const displayed = orderForDisplay(
-    preference?.allowed === "both" && preference.default === "ptcg" && physicalRanked.length ? physicalRanked : ranked,
-    query,
-  );
+  const preferred = game === "both"
+    ? ranked
+    : ranked.filter((card) => isPocketCard(card as Card) === (game === "pocket"));
+  const pool = game === "both" && preferred.length === 0 ? ranked : preferred;
+  const displayed = orderForDisplay(pool, query);
   const ordered = resolved ? hintedSetFirst(displayed, query, resolved) : displayed;
   const [primary] = ordered;
   if (!primary) return undefined;
@@ -447,13 +463,25 @@ export async function suggestNames(
   client: TcgdexClient,
   query: string,
   limit = 3,
+  options: { gamePreference?: GamePreference; setHint?: string } = {},
 ): Promise<CardSummary[]> {
   const words = query.trim().split(/\s+/).filter(Boolean);
   if (words.length < 2) return [];
   const shortened = words.slice(0, -1).join(" ");
   try {
     const cards = await client.searchByName(shortened);
-    return orderForDisplay(rankPrintings(cards, shortened), shortened).slice(0, limit);
+    const hint = options.setHint;
+    const resolvedHint = hint ? resolveSetHint(hint) : undefined;
+    const hintedGame = hint
+      ? isPocketHint(hint) || (resolvedHint !== undefined && isPocketSet(resolvedHint)) ? "pocket" : "ptcg"
+      : undefined;
+    const game = hintedGame ?? effectiveGame(options.gamePreference);
+    let scoped = game === "both" ? cards : cards.filter((card) => isPocketCardId(card.id) === (game === "pocket"));
+    if (resolvedHint) {
+      const family = new Set(setFamily(resolvedHint).map(normaliseName));
+      scoped = scoped.filter((card) => family.has(normaliseName(setIdOf(card.id))));
+    }
+    return orderForDisplay(rankPrintings(scoped, shortened), shortened).slice(0, limit);
   } catch {
     return [];
   }

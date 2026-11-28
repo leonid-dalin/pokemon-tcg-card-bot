@@ -1,0 +1,141 @@
+{
+  "_meta": {
+    "purpose": "Bounded regression corpus for the effective-game selection contract (plan Task 5).",
+    "sources": [
+      "captured clefairy-upstream.json and exeggcute-upstream.json",
+      "captured selection-card-me03-030.json and selection-card-swsh11-062.json",
+      "installed pokemon-tcg-pocket-cards 5.5.1 records",
+      "checked-in src/data/text-index.json"
+    ],
+    "bounds": {
+      "cases": 14,
+      "settings": 5,
+      "caps": [24, 25, 26, 9, 10, 11, 249, 250, 251],
+      "oracles": "Known cards require a successful result; only cases marked expectNoMatch allow none."
+    },
+    "assertionStyle": "Assert game, reachability and user-visible fallback. Do not freeze release order or unrelated IDs."
+  },
+  "settings": [
+    { "id": "physical-only", "allowed": "ptcg", "default": "ptcg" },
+    { "id": "pocket-only", "allowed": "pocket", "default": "pocket" },
+    { "id": "both-physical-default", "allowed": "both", "default": "ptcg" },
+    { "id": "both-pocket-default", "allowed": "both", "default": "pocket" },
+    { "id": "no-server-dm", "allowed": null, "default": null }
+  ],
+  "cases": [
+    {
+      "id": "clefairy-shared",
+      "kind": "shared-name,many-printings,different-gameplay",
+      "query": "Clefairy",
+      "upstream": "clefairy-upstream.json",
+      "physicalId": "me03-030",
+      "pocketId": "a1-113",
+      "setHint": "lor",
+      "setId": "swsh11-062",
+      "setAbility": "Moon-Watching Party",
+      "quickSwapExcluded": "swsh11-062",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "pocket", "both-physical-default": "ptcg", "both-pocket-default": "pocket", "no-server-dm": "any" }
+    },
+    {
+      "id": "clefairy-lor-literal",
+      "kind": "trailing-set-code",
+      "query": "clefairy lor",
+      "upstream": "clefairy-upstream.json",
+      "physicalId": "swsh11-062",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "ptcg", "both-physical-default": "ptcg", "both-pocket-default": "ptcg", "no-server-dm": "ptcg" }
+    },
+    {
+      "id": "clefairy-lor-pipe",
+      "kind": "explicit-set-hint",
+      "query": "clefairy|lor",
+      "upstream": "clefairy-upstream.json",
+      "physicalId": "swsh11-062",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "ptcg", "both-physical-default": "ptcg", "both-pocket-default": "ptcg", "no-server-dm": "ptcg" }
+    },
+    {
+      "id": "exeggcute-bw-literal",
+      "kind": "ambiguous-set,user-report",
+      "query": "Exeggcute BW",
+      "upstream": "exeggcute-upstream.json",
+      "physicalCandidates": ["bw9-4", "bw10-102"],
+      "mustNotReturn": "a1-021",
+      "expectedGame": { "physical-only": "none", "pocket-only": "pocket", "both-physical-default": "none", "both-pocket-default": "pocket", "no-server-dm": "pocket" }
+    },
+    {
+      "id": "exeggcute-bw-pipe",
+      "kind": "set-hint-no-match",
+      "query": "Exeggcute|BW",
+      "upstream": "exeggcute-upstream.json",
+      "expectNoMatch": true,
+      "expectedGame": { "physical-only": "none", "pocket-only": "none", "both-physical-default": "none", "both-pocket-default": "none", "no-server-dm": "none" }
+    },
+    {
+      "id": "exeggcute-shared",
+      "kind": "shared-name",
+      "query": "Exeggcute",
+      "upstream": "exeggcute-upstream.json",
+      "physicalId": "bw9-4",
+      "pocketId": "a1-021",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "pocket", "both-physical-default": "ptcg", "both-pocket-default": "pocket", "no-server-dm": "any" }
+    },
+    {
+      "id": "mew-not-mewtwo",
+      "kind": "nearest-wrong-name",
+      "query": "Mew",
+      "physicalId": "basep-8",
+      "mustNotReturnName": "Mewtwo",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "pocket", "both-physical-default": "ptcg", "both-pocket-default": "pocket", "no-server-dm": "any" }
+    },
+    {
+      "id": "clefairy-not-clefable",
+      "kind": "nearest-wrong-name",
+      "query": "Clefairy",
+      "physicalId": "me03-030",
+      "mustNotReturnName": "Clefable",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "pocket", "both-physical-default": "ptcg", "both-pocket-default": "pocket", "no-server-dm": "any" }
+    },
+    {
+      "id": "short-n",
+      "kind": "short-name",
+      "query": "N",
+      "physicalId": "bw3-101",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "none", "both-physical-default": "ptcg", "both-pocket-default": "none", "no-server-dm": "ptcg" }
+    },
+    {
+      "id": "package-only-mega-mewtwo-y",
+      "kind": "package-only-name,missing-index-entry",
+      "query": "Mega Mewtwo Y ex",
+      "pocketId": "pc-002",
+      "expectedGame": { "physical-only": "none", "pocket-only": "pocket", "both-physical-default": "none", "both-pocket-default": "pocket", "no-server-dm": "any" }
+    },
+    {
+      "id": "package-only-genome-converter-y",
+      "kind": "package-only-name,missing-index-entry",
+      "query": "Genome Converter Y",
+      "pocketId": "pc-009",
+      "expectedGame": { "physical-only": "none", "pocket-only": "pocket", "both-physical-default": "none", "both-pocket-default": "pocket", "no-server-dm": "any" }
+    },
+    {
+      "id": "owner-prefix",
+      "kind": "owner-prefix",
+      "query": "Erika's Jigglypuff",
+      "physicalId": "gym2-69",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "any", "both-physical-default": "ptcg", "both-pocket-default": "any", "no-server-dm": "any" }
+    },
+    {
+      "id": "mechanic-suffix",
+      "kind": "mechanic-suffix",
+      "query": "Mewtwo ex",
+      "physicalId": "ex1-101",
+      "pocketId": "a1-129",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "pocket", "both-physical-default": "ptcg", "both-pocket-default": "pocket", "no-server-dm": "any" }
+    },
+    {
+      "id": "accent-fallback",
+      "kind": "accent",
+      "query": "pokemon breeder",
+      "physicalId": "base1-76",
+      "expectedGame": { "physical-only": "ptcg", "pocket-only": "none", "both-physical-default": "ptcg", "both-pocket-default": "none", "no-server-dm": "ptcg" }
+    }
+  ]
+}

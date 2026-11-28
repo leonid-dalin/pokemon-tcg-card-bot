@@ -4,7 +4,7 @@ import { isImageOnly, lookupEmbeds, type CardLookup } from "../lookup.js";
 import { matchingDetail, unquote, type TextGroup } from "../text-search.js";
 import { toEmbeds } from "./embeds.js";
 import { listReply, type ListPage, type PageStore } from "./pages.js";
-import { detailsRow, detailsRows, missMenu, printingRows } from "./printing-buttons.js";
+import { allPrintingsRow, detailsRow, detailsRows, missMenu, printingRows } from "./printing-buttons.js";
 
 /** Maximum embeds included in one mention reply. */
 export const MAX_EMBEDS_PER_MESSAGE = 5;
@@ -13,7 +13,7 @@ export const MAX_EMBEDS_PER_MESSAGE = 5;
 export function cardReply(lookup: CardLookup, ownerId?: string) {
   const components = isImageOnly(lookup)
     ? []
-    : [...printingRows(lookup.matchingPrintings ?? lookup.alternates, ownerId), ...detailsRow(lookup.card.id)];
+    : [...printingRows(lookup.matchingPrintings ?? lookup.alternates, ownerId), ...detailsRow(lookup.card.id), ...allPrintingsRow(lookup.card.id, ownerId)];
   return {
     embeds: toEmbeds(lookupEmbeds(lookup)),
     ...(components.length > 0 ? { components } : {}),
@@ -108,7 +108,7 @@ export function mentionReply(found: CardLookup[], misses: MentionMiss[], ownerId
     ...(found.length === 1 && found[0]
       ? isImageOnly(found[0])
         ? []
-        : [...printingRows(found[0].matchingPrintings ?? found[0].alternates, ownerId), ...detailsRow(found[0].card.id)]
+        : [...printingRows(found[0].matchingPrintings ?? found[0].alternates, ownerId), ...detailsRow(found[0].card.id), ...allPrintingsRow(found[0].card.id, ownerId)]
       : detailsRows(found.filter((lookup) => !isImageOnly(lookup)))),
     ...misses.flatMap((miss, index) => missMenu(miss.closest, index, ownerId)),
   ];
