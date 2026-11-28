@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Card, CardSummary } from "./types.js";
-import { normaliseName } from "../resolve.js";
+import { canonicalNameQuery, isPartialPrintingOf, isPrintingOf, normaliseName } from "../resolve.js";
 
 // Resolve package data relative to this module, independent of the working directory.
 const PACKAGE_ROOT = join(
@@ -234,7 +234,23 @@ function loadIndex(): PocketIndex {
   return cached;
 }
 
-/** Searches Pocket printings by name; exact-name results sort newest first. */
+/**
+ * Package candidates for a request. Attached mechanics are searched in their
+ * spaced form, and explicit mechanics or owner prefixes constrain the result.
+ */
+export function pocketCandidates(name: string): CardSummary[] {
+  const direct = searchPocketByName(name);
+  const canonical = canonicalNameQuery(name);
+  const pool = normaliseName(canonical) === normaliseName(name)
+    ? direct
+    : [...direct, ...searchPocketByName(canonical)];
+  const unique = pool.filter((card, index) => pool.findIndex((row) => row.id.toLowerCase() === card.id.toLowerCase()) === index);
+  const compatible = unique.filter((card) => isPrintingOf(name, card.name));
+  if (compatible.length > 0) return compatible;
+  const partial = unique.filter((card) => isPartialPrintingOf(name, card.name));
+  return partial.length > 0 ? partial : [];
+}
+
 export function searchPocketByName(name: string): CardSummary[] {
   const { byName } = loadIndex();
   const query = normaliseName(name);

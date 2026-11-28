@@ -8,7 +8,7 @@ import { printedNumber } from "./printed.js";
 import { normaliseName } from "./resolve.js";
 import { SET_INDEX } from "./data/set-index.js";
 import { convertFromEur, formatPrice } from "./currency.js";
-import type { Currency } from "./settings-store.js";
+import { formatMoney, type Currency } from "./settings-store.js";
 
 const setById = new Map(SET_INDEX.map((entry) => [normaliseName(entry.id), entry]));
 
@@ -365,7 +365,7 @@ and ${cards.length - 15} more` : ""}`, 4000),
 }
 
 /** Formats a parsed deck and its supplied total, with optional legality and price data. */
-export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[]): EmbedView {
+export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[], currency: Currency = "EUR"): EmbedView {
   const body = deck.lines
     .map((line) => {
       const printing = line.setCode ? ` (${line.setCode}${line.number ? ` ${line.number}` : ""})` : "";
@@ -386,7 +386,7 @@ export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[]): Emb
         .join("\n");
       fields.push({ name: "Not Standard legal", value: truncate(lines, FIELD_VALUE_LIMIT) });
     }
-    const price = deckPrice(resolved);
+    const price = deckPrice(resolved, currency);
     if (price) fields.push({ name: "Deck price", value: price, inline: false });
   }
 
@@ -404,7 +404,7 @@ export function renderDecklist(deck: ParsedDeck, resolved?: ResolvedLine[]): Emb
  * Excludes resolved Basic Energy and includes unresolved copies in coverage.
  * Returns undefined when no copies have an average price.
  */
-export function deckPrice(resolved: ResolvedLine[]): string | undefined {
+export function deckPrice(resolved: ResolvedLine[], currency: Currency = "EUR"): string | undefined {
   let total = 0;
   let priced = 0;
   // Coverage includes every copy except resolved Basic Energy.
@@ -419,7 +419,10 @@ export function deckPrice(resolved: ResolvedLine[]): string | undefined {
     priced += line.count;
   }
   if (priced === 0) return undefined;
-  return `≈ ${total.toFixed(2)} EUR (Cardmarket average, ${priced} of ${eligible} cards priced)`;
+  const value = currency === "EUR"
+    ? `≈ ${total.toFixed(2)} EUR`
+    : `≈ ${formatMoney(convertFromEur(total, currency), currency)}`;
+  return `${value} (Cardmarket average, ${priced} of ${eligible} cards priced)`;
 }
 
 export function renderSet(set: SetSummary | CardSetRef, attribution = DEFAULT_ATTRIBUTION): EmbedView {
