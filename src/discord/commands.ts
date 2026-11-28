@@ -16,9 +16,9 @@ import { printingItems, printingsOf } from "../printings.js";
 import { setChecklistReply } from "../set-checklist.js";
 import { helpView } from "../help.js";
 import { allPrintingsIdFrom, printingIdFrom, detailsIdFrom, cardmarketRow, MISS_MENU_ID, MISS_MENU_PREFIX } from "./printing-buttons.js";
-import { rankPrintings } from "../resolve.js";
+import { canonicalNameQuery, rankPrintings } from "../resolve.js";
 import { effectiveGame } from "../game-preference.js";
-import { searchPocketByName } from "../api/pocket.js";
+import { pocketCandidates, searchPocketByName } from "../api/pocket.js";
 import { toEmbed } from "./embeds.js";
 import { listReply, filterTokenFrom, pageFilterFrom, pageIndexFrom, pageTokenFrom, type ListPage, type PageStore } from "./pages.js";
 import { cardReply, searchReply } from "./replies.js";
@@ -203,14 +203,13 @@ export async function handleAutocomplete(
   }
   if (game === "pocket") {
     const merged = new Map<string, (typeof allowed)[number]>();
-    for (const card of searchPocketByName(query)) merged.set(pocketPrintingKey(card.id), card);
-    for (const card of allowed) {
+    for (const card of pocketCandidates(query)) merged.set(pocketPrintingKey(card.id), card);    for (const card of allowed) {
       const key = pocketPrintingKey(card.id);
       if (!merged.has(key)) merged.set(key, card);
     }
     allowed = [...merged.values()];
   }
-  const ranked = rankPrintings(allowed, query).slice(0, 25);
+  const ranked = rankPrintings(allowed, canonicalNameQuery(query)).slice(0, 25);
   await interaction.respond(
     ranked.map((card) => ({ name: `${card.name} · ${printedNumber(card.id)}`.slice(0, 100), value: card.id })),
   );
@@ -568,7 +567,13 @@ export async function handlePrintingsCommand(
   let printings: Awaited<ReturnType<typeof printingsOf>>;
   try {
     const pinned = isCardId(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
-    printings = await printingsOf(context.client, pinned?.card.name ?? query, allowed);
+    // An explicit ID chooses its own game, overriding the server default.
+    const scope = pinned
+      ? isPocketCardId(pinned.card.id)
+        ? "pocket"
+        : "ptcg"
+      : allowed;
+    printings = await printingsOf(context.client, pinned?.card.name ?? query, scope);
   } catch (error) {
     const hint = overloadHint(error);
     if (hint === undefined) throw error;

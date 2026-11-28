@@ -4,8 +4,7 @@ import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } fr
 import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
 import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdMatches, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
-import { compatiblePrintingsOf, getPocketCard, searchPocketByName } from "./api/pocket.js";
-import { findExactCardName, findExactNames, isCardNameEnding } from "./text-search.js";
+import { compatiblePrintingsOf, getPocketCard, pocketCandidates, searchPocketByName } from "./api/pocket.js";import { findExactCardName, findExactNames, isCardNameEnding } from "./text-search.js";
 import { effectiveGame, type GamePreference } from "./game-preference.js";
 import { isPocketCard, isPocketCardId, isPocketSet } from "./prizes.js";
 import { isPocketHint, packageSetId, resolveSetHint, exactSetHint, setFamily, setRecency } from "./set-index.js";
@@ -199,12 +198,17 @@ const printedAsId = (value: string): string => {
 };
 
 export const isCardId = (value: string): boolean => {
-  value = printedAsId(value);
+  value = printedAsId(value.trim());
+  if (SET_IDS.has(normaliseName(value))) return false;
   const at = value.lastIndexOf("-");
   if (at <= 0 || at === value.length - 1) return false;
-  if (!LOCAL_ID.test(value.slice(at + 1))) return false;
-  // The package includes Pocket sets absent from the TCGdex set index.
-  return SET_IDS.has(normaliseName(value.slice(0, at))) || getPocketCard(value) !== undefined;
+  const local = value.slice(at + 1);
+  if (!LOCAL_ID.test(local)) return false;
+  const setId = value.slice(0, at);
+  // Newer physical sets can be absent from the checked-in index. Their card ids
+  // still address an upstream record once the set part is numbered.
+  const unindexedPhysical = /\d/.test(setId) && !isPocketSet(setId) && /^\d{1,3}[a-z]?$/i.test(local);
+  return SET_IDS.has(normaliseName(setId)) || getPocketCard(value) !== undefined || unindexedPhysical;
 };
 
 /** Source credit for cards loaded from the Pocket package. */
@@ -219,7 +223,7 @@ function lookupPocket(
   requireSet = false,
   requiredSetId?: string,
 ): CardLookup | undefined {
-  const all = searchPocketByName(query);
+  const all = pocketCandidates(query);
   if (all.length === 0) return undefined;
 
   const hint = setHint && !isPocketHint(setHint) ? setHint.trim().toLowerCase() : undefined;
@@ -294,7 +298,7 @@ export async function lookupById(
 
   // Package cards use package alternates to keep the source catalogue consistent.
   const candidates = pocketCard
-    ? searchPocketByName(pinned.name)
+    ? pocketCandidates(pinned.name)
     : await client.searchByName(pinned.name).catch(() => []);
   return toLookup(pinned, candidates, pocketCard ? POCKET_ATTRIBUTION : options.attribution, options.energyEmoji, options.alternateLimit);
 }
@@ -356,7 +360,10 @@ export async function lookupCard(
   const hintPocketSet = resolved !== undefined && isPocketSet(resolved);
   const requireResolved = hintPocketSet;
   const requireArg = requireResolved ? packageSetId(resolved) : undefined;
-  if (pocketOnly) return lookupPocket(query, setHint, options);
+  if (pocketOnly) {
+    if (normaliseName(query).length < 2 && !pocketCandidates(query).some((card) => normaliseName(card.name) === normaliseName(query))) return undefined;
+    return lookupPocket(query, setHint, options);
+  }
 
   // A one-character name cannot be resolved by upstream search: TCGdex treats it
   // as a substring filter and returns unrelated cards first. A real card with
@@ -376,7 +383,7 @@ export async function lookupCard(
     }
     const shortGame = effectiveGame(options.gamePreference);
     const pocket = shortGame === "ptcg" ? undefined : getPocketCard(query.trim());
-    if (pocket) return toLookup(pocket, searchPocketByName(pocket.name), POCKET_ATTRIBUTION, options.energyEmoji, options.alternateLimit);
+    if (pocket) return toLookup(pocket, pocketCandidates(pocket.name), POCKET_ATTRIBUTION, options.energyEmoji, options.alternateLimit);
     if (shortGame === "pocket") return undefined;
     const exact = findExactCardName(query);
     if (!exact) return undefined;

@@ -1,11 +1,10 @@
 import type { TcgdexClient } from "./api/tcgdex.js";
 import { OverloadedError } from "./api/limiter.js";
-import { getPocketCard, searchPocketByName } from "./api/pocket.js";
-import { pocketPrintingKey, printedNumber } from "./printed.js";
-import { normaliseName, setIdOf } from "./resolve.js";
+import { getPocketCard, pocketCandidates, searchPocketByName } from "./api/pocket.js";
+import { pocketPrintingKey, printedNumber } from "./printed.js";import { normaliseName, setIdOf } from "./resolve.js";
 import { SET_INDEX } from "./data/set-index.js";
 import { searchWithAccents } from "./lookup.js";
-import { isPocketCard } from "./prizes.js";
+import { isPocketCard, isPocketCardId } from "./prizes.js";
 import { findExactNames } from "./text-search.js";
 
 export interface Printing {
@@ -55,6 +54,7 @@ export async function printingsOf(client: TcgdexClient, name: string, allowed: "
       const reachable = searched.some((card) => normaliseName(card.name) === wanted);
       if (!reachable) {
         for (const card of findExactNames(name)) {
+          if (allowed === "ptcg" && isPocketCardId(card.id)) continue;
           const date = releaseDateOf(card.id);
           rows.push({ printing: { id: card.id, name: card.name, setLabel: labelOf(card.id, date) }, date, fromPackage: false });
         }
@@ -74,7 +74,7 @@ export async function printingsOf(client: TcgdexClient, name: string, allowed: "
     }
   }
 
-  for (const card of searchPocketByName(name)) {
+  for (const card of pocketCandidates(name)) {
     if (allowed === "ptcg") continue;
     if (normaliseName(card.name) !== wanted) continue;
     const date = releaseDateOf(card.id);

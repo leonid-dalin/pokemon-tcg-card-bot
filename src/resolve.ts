@@ -50,16 +50,42 @@ export function scoreCandidate(query: string, candidate: string): number {
   return 0;
 }
 
-/** Prefixes the data uses ahead of a card name without changing which Pokémon it is. */
-const NAME_PREFIXES = new Set(["mega", "team", "radiant", "shining", "dark", "light"]);
-
-/** Possessive tokens such as "Cynthia's" and "N's" are owner prefixes. */
-const POSSESSIVE = /^[\p{L}\p{N}.\-]+'s$/u;
+/** True when a name core carries an explicit mechanic suffix or owner prefix. */
+export function hasQualifiedName(query: string): boolean {
+  const tokens = nameTokens(query);
+  if (tokens.length < 2) return false;
+  const core = tokens.filter((token) => !NAME_SUFFIXES.has(token) && !POSSESSIVE.test(token));
+  return core.length > 0 && tokens.some((token) => NAME_SUFFIXES.has(token) || POSSESSIVE.test(token));
+}
 
 /** Splits attached mechanics so "Gengar-EX" searches the same names as "Gengar ex". */
 export function canonicalNameQuery(query: string): string {
   return nameTokens(query).join(" ");
 }
+
+/**
+ * True when the query is an incomplete spelling of the candidate: every query
+ * token matches a candidate token in order, allowing a short final token to be
+ * a prefix of the candidate's token and leading modifier tokens in the candidate.
+ */
+export function isPartialPrintingOf(query: string, candidate: string): boolean {
+  const wanted = nameTokens(query);
+  const words = nameTokens(candidate);
+  if (wanted.length === 0 || words.length < wanted.length) return false;
+  for (let start = 0; start <= words.length - wanted.length; start += 1) {
+    const leading = words.slice(0, start);
+    if (!leading.every((token) => POSSESSIVE.test(token) || NAME_PREFIXES.has(token))) continue;
+    const core = words.slice(start, start + wanted.length);
+    if (core.every((token, index) => token === wanted[index] || token.startsWith(wanted[index]!))) return true;
+  }
+  return false;
+}
+
+/** Prefixes the data uses ahead of a card name without changing which Pokémon it is. */
+const NAME_PREFIXES = new Set(["mega", "team", "radiant", "shining", "dark", "light"]);
+
+/** Possessive tokens such as "Cynthia's" and "N's" are owner prefixes. */
+const POSSESSIVE = /^[\p{L}\p{N}.\-]+'s$/u;
 
 /** Mechanics that may trail a name, so "charizard ex" and "Charizard GX" differ. */
 const NAME_SUFFIXES = new Set(["ex", "gx", "v", "vmax", "vstar", "v-union", "break", "lv.x", "lv. x", "prime"]);
