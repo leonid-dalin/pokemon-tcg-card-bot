@@ -5,6 +5,20 @@ import { isPocketSet } from "./prizes.js";
 // Display package promo prefixes pa/pb as P-A/P-B.
 const PROMO_CODE = /^p([abc])$/i;
 
+/**
+ * Canonical identity for a Pocket printing. The package writes promo sets as
+ * pa/pb/pc while printed and upstream records use P-A/P-B/P-C; both spellings
+ * name the same printing and must occupy one option slot. Family and number
+ * stay distinct, so P-A-007 and P-B-007 are different printings.
+ */
+export function pocketPrintingKey(id: string): string {
+  const normalised = id.toLowerCase();
+  const promo = /^p-([abc])-0*(\d+[a-z]?)$/.exec(normalised);
+  if (promo) return `${promo[1]}${promo[2]}`;
+  const barePromo = /^p([abc])-0*(\d+[a-z]?)$/.exec(normalised);
+  return barePromo ? `${barePromo[1]}${barePromo[2]}` : normalised;
+}
+
 const codeBySet = new Map(
   SET_INDEX.filter((entry) => entry.code).map((entry) => [normaliseName(entry.id), entry.code as string]),
 );

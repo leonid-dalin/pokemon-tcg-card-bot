@@ -1,7 +1,7 @@
 import type { TcgdexClient } from "./api/tcgdex.js";
 import { OverloadedError } from "./api/limiter.js";
 import { getPocketCard, searchPocketByName } from "./api/pocket.js";
-import { printedNumber } from "./printed.js";
+import { pocketPrintingKey, printedNumber } from "./printed.js";
 import { normaliseName, setIdOf } from "./resolve.js";
 import { SET_INDEX } from "./data/set-index.js";
 import { searchWithAccents } from "./lookup.js";
@@ -34,7 +34,7 @@ function labelOf(cardId: string, date: string | undefined): string {
 }
 
 // Fold Pocket ID casing when merging upstream and package records.
-const pocketKey = (id: string): string => (isPocketCard({ id, name: "" } as never) ? id.toLowerCase() : id);
+const pocketKey = (id: string): string => (isPocketCard({ id, name: "" } as never) ? pocketPrintingKey(id) : id);
 
 /**
  * Lists exact normalised-name matches across both catalogues, newest first.

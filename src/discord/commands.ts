@@ -10,7 +10,7 @@ import type { TcgdexClient } from "../api/tcgdex.js";
 import { isCardId, lookupById, lookupCard, POCKET_ATTRIBUTION } from "../lookup.js";
 import { isPocketCardId } from "../prizes.js";
 import { renderCardDetails, renderSet } from "../render.js";
-import { printedNumber } from "../printed.js";
+import { pocketPrintingKey, printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
 import { printingItems, printingsOf } from "../printings.js";
 import { setChecklistReply } from "../set-checklist.js";
@@ -203,9 +203,9 @@ export async function handleAutocomplete(
   }
   if (game === "pocket") {
     const merged = new Map<string, (typeof allowed)[number]>();
-    for (const card of searchPocketByName(query)) merged.set(card.id.toLowerCase(), card);
+    for (const card of searchPocketByName(query)) merged.set(pocketPrintingKey(card.id), card);
     for (const card of allowed) {
-      const key = card.id.toLowerCase();
+      const key = pocketPrintingKey(card.id);
       if (!merged.has(key)) merged.set(key, card);
     }
     allowed = [...merged.values()];
