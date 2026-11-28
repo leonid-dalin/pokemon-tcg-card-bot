@@ -186,6 +186,14 @@ function assertMeaning(entry: (typeof corpus.cases)[number], setting: (typeof co
   if (entry.mustNotReturn && (expected === "ptcg" || expected === "none")) expect(result.id?.toLowerCase()).not.toBe(entry.mustNotReturn.toLowerCase());
   if (entry.mustNotReturnName) expect(result.name).not.toBe(entry.mustNotReturnName);
   if (entry.setId && expected !== "pocket") expect(result.setReachable).toBe(true);
+  // A requested set must constrain the selected printing, not just the list.
+  if (entry.kind === "trailing-set-code" || entry.kind === "explicit-set-hint") {
+    if (expected === "ptcg" && entry.physicalId) {
+      expect(result.id?.toLowerCase().replace(/[^a-z0-9]/g, "")).toBe(
+        entry.physicalId.toLowerCase().replace(/[^a-z0-9]/g, ""),
+      );
+    }
+  }
 }
 
 describe("selection corpus: production helper across settings", () => {
