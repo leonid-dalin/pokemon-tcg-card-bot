@@ -565,7 +565,13 @@ export async function handlePrintingsCommand(
   let printings: Awaited<ReturnType<typeof printingsOf>>;
   try {
     const pinned = isCardId(query) ? await lookupById(context.client, query, { attribution: context.attribution }) : undefined;
-    printings = await printingsOf(context.client, pinned?.card.name ?? query, allowed);
+    // An explicit ID chooses its own game, overriding the server default.
+    const scope = pinned
+      ? isPocketCardId(pinned.card.id)
+        ? "pocket"
+        : "ptcg"
+      : allowed;
+    printings = await printingsOf(context.client, pinned?.card.name ?? query, scope);
   } catch (error) {
     const hint = overloadHint(error);
     if (hint === undefined) throw error;
