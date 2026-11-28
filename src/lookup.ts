@@ -4,7 +4,7 @@ import { cardImage, priceField, renderCard, renderCardImage, type EmbedView } fr
 import { printedNumber, setIdForCode, setIdForSubsetCode } from "./printed.js";
 import { isPrintingOf, normaliseName, rankPrintings, scoreCandidate, setIdMatches, setIdOf } from "./resolve.js";
 import { indexedText } from "./text-search.js";
-import { getPocketCard, searchPocketByName } from "./api/pocket.js";
+import { compatiblePrintingsOf, getPocketCard, searchPocketByName } from "./api/pocket.js";
 import { findExactCardName, findExactNames, isCardNameEnding } from "./text-search.js";
 import { effectiveGame, type GamePreference } from "./game-preference.js";
 import { isPocketCard, isPocketCardId, isPocketSet } from "./prizes.js";
@@ -223,22 +223,27 @@ function lookupPocket(
   if (all.length === 0) return undefined;
 
   const hint = setHint && !isPocketHint(setHint) ? setHint.trim().toLowerCase() : undefined;
+  // Exact-name discovery stops at the base name, so a concrete set filter needs
+  // compatible printings as well. Exact cards stay first for unhinted requests.
+  const poolSource = hint || requiredSetId
+    ? [...all, ...compatiblePrintingsOf(query).filter((card) => !all.some((row) => row.id.toLowerCase() === card.id.toLowerCase()))]
+    : all;
   // A resolved Pocket set arrives in set-index form (A1, P-A); the package uses a1, pa.
   const required = requiredSetId?.toLowerCase().replace(/-/g, "");
   const filtered = required
-    ? all.filter((summary) => {
+    ? poolSource.filter((summary) => {
         const card = getPocketCard(summary.id);
         return (card?.set?.id ?? "").toLowerCase() === required;
       })
     : hint
-      ? all.filter((summary) => {
+      ? poolSource.filter((summary) => {
           const card = getPocketCard(summary.id);
           const setId = (card?.set?.id ?? "").toLowerCase();
           const setName = (card?.set?.name ?? "").toLowerCase();
           return setId === hint || setName.includes(hint);
         })
       : all;
-  const pool = filtered.length > 0 ? filtered : requireSet && (hint || required) ? [] : all;
+  const pool = filtered.length > 0 ? filtered : requireSet && (hint || required) ? [] : poolSource;
 
   const [primary] = pool;
   if (!primary) return undefined;
