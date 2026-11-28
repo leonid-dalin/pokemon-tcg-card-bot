@@ -3,7 +3,6 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Card, CardSummary } from "./types.js";
 import { canonicalNameQuery, isPartialPrintingOf, isPrintingOf, normaliseName } from "../resolve.js";
-
 // Resolve package data relative to this module, independent of the working directory.
 const PACKAGE_ROOT = join(
   dirname(createRequire(import.meta.url).resolve("pokemon-tcg-pocket-cards/package.json")),
@@ -270,6 +269,21 @@ export function searchPocketByName(name: string): CardSummary[] {
     if (key.includes(query) || query.includes(key)) partial.push(...list);
   }
   return partial;
+}
+
+/**
+ * Compatible printings of an exact name. An exact-name discovery stops at the
+ * base name, so a concrete set filter needs this to find a printing such as
+ * Charizard ex inside A2b. Exact names keep their primacy at the call site.
+ */
+export function compatiblePrintingsOf(name: string): CardSummary[] {
+  const { byName } = loadIndex();
+  const canonical = canonicalNameQuery(name);
+  const query = normaliseName(canonical);
+  if (!query || !byName.has(query)) return [];
+  return [...byName.entries()]
+    .filter(([key]) => key !== query && isPrintingOf(canonical, key))
+    .flatMap(([, list]) => list);
 }
 
 export function getPocketExpansion(idOrName: string): { id: string; name: string } | undefined {

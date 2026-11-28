@@ -5,7 +5,7 @@ import { busyMessage } from "../src/discord/interaction-failure.js";
 import { handleAutocomplete, handleCardCommand } from "../src/discord/commands.js";
 import { createMessageHandler } from "../src/discord/messages.js";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 const base = { attribution: "Card data from TCGdex", energyEmoji: {} };
 
@@ -27,12 +27,40 @@ describe("a direct message is metered too", () => {
       editReply: async (payload: { content?: string }) => sent.push(`edit:${payload.content ?? ""}`),
     };
 
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
     await handleCardCommand(context as never, interaction as never);
     const afterFirst = calls.length;
     await handleCardCommand(context as never, interaction as never);
 
     expect(afterFirst).toBeGreaterThan(0);
     expect(calls.length).toBe(afterFirst);
+    expect(sent.at(-1)).toBe(`edit:${busyMessage(60)}`);
+  });
+
+  it("refuses a second DM request without a second upstream call when spent", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+    });
+    const requests = new MentionBudget({ capacity: 1, refillSeconds: 60 });
+    const context = { ...base, client: new TcgdexClient({ retries: 0 }), requests };
+    const sent: string[] = [];
+    const interaction = {
+      guildId: null,
+      user: { id: "spent-member" },
+      options: { getString: (name: string) => (name === "name" ? "Pikachu" : null), getBoolean: () => null },
+      deferReply: async () => sent.push("defer"),
+      editReply: async (payload: { content?: string }) => sent.push(`edit:${payload.content ?? ""}`),
+    };
+    await handleCardCommand(context as never, interaction as never);
+    const first = calls.length;
+    await handleCardCommand(context as never, interaction as never);
+    expect(first).toBeGreaterThan(0);
+    expect(calls.length).toBe(first);
     expect(sent.at(-1)).toBe(`edit:${busyMessage(60)}`);
   });
 

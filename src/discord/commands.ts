@@ -10,7 +10,7 @@ import type { TcgdexClient } from "../api/tcgdex.js";
 import { isCardId, lookupById, lookupCard, POCKET_ATTRIBUTION } from "../lookup.js";
 import { isPocketCardId } from "../prizes.js";
 import { renderCardDetails, renderSet } from "../render.js";
-import { printedNumber } from "../printed.js";
+import { pocketPrintingKey, printedNumber } from "../printed.js";
 import { searchCardGroups } from "../text-search.js";
 import { printingItems, printingsOf } from "../printings.js";
 import { setChecklistReply } from "../set-checklist.js";
@@ -203,9 +203,8 @@ export async function handleAutocomplete(
   }
   if (game === "pocket") {
     const merged = new Map<string, (typeof allowed)[number]>();
-    for (const card of pocketCandidates(query)) merged.set(card.id.toLowerCase(), card);
-    for (const card of allowed) {
-      const key = card.id.toLowerCase();
+    for (const card of pocketCandidates(query)) merged.set(pocketPrintingKey(card.id), card);    for (const card of allowed) {
+      const key = pocketPrintingKey(card.id);
       if (!merged.has(key)) merged.set(key, card);
     }
     allowed = [...merged.values()];
@@ -397,7 +396,10 @@ export async function handleOpenCardMenu(
       });
       return;
     }
-    if (missTransitions.get(interaction.message.id)?.converted) return;
+    if (missTransitions.get(interaction.message.id)?.converted) {
+      await interaction.deferUpdate();
+      return;
+    }
     await replaceMissWithCard(context, interaction, cardId);
     return;
   }

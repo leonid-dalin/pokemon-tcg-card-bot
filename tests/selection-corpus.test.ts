@@ -186,6 +186,14 @@ function assertMeaning(entry: (typeof corpus.cases)[number], setting: (typeof co
   if (entry.mustNotReturn && (expected === "ptcg" || expected === "none")) expect(result.id?.toLowerCase()).not.toBe(entry.mustNotReturn.toLowerCase());
   if (entry.mustNotReturnName) expect(result.name).not.toBe(entry.mustNotReturnName);
   if (entry.setId && expected !== "pocket") expect(result.setReachable).toBe(true);
+  // A requested set must constrain the selected printing, not just the list.
+  if (entry.kind === "trailing-set-code" || entry.kind === "explicit-set-hint") {
+    if (expected === "ptcg" && entry.physicalId) {
+      expect(result.id?.toLowerCase().replace(/[^a-z0-9]/g, "")).toBe(
+        entry.physicalId.toLowerCase().replace(/[^a-z0-9]/g, ""),
+      );
+    }
+  }
 }
 
 describe("selection corpus: production helper across settings", () => {
@@ -233,6 +241,29 @@ describe("selection corpus: public entry points", () => {
       }
     });
   }
+
+  it("delivers the captured LOR printing through slash and inline in every setting", async () => {
+    const cases = corpus.cases.filter((entry) => entry.id === "clefairy-lor-pipe" || entry.id === "clefairy-lor-literal");
+    expect(cases.map((entry) => entry.id).sort()).toEqual(["clefairy-lor-literal", "clefairy-lor-pipe"]);
+    for (const setting of corpus.settings) {
+      settingsStore.update("g1", {
+        cardGames: setting.allowed ?? "both",
+        defaultCardGame: setting.default ?? "ptcg",
+      });
+      for (const entry of cases) {
+        const payloads = [...await runSlash(entry, setting, settingsStore), ...await runMessage(entry, setting, settingsStore)];
+        expect(payloads).toHaveLength(2);
+        for (const payload of payloads) {
+          const json = JSON.stringify(payload);
+          expect(json).toContain("swsh11-062");
+          expect(json).not.toContain("me03-030");
+          expect(json).toContain("Moon-Watching Party");
+          expect(json).toContain("Wonder Storm");
+          expect(json).not.toContain("Follow Me");
+        }
+      }
+    }
+  });
 
   it("uses persisted settings after a database reopen", async () => {
     settingsStore.update("g1", { cardGames: "ptcg", defaultCardGame: "ptcg" });

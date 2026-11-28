@@ -114,7 +114,7 @@ export function renderPanel(model: PanelModel): ContainerBuilder {
           container.addActionRowComponents(row);
         }
         if (model.session.draftChannelIds && model.session.draftChannelIds.length > 0) {
-          container.addActionRowComponents(removeActions(model.session.draftChannelIds, model.session.id));
+          container.addActionRowComponents(removeActions(model.session.draftChannelIds, model.session.id, model.session.draftRemovePage ?? 0));
         }
         break;
       case "games":
@@ -199,14 +199,28 @@ function channelDraftActions(draft: string[], sessionId: string, editedDraft: bo
   return rows;
 }
 
-function removeActions(draft: string[], sessionId: string): ActionRowBuilder<StringSelectMenuBuilder> {
+function removeActions(draft: string[], sessionId: string, page = 0): ActionRowBuilder<StringSelectMenuBuilder>[] {
+  const start = Math.min(page * 25, Math.max(0, draft.length - 1));
+  const visible = draft.slice(start, start + 25);
   const menu = new StringSelectMenuBuilder()
     .setCustomId(`st:ch:remove-submit:${sessionId}`)
     .setPlaceholder("Choose saved channels to remove")
     .setMinValues(1)
-    .setMaxValues(Math.min(25, draft.length))
-    .addOptions(draft.slice(0, 25).map((id) => ({ label: id, value: id })));
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
+    .setMaxValues(visible.length)
+    .addOptions(visible.map((id) => ({ label: id, value: id })));
+  const rows = [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];
+  if (page > 0 || start + 25 < draft.length) {
+    rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`st:ch:remove-page:${sessionId}`)
+        .setPlaceholder(`Channels ${start + 1} to ${start + visible.length} of ${draft.length}`)
+        .addOptions([
+          ...(page > 0 ? [{ label: "Previous 25", value: String(page - 1) }] : []),
+          ...(start + 25 < draft.length ? [{ label: "Next 25", value: String(page + 1) }] : []),
+        ]),
+    ));
+  }
+  return rows;
 }
 
 function currencyActions(sessionId: string): ActionRowBuilder<StringSelectMenuBuilder> {

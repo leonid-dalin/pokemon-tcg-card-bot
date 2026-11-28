@@ -221,6 +221,12 @@ def recover():
         print("Unreadable update state; see docs/deployment.md for manual recovery", file=sys.stderr)
         raise SystemExit(1)
     progress("Recovering an interrupted update")
+    if phase not in ("manual", "prepared", "checkpointed", "ready", "switched"):
+        print(
+            f"Unknown update phase {phase!r}; {STATE.name} is kept and the service is left untouched",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     selected = current()
     if phase == "manual":
         if selected == previous:
