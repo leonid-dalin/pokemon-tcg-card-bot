@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Card, CardSummary } from "./types.js";
-import { isPrintingOf, normaliseName } from "../resolve.js";
+import { canonicalNameQuery, isPrintingOf, normaliseName } from "../resolve.js";
 
 // Resolve package data relative to this module, independent of the working directory.
 const PACKAGE_ROOT = join(
@@ -263,10 +263,11 @@ export function searchPocketByName(name: string): CardSummary[] {
  */
 export function compatiblePrintingsOf(name: string): CardSummary[] {
   const { byName } = loadIndex();
-  const query = normaliseName(name);
+  const canonical = canonicalNameQuery(name);
+  const query = normaliseName(canonical);
   if (!query || !byName.has(query)) return [];
   return [...byName.entries()]
-    .filter(([key]) => key !== query && isPrintingOf(name, key))
+    .filter(([key]) => key !== query && isPrintingOf(canonical, key))
     .flatMap(([, list]) => list);
 }
 

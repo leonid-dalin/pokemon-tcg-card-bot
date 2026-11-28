@@ -56,6 +56,11 @@ const NAME_PREFIXES = new Set(["mega", "team", "radiant", "shining", "dark", "li
 /** Possessive tokens such as "Cynthia's" and "N's" are owner prefixes. */
 const POSSESSIVE = /^[\p{L}\p{N}.\-]+'s$/u;
 
+/** Splits attached mechanics so "Gengar-EX" searches the same names as "Gengar ex". */
+export function canonicalNameQuery(query: string): string {
+  return nameTokens(query).join(" ");
+}
+
 /** Mechanics that may trail a name, so "charizard ex" and "Charizard GX" differ. */
 const NAME_SUFFIXES = new Set(["ex", "gx", "v", "vmax", "vstar", "v-union", "break", "lv.x", "lv. x", "prime"]);
 
